@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Apply tabular figures whenever this class is set on a money-bearing element.
+   Pair with `font-mono` (Geist Mono) for fully aligned columns of numbers. */
+.tabnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

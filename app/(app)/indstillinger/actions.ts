@@ -1,0 +1,212 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { getHouseholdContext } from '@/lib/dal';
+import type { CategoryKind } from '@/lib/database.types';
+
+// Empty / 0 / non-numeric → no expiry. Any positive integer → that many days.
+function parseExpiresInDays(raw: FormDataEntryValue | null): number | null {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.floor(n);
+}
+
+export async function createInvite(formData: FormData) {
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  const days = parseExpiresInDays(formData.get('expires_in_days'));
+  const expires_at =
+    days === null
+      ? null
+      : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+  // `code` has a SQL default of generate_invite_code() — we don't pass it.
+  const { error } = await supabase.from('household_invites').insert({
+    household_id: householdId,
+    created_by: user.id,
+    expires_at,
+  });
+
+  if (error) {
+    // Surface the message in dev; in real life this is essentially never hit.
+    throw new Error(`Could not create invite: ${error.message}`);
+  }
+
+  revalidatePath('/indstillinger');
+}
+
+export async function deleteInvite(formData: FormData) {
+  const id = String(formData.get('id') ?? '').trim();
+  if (!id) return;
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('household_invites')
+    .delete()
+    .eq('id', id)
+    .eq('household_id', householdId);
+
+  if (error) throw new Error(`Could not delete invite: ${error.message}`);
+
+  revalidatePath('/indstillinger');
+}
+
+// ----------------------------------------------------------------------------
+// Categories
+// ----------------------------------------------------------------------------
+const VALID_KINDS: readonly CategoryKind[] = ['income', 'expense'];
+
+function readCategoryForm(formData: FormData):
+  | { error: string }
+  | { data: { name: string; kind: CategoryKind; color: string } } {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return { error: 'Navn er påkrævet' };
+
+  const kindRaw = String(formData.get('kind') ?? '');
+  if (!VALID_KINDS.includes(kindRaw as CategoryKind)) {
+    return { error: 'Ugyldig kategoritype' };
+  }
+
+  // Hex colour: '#' + 3 or 6 hex digits. Falls back to a neutral grey.
+  let color = String(formData.get('color') ?? '').trim();
+  if (!/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color)) {
+    color = '#94a3b8';
+  }
+
+  return { data: { name, kind: kindRaw as CategoryKind, color } };
+}
+
+export async function createCategory(formData: FormData) {
+  const parsed = readCategoryForm(formData);
+  if ('error' in parsed) {
+    redirect('/indstillinger?error=' + encodeURIComponent(parsed.error));
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase.from('categories').insert({
+    household_id: householdId,
+    ...parsed.data,
+  });
+  if (error) {
+    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/indstillinger');
+}
+
+export async function updateCategory(id: string, formData: FormData) {
+  const parsed = readCategoryForm(formData);
+  if ('error' in parsed) {
+    redirect(
+      `/indstillinger/kategorier/${encodeURIComponent(id)}?error=` +
+        encodeURIComponent(parsed.error)
+    );
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('categories')
+    .update(parsed.data)
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) {
+    redirect(
+      `/indstillinger/kategorier/${encodeURIComponent(id)}?error=` +
+        encodeURIComponent(error.message)
+    );
+  }
+
+  revalidatePath('/indstillinger');
+  redirect('/indstillinger');
+}
+
+// Soft-delete: transactions reference categories ON DELETE SET NULL, so a hard
+// delete would orphan them. Archiving keeps the link intact for history.
+export async function archiveCategory(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('categories')
+    .update({ archived: true })
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/indstillinger');
+}
+
+export async function restoreCategory(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('categories')
+    .update({ archived: false })
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/indstillinger');
+}
+
+// ----------------------------------------------------------------------------
+// Family members
+// ----------------------------------------------------------------------------
+export async function createFamilyMember(formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) {
+    redirect('/indstillinger?error=' + encodeURIComponent('Navn er påkrævet'));
+  }
+
+  const birthdateRaw = String(formData.get('birthdate') ?? '').trim();
+  const birthdate = birthdateRaw && /^\d{4}-\d{2}-\d{2}$/.test(birthdateRaw)
+    ? birthdateRaw
+    : null;
+
+  const { supabase, householdId } = await getHouseholdContext();
+
+  // Append to the end. Same pattern as transaction_components — sequence-based
+  // ordering, no gaps to manage.
+  const { data: last } = await supabase
+    .from('family_members')
+    .select('position')
+    .eq('household_id', householdId)
+    .order('position', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextPos = (last?.position ?? -1) + 1;
+
+  const { error } = await supabase.from('family_members').insert({
+    household_id: householdId,
+    name,
+    birthdate,
+    position: nextPos,
+  });
+  if (error) {
+    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/indstillinger');
+  // Budget pages also use the family list in dropdowns — refresh those too.
+  revalidatePath('/budget', 'layout');
+}
+
+export async function deleteFamilyMember(formData: FormData) {
+  const id = String(formData.get('id') ?? '').trim();
+  if (!id) return;
+
+  const { supabase, householdId } = await getHouseholdContext();
+  // ON DELETE SET NULL on the FK columns means existing transactions and
+  // components keep working — they just lose their tag.
+  const { error } = await supabase
+    .from('family_members')
+    .delete()
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/indstillinger');
+  revalidatePath('/budget', 'layout');
+}

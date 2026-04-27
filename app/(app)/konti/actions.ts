@@ -1,0 +1,145 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { getHouseholdContext } from '@/lib/dal';
+import { parseAmountToOere } from '@/lib/format';
+import type { AccountKind } from '@/lib/database.types';
+
+const VALID_KINDS: readonly AccountKind[] = [
+  'checking',
+  'budget',
+  'household',
+  'savings',
+  'credit',
+  'cash',
+  'other',
+];
+
+// Pulls the common fields out of a FormData. Returns either an error message
+// (string) or a normalised payload (the second tuple element). We don't throw
+// because actions redirect with ?error=... rather than crashing the page.
+function readAccountForm(formData: FormData):
+  | { error: string }
+  | {
+      data: {
+        name: string;
+        owner_name: string | null;
+        kind: AccountKind;
+        opening_balance: number;
+        goal_amount: number | null;
+        goal_date: string | null;
+        goal_label: string | null;
+        editable_by_all: boolean;
+      };
+    } {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return { error: 'Navn er påkrævet' };
+
+  const kindRaw = String(formData.get('kind') ?? 'checking');
+  if (!VALID_KINDS.includes(kindRaw as AccountKind)) {
+    return { error: 'Ugyldig kontotype' };
+  }
+  const kind = kindRaw as AccountKind;
+
+  const openingRaw = String(formData.get('opening_balance') ?? '0');
+  const opening_balance = parseAmountToOere(openingRaw) ?? 0;
+
+  const goalAmountRaw = String(formData.get('goal_amount') ?? '').trim();
+  const goal_amount = goalAmountRaw ? parseAmountToOere(goalAmountRaw) : null;
+  if (goalAmountRaw && (goal_amount === null || goal_amount <= 0)) {
+    return { error: 'Målbeløb skal være et positivt tal' };
+  }
+
+  const goalDateRaw = String(formData.get('goal_date') ?? '').trim();
+  const goal_date = goalDateRaw || null;
+
+  const goalLabelRaw = String(formData.get('goal_label') ?? '').trim();
+  const goal_label = goalLabelRaw || null;
+
+  const ownerRaw = String(formData.get('owner_name') ?? '').trim();
+  const owner_name = ownerRaw || null;
+
+  // Checkbox: present in formData ('on') means checked, absent means unchecked.
+  const editable_by_all = formData.get('editable_by_all') === 'on';
+
+  return {
+    data: {
+      name, owner_name, kind, opening_balance,
+      goal_amount, goal_date, goal_label, editable_by_all,
+    },
+  };
+}
+
+export async function createAccount(formData: FormData) {
+  const parsed = readAccountForm(formData);
+  if ('error' in parsed) {
+    redirect('/konti/ny?error=' + encodeURIComponent(parsed.error));
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase.from('accounts').insert({
+    household_id: householdId,
+    ...parsed.data,
+  });
+  if (error) {
+    redirect('/konti/ny?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/konti');
+  revalidatePath('/dashboard');
+  redirect('/konti');
+}
+
+export async function updateAccount(id: string, formData: FormData) {
+  const parsed = readAccountForm(formData);
+  if ('error' in parsed) {
+    redirect(`/konti/${encodeURIComponent(id)}?error=` + encodeURIComponent(parsed.error));
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('accounts')
+    .update(parsed.data)
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) {
+    redirect(`/konti/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/konti');
+  revalidatePath('/dashboard');
+  redirect('/konti');
+}
+
+// Soft-delete: transactions/transfers reference accounts ON DELETE RESTRICT,
+// so a hard delete fails the moment any history exists. Archiving is the
+// equivalent UI affordance — archived accounts disappear from the default
+// list view and from the dashboard.
+export async function archiveAccount(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('accounts')
+    .update({ archived: true })
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/konti');
+  revalidatePath('/dashboard');
+}
+
+export async function restoreAccount(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('accounts')
+    .update({ archived: false })
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/konti');
+  revalidatePath('/dashboard');
+}

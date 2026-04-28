@@ -19,7 +19,7 @@ export default async function EditKontoPage({
   const action = updateAccount.bind(null, id);
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <Link
         href="/konti"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900"
@@ -41,6 +41,7 @@ export default async function EditKontoPage({
             name: account.name,
             owner_name: account.owner_name,
             kind: account.kind,
+            investment_type: account.investment_type,
             opening_balance: account.opening_balance,
             goal_amount: account.goal_amount,
             goal_date: account.goal_date,

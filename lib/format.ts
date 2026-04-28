@@ -1,4 +1,4 @@
-import type { AccountKind, RecurrenceFreq } from '@/lib/database.types';
+import type { AccountKind, InvestmentType, RecurrenceFreq } from '@/lib/database.types';
 
 // Danish labels for the account_kind enum — single source of truth.
 export const ACCOUNT_KIND_LABEL_DA: Record<AccountKind, string> = {
@@ -6,9 +6,31 @@ export const ACCOUNT_KIND_LABEL_DA: Record<AccountKind, string> = {
   budget: 'Budgetkonto',
   household: 'Husholdningskonto',
   savings: 'Opsparing',
+  investment: 'Investering',
   credit: 'Kredit',
   cash: 'Kontanter',
   other: 'Anden',
+};
+
+// Subtyper når kind='investment'. Vises som badge på /konti og som loft-info
+// hvor det er relevant. Lofterne her er dem der gælder pr. 2026 — opdatér
+// årligt hvis Skattestyrelsen ændrer satserne.
+export const INVESTMENT_TYPE_LABEL_DA: Record<InvestmentType, string> = {
+  aldersopsparing: 'Aldersopsparing',
+  aktiesparekonto: 'Aktiesparekonto (ASK)',
+  aktiedepot: 'Aktiedepot',
+  pension: 'Pension (rate/livrente)',
+  boerneopsparing: 'Børneopsparing',
+};
+
+// Kort tekst-info om indbetalingsloft til visning ved siden af kontoen.
+// `null` betyder "intet loft" (alm. aktiedepot, pension som er individuel).
+export const INVESTMENT_TYPE_CAP_DA: Record<InvestmentType, string | null> = {
+  aldersopsparing: 'Loft: 9.900 kr/år',
+  aktiesparekonto: 'Loft: 135.900 kr i alt',
+  aktiedepot: null,
+  pension: null,
+  boerneopsparing: 'Loft: 6.000 kr/år, 72.000 kr i alt',
 };
 
 export const RECURRENCE_LABEL_DA: Record<RecurrenceFreq, string> = {

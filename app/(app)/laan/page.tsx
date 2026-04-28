@@ -22,11 +22,11 @@ const LOAN_TYPE_LABEL_DA: Record<LoanType, string> = {
 export default async function LaanPage() {
   const loans = await getLoans();
 
-  // Sum gæld (negative opening_balance values) and monthly burden — gives a
-  // single-glance picture of the household's debt situation. payment_amount
-  // is per payment_interval, so normalise to /md before summing.
+  // Sum gæld and monthly burden — gives a single-glance picture of the
+  // household's debt situation. abs() so positive-saved rows still count.
+  // payment_amount is per payment_interval, so normalise to /md before summing.
   const totalDebt = loans.reduce(
-    (sum, l) => sum + (l.opening_balance < 0 ? -l.opening_balance : 0),
+    (sum, l) => sum + Math.abs(l.opening_balance),
     0
   );
   const monthlyBurden = loans.reduce(
@@ -39,7 +39,7 @@ export default async function LaanPage() {
   );
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -78,11 +78,23 @@ export default async function LaanPage() {
       ) : (
         <div className="mt-6 grid gap-3">
           {loans.map((l) => {
-            const debt = l.opening_balance < 0 ? -l.opening_balance : 0;
+            // abs() keeps the display sane regardless of which sign convention
+            // the row was saved with — older rows or manual SQL edits may have
+            // positive values. The form auto-negates new saves.
+            const debt = Math.abs(l.opening_balance);
             const principal = l.original_principal ?? 0;
             const paid = principal > 0 ? Math.max(0, principal - debt) : 0;
             const paidPct = principal > 0 ? Math.round((paid / principal) * 100) : null;
             const isShared = l.owner_name === 'Fælles';
+            // "Afdragsfri" hvis der er gæld men ingen ydelse overhovedet
+            // (typisk kassekredit/kreditkort) ELLER hvis brugeren udtrykkeligt
+            // har sat afdragsdelen til 0 i breakdown'et (realkredit i
+            // afdragsfri periode). En manglende breakdown med kun en samlet
+            // ydelse betyder IKKE afdragsfri — det betyder bare at vi ikke
+            // kender splittet endnu.
+            const hasYdelse = l.payment_amount != null && l.payment_amount > 0;
+            const isInterestOnly =
+              debt > 0 && (!hasYdelse || l.payment_afdrag === 0);
             return (
               <div
                 key={l.id}
@@ -108,6 +120,14 @@ export default async function LaanPage() {
                       >
                         {isShared ? 'Fælles' : 'Personlig'}
                       </span>
+                      {isInterestOnly && (
+                        <span
+                          className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+                          title="Lånet afdrages ikke pt. — kun rente betales"
+                        >
+                          Afdragsfri
+                        </span>
+                      )}
                     </div>
                     {l.lender && (
                       <div className="mt-0.5 text-xs text-neutral-500">{l.lender}</div>
@@ -167,7 +187,7 @@ export default async function LaanPage() {
                   )}
                   {l.payment_start_date && (
                     <div>
-                      <dt className="text-neutral-500">Næste betaling</dt>
+                      <dt className="text-neutral-500">Næste rente-opkrævning</dt>
                       <dd className="inline-flex items-center gap-1 text-sm text-neutral-700">
                         <Calendar className="h-3 w-3 text-neutral-400" />
                         {formatShortDateDA(

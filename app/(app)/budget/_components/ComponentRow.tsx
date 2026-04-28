@@ -96,6 +96,10 @@ export function ComponentRow({ component, accountId, familyMembers }: Props) {
     );
   }
 
+  // Negative amounts (e.g. rabat / KundeKroner) render in green with the
+  // sign preserved so the row reads as a discount, not an addition.
+  const isNegative = component.amount < 0;
+
   return (
     <li className="flex items-center justify-between gap-2 text-xs">
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -107,7 +111,9 @@ export function ComponentRow({ component, accountId, familyMembers }: Props) {
         )}
       </span>
       <span className="inline-flex shrink-0 items-center gap-1.5">
-        <span className="tabnum font-mono text-neutral-500">
+        <span
+          className={`tabnum font-mono ${isNegative ? 'text-emerald-700' : 'text-neutral-500'}`}
+        >
           {formatAmount(component.amount)} kr.
         </span>
         <button

@@ -84,6 +84,49 @@ export function LoanForm({
     dv.payment_rabat != null ? formatOereForInput(dv.payment_rabat) : ''
   );
 
+  // Løbetid-felt har to inputs der altid synkroniseres: År (UI-helper, posts
+  // ikke) og Måneder (name="term_months", er dem databasen ser). Brugeren
+  // kan skrive i hvad end der falder dem mest naturligt.
+  const initialMonths = dv.term_months ?? null;
+  const [yearsStr, setYearsStr] = useState(
+    initialMonths != null
+      ? Number.isInteger(initialMonths / 12)
+        ? String(initialMonths / 12)
+        : (initialMonths / 12).toFixed(2)
+      : ''
+  );
+  const [monthsStr, setMonthsStr] = useState(
+    initialMonths != null ? String(initialMonths) : ''
+  );
+
+  function handleYearsChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setYearsStr(v);
+    if (v.trim() === '') {
+      setMonthsStr('');
+      return;
+    }
+    // Accept comma as decimal — Danish keyboards default to it.
+    const n = Number(v.replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) {
+      setMonthsStr(String(Math.round(n * 12)));
+    }
+  }
+
+  function handleMonthsChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setMonthsStr(v);
+    if (v.trim() === '') {
+      setYearsStr('');
+      return;
+    }
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) {
+      const y = n / 12;
+      setYearsStr(Number.isInteger(y) ? String(y) : y.toFixed(2));
+    }
+  }
+
   const breakdownSum =
     (parseLooseAmount(rente) ?? 0) +
     (parseLooseAmount(afdrag) ?? 0) +
@@ -101,7 +144,7 @@ export function LoanForm({
 
   return (
     <form action={action} onInput={handleInput} className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className={labelClass}>Navn</label>
           <input
@@ -130,7 +173,7 @@ export function LoanForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="lender" className={labelClass}>
             Långiver <span className="text-neutral-400">(valgfrit)</span>
@@ -162,7 +205,7 @@ export function LoanForm({
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Beløb
         </legend>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="original_principal" className={labelClass}>
               Hovedstol <span className="text-neutral-400">(kr. — valgfrit)</span>
@@ -177,31 +220,57 @@ export function LoanForm({
           </div>
           <div>
             <label htmlFor="opening_balance" className={labelClass}>
-              Restgæld <span className="text-neutral-400">(kr. — minus for gæld)</span>
+              Gæld <span className="text-neutral-400">(kr.)</span>
             </label>
             <AmountInput
               id="opening_balance"
               name="opening_balance"
-              defaultValue={dv.opening_balance != null ? formatOereForInput(dv.opening_balance) : ''}
-              placeholder="-2 381 448.85"
+              defaultValue={
+                dv.opening_balance != null
+                  ? formatOereForInput(Math.abs(dv.opening_balance))
+                  : ''
+              }
+              placeholder="2 381 448.85"
             />
-            <p className="mt-1 text-xs text-neutral-500">Aktuel saldo (negativ)</p>
+            <p className="mt-1 text-xs text-neutral-500">Aktuelt skyldigt beløb</p>
           </div>
         </div>
         <div className="mt-4">
-          <label htmlFor="term_months" className={labelClass}>
-            Løbetid <span className="text-neutral-400">(måneder — valgfrit)</span>
-          </label>
-          <input
-            id="term_months"
-            name="term_months"
-            type="number"
-            min="1"
-            defaultValue={dv.term_months ?? ''}
-            placeholder="360"
-            className={fieldClass}
-          />
-          <p className="mt-1 text-xs text-neutral-500">Fx 360 = 30 år</p>
+          <div className={labelClass}>Løbetid <span className="text-neutral-400">(valgfrit)</span></div>
+          <div className="mt-1.5 grid grid-cols-2 gap-3">
+            <div>
+              <input
+                id="term_years"
+                type="text"
+                inputMode="decimal"
+                value={yearsStr}
+                onChange={handleYearsChange}
+                placeholder="30"
+                className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+              <label htmlFor="term_years" className="mt-1 block text-xs text-neutral-500">
+                År
+              </label>
+            </div>
+            <div>
+              <input
+                id="term_months"
+                name="term_months"
+                type="number"
+                min="1"
+                value={monthsStr}
+                onChange={handleMonthsChange}
+                placeholder="360"
+                className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+              <label htmlFor="term_months" className="mt-1 block text-xs text-neutral-500">
+                Måneder
+              </label>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            Skriv i den enhed du har for hånden — det andet felt opdaterer sig automatisk.
+          </p>
         </div>
       </fieldset>
 
@@ -209,7 +278,7 @@ export function LoanForm({
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Betalingsinterval og ydelse
         </legend>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="payment_interval" className={labelClass}>
               Betalingsinterval
@@ -272,7 +341,7 @@ export function LoanForm({
           bliver hver del en underpost på den tilknyttede transaktion.
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="payment_rente" className={labelClass}>
               Rente <span className="text-neutral-400">(kr.)</span>
@@ -341,7 +410,7 @@ export function LoanForm({
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Rente
         </legend>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="interest_rate" className={labelClass}>
               Rente <span className="text-neutral-400">(% — valgfrit)</span>

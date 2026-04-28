@@ -1,16 +1,32 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
-import { formatOereForInput } from '@/lib/format';
-import type { AccountKind } from '@/lib/database.types';
+import {
+  formatOereForInput,
+  INVESTMENT_TYPE_LABEL_DA,
+  INVESTMENT_TYPE_CAP_DA,
+} from '@/lib/format';
+import type { AccountKind, InvestmentType } from '@/lib/database.types';
 
 const KIND_OPTIONS: { value: AccountKind; label: string }[] = [
   { value: 'checking', label: 'Lønkonto' },
   { value: 'budget', label: 'Budgetkonto' },
   { value: 'household', label: 'Husholdningskonto' },
   { value: 'savings', label: 'Opsparing' },
+  { value: 'investment', label: 'Investering' },
   { value: 'credit', label: 'Kredit' },
   { value: 'cash', label: 'Kontanter' },
   { value: 'other', label: 'Anden' },
+];
+
+const INVESTMENT_TYPE_ORDER: InvestmentType[] = [
+  'aktiedepot',
+  'aktiesparekonto',
+  'aldersopsparing',
+  'pension',
+  'boerneopsparing',
 ];
 
 type Props = {
@@ -19,6 +35,7 @@ type Props = {
     name?: string;
     owner_name?: string | null;
     kind?: AccountKind;
+    investment_type?: InvestmentType | null;
     opening_balance?: number;
     goal_amount?: number | null;
     goal_date?: string | null;
@@ -36,6 +53,14 @@ const labelClass = 'block text-xs font-medium text-neutral-600';
 
 export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHref, error }: Props) {
   const dv = defaultValues;
+  // Track kind locally so investment_type-feltet kan vises/skjules dynamisk.
+  const [kind, setKind] = useState<AccountKind>(dv.kind ?? 'checking');
+  const [investmentType, setInvestmentType] = useState<InvestmentType | ''>(
+    dv.investment_type ?? ''
+  );
+  const showInvestmentType = kind === 'investment';
+  const cap = investmentType ? INVESTMENT_TYPE_CAP_DA[investmentType] : null;
+
   return (
     <form action={action} className="space-y-5">
       <div>
@@ -51,10 +76,16 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="kind" className={labelClass}>Type</label>
-          <select id="kind" name="kind" defaultValue={dv.kind ?? 'checking'} className={fieldClass}>
+          <select
+            id="kind"
+            name="kind"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as AccountKind)}
+            className={fieldClass}
+          >
             {KIND_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
@@ -70,11 +101,36 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
             name="owner_name"
             type="text"
             defaultValue={dv.owner_name ?? ''}
-            placeholder="Mikkel / Fælles"
+            placeholder="Mikkel / Fælles / barnets navn"
             className={fieldClass}
           />
         </div>
       </div>
+
+      {showInvestmentType && (
+        <div>
+          <label htmlFor="investment_type" className={labelClass}>
+            Investeringstype <span className="text-neutral-400">(valgfrit)</span>
+          </label>
+          <select
+            id="investment_type"
+            name="investment_type"
+            value={investmentType}
+            onChange={(e) => setInvestmentType(e.target.value as InvestmentType | '')}
+            className={fieldClass}
+          >
+            <option value="">— Vælg type —</option>
+            {INVESTMENT_TYPE_ORDER.map((t) => (
+              <option key={t} value={t}>
+                {INVESTMENT_TYPE_LABEL_DA[t]}
+              </option>
+            ))}
+          </select>
+          {cap && (
+            <p className="mt-1.5 text-xs text-neutral-500">{cap}</p>
+          )}
+        </div>
+      )}
 
       <div>
         <label htmlFor="opening_balance" className={labelClass}>
@@ -105,7 +161,7 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="goal_amount" className={labelClass}>
                 Målbeløb <span className="text-neutral-400">(kr.)</span>

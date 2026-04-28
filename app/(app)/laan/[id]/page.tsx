@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { getBudgetAccounts, getLoanById } from '@/lib/dal';
 import { LoanForm } from '../_components/LoanForm';
+import { AmortisationProjection } from '../_components/AmortisationProjection';
 import { updateLoan, pushLoanToBudget } from '../actions';
 import { ACCOUNT_KIND_LABEL_DA } from '@/lib/format';
 
@@ -10,10 +11,10 @@ export default async function EditLaanPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; pushed?: string }>;
 }) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, pushed } = await searchParams;
 
   const [loan, budgetAccounts] = await Promise.all([
     getLoanById(id),
@@ -24,7 +25,7 @@ export default async function EditLaanPage({
   const pushAction = pushLoanToBudget.bind(null, id);
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <Link
         href="/laan"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900"
@@ -38,6 +39,17 @@ export default async function EditLaanPage({
           Rediger lån
         </h1>
       </header>
+
+      {pushed && (
+        <div className="mt-4 max-w-2xl flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>
+            {pushed === '1'
+              ? 'Lånet er tilføjet som månedlig udgift på budgetkontoen.'
+              : `Lånet er tilføjet som månedlig udgift på ${pushed}.`}
+          </span>
+        </div>
+      )}
 
       <div className="mt-6 max-w-2xl">
         <LoanForm
@@ -64,6 +76,8 @@ export default async function EditLaanPage({
           cancelHref="/laan"
           error={error}
         />
+
+        <AmortisationProjection loan={loan} />
 
         <section className="mt-10 rounded-md border border-neutral-200 bg-neutral-50 p-4">
           <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500">

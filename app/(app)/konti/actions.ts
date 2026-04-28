@@ -4,16 +4,25 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere } from '@/lib/format';
-import type { AccountKind } from '@/lib/database.types';
+import type { AccountKind, InvestmentType } from '@/lib/database.types';
 
 const VALID_KINDS: readonly AccountKind[] = [
   'checking',
   'budget',
   'household',
   'savings',
+  'investment',
   'credit',
   'cash',
   'other',
+];
+
+const VALID_INVESTMENT_TYPES: readonly InvestmentType[] = [
+  'aldersopsparing',
+  'aktiesparekonto',
+  'aktiedepot',
+  'pension',
+  'boerneopsparing',
 ];
 
 // Pulls the common fields out of a FormData. Returns either an error message
@@ -26,6 +35,7 @@ function readAccountForm(formData: FormData):
         name: string;
         owner_name: string | null;
         kind: AccountKind;
+        investment_type: InvestmentType | null;
         opening_balance: number;
         goal_amount: number | null;
         goal_date: string | null;
@@ -41,6 +51,18 @@ function readAccountForm(formData: FormData):
     return { error: 'Ugyldig kontotype' };
   }
   const kind = kindRaw as AccountKind;
+
+  // investment_type er kun meningsfuld når kind='investment'. For alle andre
+  // kinds nuller vi det ud så subtypen ikke hænger ved hvis brugeren skifter
+  // type på en eksisterende konto.
+  const investmentTypeRaw = String(formData.get('investment_type') ?? '').trim();
+  let investment_type: InvestmentType | null = null;
+  if (kind === 'investment' && investmentTypeRaw) {
+    if (!VALID_INVESTMENT_TYPES.includes(investmentTypeRaw as InvestmentType)) {
+      return { error: 'Ugyldig investeringstype' };
+    }
+    investment_type = investmentTypeRaw as InvestmentType;
+  }
 
   const openingRaw = String(formData.get('opening_balance') ?? '0');
   const opening_balance = parseAmountToOere(openingRaw) ?? 0;
@@ -65,7 +87,7 @@ function readAccountForm(formData: FormData):
 
   return {
     data: {
-      name, owner_name, kind, opening_balance,
+      name, owner_name, kind, investment_type, opening_balance,
       goal_amount, goal_date, goal_label, editable_by_all,
     },
   };

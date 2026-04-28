@@ -83,15 +83,16 @@ function readLoanForm(formData: FormData):
   const lenderRaw = String(formData.get('lender') ?? '').trim();
   const lender = lenderRaw || null;
 
-  // opening_balance is the only "balance" column on accounts; we treat it as
-  // restgæld (current balance, typically negative). Default to 0 if empty so
-  // the NOT NULL constraint stays happy.
+  // opening_balance on a loan account is restgæld stored as a negative number
+  // (consistent with how credit-cards and the rest of the app treat debt as
+  // signed bigint). Users routinely type the positive number — we auto-negate
+  // so they don't have to remember the convention.
   const balanceRaw = String(formData.get('opening_balance') ?? '').trim();
   let opening_balance = 0;
   if (balanceRaw) {
     const v = parseAmountToOere(balanceRaw);
-    if (v === null) return { error: 'Ugyldig restgæld' };
-    opening_balance = v;
+    if (v === null) return { error: 'Ugyldig gæld' };
+    opening_balance = v === 0 ? 0 : -Math.abs(v);
   }
 
   const principal = parseOptionalAmount(String(formData.get('original_principal') ?? ''));
@@ -240,7 +241,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
   const { data: loan, error: loanErr } = await supabase
     .from('accounts')
     .select(
-      'name, payment_amount, payment_interval, payment_start_date, payment_rente, payment_afdrag, payment_bidrag, payment_rabat'
+      'name, payment_amount, payment_interval, payment_start_date, payment_rente, payment_afdrag, payment_bidrag, payment_rabat, opening_balance, interest_rate'
     )
     .eq('id', loanId)
     .eq('household_id', householdId)
@@ -287,14 +288,53 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     occurs_on = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   }
 
-  // Decide if we have a breakdown worth surfacing as components. We use
-  // breakdown-mode (parent IS the total; components are informational) so
-  // the cashflow stays exactly equal to payment_amount.
-  const hasBreakdown =
+  // Build components from explicit breakdown if available.
+  const explicitBreakdown =
     loan.payment_rente != null ||
     loan.payment_afdrag != null ||
     loan.payment_bidrag != null ||
     loan.payment_rabat != null;
+
+  const components: { label: string; amount: number; position: number }[] = [];
+  let pos = 0;
+  if (explicitBreakdown) {
+    if (loan.payment_rente != null)
+      components.push({ label: 'Rente', amount: loan.payment_rente, position: pos++ });
+    if (loan.payment_afdrag != null)
+      components.push({ label: 'Afdrag', amount: loan.payment_afdrag, position: pos++ });
+    if (loan.payment_bidrag != null)
+      components.push({ label: 'Bidrag', amount: loan.payment_bidrag, position: pos++ });
+    if (loan.payment_rabat != null)
+      // Stored signed (negative for KundeKroner) and pushed as-is. Migration
+      // 0019 dropped the amount >= 0 check on transaction_components so
+      // components can naturally sum to the parent total.
+      components.push({ label: 'Rabat', amount: loan.payment_rabat, position: pos++ });
+  } else if (loan.interest_rate != null && loan.opening_balance < 0) {
+    // No explicit breakdown but we have rente% + restgæld — derive a rente
+    // estimate so the budget shows where the cashflow goes. Most users
+    // forget to count rente when laying out their budget, which is exactly
+    // where this should help. The derived split is a snapshot of the FIRST
+    // payment; for an annuitetslån it shifts month-to-month, but as an
+    // overview it's the right ballpark.
+    const periodsPerYear =
+      { once: 0, weekly: 52, monthly: 12, quarterly: 4, semiannual: 2, yearly: 1 }[
+        loan.payment_interval
+      ] ?? 0;
+    if (periodsPerYear > 0) {
+      const restgaeld = -loan.opening_balance;
+      const rentePerPeriod = Math.round(
+        (restgaeld * (loan.interest_rate / 100)) / periodsPerYear
+      );
+      const afdragPerPeriod = loan.payment_amount - rentePerPeriod;
+      // Only auto-derive if the result is sensible (positive afdrag).
+      if (rentePerPeriod > 0 && afdragPerPeriod > 0) {
+        components.push({ label: 'Rente (estimat)', amount: rentePerPeriod, position: pos++ });
+        components.push({ label: 'Afdrag (estimat)', amount: afdragPerPeriod, position: pos++ });
+      }
+    }
+  }
+
+  const useBreakdownMode = components.length > 0;
 
   const { data: tx, error: txErr } = await supabase
     .from('transactions')
@@ -306,7 +346,10 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       description: loan.name,
       occurs_on,
       recurrence: loan.payment_interval,
-      components_mode: hasBreakdown ? 'breakdown' : 'additive',
+      // breakdown-mode: parent IS the total; components are informational.
+      // Cashflow stays exactly equal to payment_amount regardless of the
+      // sum of components.
+      components_mode: useBreakdownMode ? 'breakdown' : 'additive',
     })
     .select('id')
     .single();
@@ -314,26 +357,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     redirect(`/laan/${encodeURIComponent(loanId)}?error=` + encodeURIComponent(txErr.message));
   }
 
-  if (hasBreakdown) {
-    const components: { label: string; amount: number; position: number }[] = [];
-    let pos = 0;
-    if (loan.payment_rente != null)
-      components.push({ label: 'Rente', amount: loan.payment_rente, position: pos++ });
-    if (loan.payment_afdrag != null)
-      components.push({ label: 'Afdrag', amount: loan.payment_afdrag, position: pos++ });
-    if (loan.payment_bidrag != null)
-      components.push({ label: 'Bidrag', amount: loan.payment_bidrag, position: pos++ });
-    if (loan.payment_rabat != null)
-      // Show rabat as a positive amount with a "Rabat" label — keeping the
-      // stored value signed, but transaction_components only allow >= 0
-      // (per migration 0010). Use absolute value; the label communicates
-      // that it's a discount rather than an addition.
-      components.push({
-        label: 'Rabat',
-        amount: Math.abs(loan.payment_rabat),
-        position: pos++,
-      });
-
+  if (useBreakdownMode) {
     const { error: compErr } = await supabase.from('transaction_components').insert(
       components.map((c) => ({
         household_id: householdId,
@@ -344,8 +368,6 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       }))
     );
     if (compErr) {
-      // Components failed but parent transaction was created. Surface the
-      // error so the user knows; they can re-do or edit manually.
       redirect(
         `/laan/${encodeURIComponent(loanId)}?error=` +
           encodeURIComponent('Lån oprettet på budget, men nedbrydning fejlede: ' + compErr.message)
@@ -353,9 +375,22 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     }
   }
 
+  // Look up the budget account's name so we can show a confirmation toast
+  // on redirect ("Tilføjet på X"). Cheap one-row read; failure is non-fatal
+  // — we just fall back to a generic message.
+  const { data: targetAccount } = await supabase
+    .from('accounts')
+    .select('name')
+    .eq('id', accountId)
+    .eq('household_id', householdId)
+    .single();
+
   revalidatePath('/laan');
   revalidatePath('/budget', 'layout');
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect(`/laan/${encodeURIComponent(loanId)}`);
+  const pushedQs = targetAccount?.name
+    ? `?pushed=${encodeURIComponent(targetAccount.name)}`
+    : '?pushed=1';
+  redirect(`/laan/${encodeURIComponent(loanId)}${pushedQs}`);
 }

@@ -141,8 +141,10 @@ export async function addComponent(formData: FormData) {
   if (!transactionId) bounceWithError(accountId, 'Manglende transaktion');
   if (!label) bounceWithError(accountId, 'Indtast et navn');
 
+  // Negative amounts are allowed (e.g. rabat / KundeKroner) — see migration
+  // 0019 which dropped the >= 0 check.
   const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount < 0) {
+  if (amount === null) {
     bounceWithError(accountId, 'Ugyldigt beløb');
   }
 
@@ -208,8 +210,9 @@ export async function updateComponent(
   const label = String(formData.get('label') ?? '').trim();
   if (!label) return { ok: false, error: 'Navn er påkrævet' };
 
+  // Negative amounts allowed (rabat) — see migration 0019.
   const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount < 0) {
+  if (amount === null) {
     return { ok: false, error: 'Ugyldigt beløb' };
   }
 

@@ -2,28 +2,27 @@ import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
 import { getDashboardData, hasAnyRecurringExpenses } from '@/lib/dal';
 import {
-  ACCOUNT_KIND_LABEL_DA,
   formatAmount,
   formatLongDateDA,
   formatMonthYearDA,
 } from '@/lib/format';
+import { CashflowAdvisor } from './_components/CashflowAdvisor';
+import { MonthlyCategoryChart } from './_components/MonthlyCategoryChart';
+import { TopExpensesList } from './_components/TopExpensesList';
 
 export default async function DashboardPage() {
-  const [{ accounts, monthlyTotals, yearMonth }, hasRecurringExpenses] = await Promise.all([
+  const [{ monthlyTotals, yearMonth }, hasRecurringExpenses] = await Promise.all([
     getDashboardData(),
     hasAnyRecurringExpenses(),
   ]);
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
-  // Capitalise first letter — Intl returns lowercase weekday names.
   const longDateCapitalised = longDate.charAt(0).toUpperCase() + longDate.slice(1);
   const monthLabel = formatMonthYearDA(yearMonth);
   const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   const { income, expense, net } = monthlyTotals;
-  // Use a real minus sign for negative amounts so the figures align visually
-  // when paired with the green '+' for positives.
   const netSign = net >= 0 ? '+' : '−';
   const netClass =
     net > 0
@@ -33,7 +32,7 @@ export default async function DashboardPage() {
         : 'text-neutral-900';
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-neutral-200 pb-6">
         <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
           Dashboard
@@ -44,8 +43,8 @@ export default async function DashboardPage() {
       {/* CTA: only shown until the user has any recurring transactions. After
           that, the Budget link in the sidebar is the discovery surface. */}
       {!hasRecurringExpenses && (
-        <div className="mt-6 flex items-start gap-4 rounded-md border border-amber-200 bg-amber-50 p-4">
-          <div className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+        <div className="mt-6 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-start sm:gap-4">
+          <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
             <ClipboardList className="h-5 w-5" />
           </div>
           <div className="flex-1">
@@ -59,14 +58,16 @@ export default async function DashboardPage() {
           </div>
           <Link
             href="/budget"
-            className="shrink-0 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="shrink-0 self-start rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
             Sæt budget op
           </Link>
         </div>
       )}
 
-      {/* Cashflow summaries — denne måned + forecast placeholder */}
+      {/* Måneds-overblik øverst — denne måneds tal til venstre, kategori-
+          fordelingen til højre. Erstatter den tidligere "Forecast"-placeholder
+          med et chart der faktisk siger noget om hvor pengene går hen. */}
       <section className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div>
           <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -74,88 +75,42 @@ export default async function DashboardPage() {
           </h2>
           <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
             <div className="grid grid-cols-3 divide-x divide-neutral-100">
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+              <div className="px-3 py-3 sm:px-4">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
                   Indtægter
                 </div>
-                <div className="tabnum mt-1 font-mono text-base text-green-700">
+                <div className="tabnum mt-1 font-mono text-sm text-green-700 sm:text-base">
                   + {formatAmount(income)}
                 </div>
               </div>
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+              <div className="px-3 py-3 sm:px-4">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
                   Udgifter
                 </div>
-                <div className="tabnum mt-1 font-mono text-base text-red-700">
+                <div className="tabnum mt-1 font-mono text-sm text-red-700 sm:text-base">
                   − {formatAmount(expense)}
                 </div>
               </div>
-              <div className="px-4 py-3">
-                <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+              <div className="px-3 py-3 sm:px-4">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
                   Netto
                 </div>
-                <div className={`tabnum mt-1 font-mono text-base font-semibold ${netClass}`}>
+                <div className={`tabnum mt-1 font-mono text-sm font-semibold sm:text-base ${netClass}`}>
                   {netSign} {formatAmount(Math.abs(net))}
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
-            Næste 30 dages cashflow
-          </h2>
-          <div className="rounded-md border border-dashed border-neutral-300 bg-white px-4 py-12 text-center">
-            <div className="text-sm text-neutral-500">Forecast kommer snart</div>
+          <div className="mt-4">
+            <TopExpensesList limit={5} />
           </div>
         </div>
+
+        <MonthlyCategoryChart limit={8} />
       </section>
 
-      {/* Konti — bare en oversigt over hvilke konti husstanden har, uden saldo. */}
-      <section className="mt-8">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-            Konti
-          </h2>
-          <span className="text-xs text-neutral-400">
-            {accounts.length} {accounts.length === 1 ? 'konto' : 'konti'}
-          </span>
-        </div>
-
-        <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-          {accounts.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-neutral-500">
-              Ingen konti endnu — opret en under{' '}
-              <span className="text-neutral-700">Konti</span>.
-            </div>
-          ) : (
-            <table className="w-full">
-              <tbody>
-                {accounts.map((a) => (
-                  <tr
-                    key={a.id}
-                    className="border-b border-neutral-100 last:border-b-0"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-neutral-900">{a.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                        <span>{ACCOUNT_KIND_LABEL_DA[a.kind] ?? a.kind}</span>
-                        {a.owner_name && (
-                          <>
-                            <span className="text-neutral-300">·</span>
-                            <span>{a.owner_name}</span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
+      <CashflowAdvisor />
     </div>
   );
 }

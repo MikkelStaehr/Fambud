@@ -8,6 +8,7 @@ export type AccountKind =
   | 'budget'
   | 'household'
   | 'savings'
+  | 'investment'
   | 'credit'
   | 'cash'
   | 'other';
@@ -17,6 +18,12 @@ export type LoanType =
   | 'banklan'
   | 'kassekredit'
   | 'andet';
+export type InvestmentType =
+  | 'aldersopsparing'
+  | 'aktiesparekonto'
+  | 'aktiedepot'
+  | 'pension'
+  | 'boerneopsparing';
 export type CategoryKind = 'income' | 'expense';
 export type RecurrenceFreq =
   | 'once'
@@ -66,6 +73,7 @@ export type Database = {
           payment_afdrag: number | null;
           payment_bidrag: number | null;
           payment_rabat: number | null;
+          investment_type: InvestmentType | null;
         };
         Insert: {
           id?: string;
@@ -95,6 +103,7 @@ export type Database = {
           payment_afdrag?: number | null;
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
+          investment_type?: InvestmentType | null;
         };
         Update: {
           id?: string;
@@ -124,6 +133,7 @@ export type Database = {
           payment_afdrag?: number | null;
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
+          investment_type?: InvestmentType | null;
         };
         Relationships: [];
       };

@@ -13,7 +13,7 @@ import type {
   Transaction,
   Transfer,
 } from '@/lib/database.types';
-import { currentYearMonth, monthBounds } from '@/lib/format';
+import { currentYearMonth, monthBounds, monthlyEquivalent } from '@/lib/format';
 import { STANDARD_EXPENSE_CATEGORIES } from '@/lib/categories';
 
 export async function requireUser() {
@@ -196,6 +196,272 @@ export async function getAccountById(id: string): Promise<Account> {
   return data;
 }
 
+// Steady-state cashflow per account in monthly øre. "in" tæller penge der
+// ankommer på kontoen (income-transaktioner + indgående overførsler) og
+// "out" tæller penge der forlader kontoen (expense-transaktioner + udgående
+// overførsler). Engangs-poster ('once') tælles ikke med — vi vil have det
+// stabile billede, ikke en bestemt måneds tilfældigheder.
+//
+// Bruges af /konti til at erstatte den misvisende opening_balance-saldo med
+// en flow-orienteret repr i tråd med appens cashflow-filosofi.
+export type AccountFlow = { in: number; out: number };
+
+export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const [txnsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select(
+        'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
+      )
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once')
+      .returns<{
+        account_id: string;
+        amount: number;
+        recurrence: RecurrenceFreq;
+        components_mode: 'additive' | 'breakdown';
+        category: { kind: 'income' | 'expense' } | null;
+        components: { amount: number }[];
+      }[]>(),
+    supabase
+      .from('transfers')
+      .select('from_account_id, to_account_id, amount, recurrence')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once'),
+  ]);
+
+  if (txnsRes.error) throw txnsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
+
+  const flows = new Map<string, AccountFlow>();
+  const bump = (id: string, key: 'in' | 'out', amount: number) => {
+    const cur = flows.get(id) ?? { in: 0, out: 0 };
+    cur[key] += amount;
+    flows.set(id, cur);
+  };
+
+  for (const t of txnsRes.data ?? []) {
+    const componentsSum = (t.components ?? []).reduce((s, c) => s + c.amount, 0);
+    // Effective amount honours components_mode — additive stacks tilkøb on
+    // top, breakdown treats parent as the total. Identical to the dashboard
+    // computation in getDashboardData().
+    const effective =
+      t.components_mode === 'breakdown' ? t.amount : t.amount + componentsSum;
+    const monthly = monthlyEquivalent(effective, t.recurrence);
+    if (t.category?.kind === 'income') bump(t.account_id, 'in', monthly);
+    else if (t.category?.kind === 'expense') bump(t.account_id, 'out', monthly);
+  }
+
+  for (const tr of transfersRes.data ?? []) {
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    bump(tr.from_account_id, 'out', monthly);
+    bump(tr.to_account_id, 'in', monthly);
+  }
+
+  return flows;
+}
+
+// Detaljeret cashflow-data til graf-visualiseringen på dashboard. Forskellen
+// fra getAccountFlows() er at vi separerer income/expense (eksterne kanter
+// til/fra synthetic "Indtægter"/"Udgifter"-noder) fra transfers (kanter
+// mellem konti). Den aggregerede in/out i flows gjorde det umuligt at
+// tegne grafen korrekt — hvis vi blot tegnede in→Udgifter ville en transfer
+// til en opsparingskonto fejlagtigt blive vist som en udgift.
+export type AccountCashflowDetail = {
+  income: number;        // monthlyEquivalent af kategori=income transaktioner
+  expense: number;       // monthlyEquivalent af kategori=expense transaktioner
+  transfersIn: number;   // monthlyEquivalent af indgående overførsler
+  transfersOut: number;  // monthlyEquivalent af udgående overførsler
+};
+
+export type CashflowEdge = {
+  from: string;          // account id (eller 'income' synthetic)
+  to: string;            // account id (eller 'expense' synthetic)
+  monthly: number;
+  kind: 'income' | 'expense' | 'transfer';
+};
+
+export type CashflowGraphData = {
+  perAccount: Map<string, AccountCashflowDetail>;
+  edges: CashflowEdge[];
+};
+
+export async function getCashflowGraph(): Promise<CashflowGraphData> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const [txnsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select(
+        'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
+      )
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once')
+      .returns<{
+        account_id: string;
+        amount: number;
+        recurrence: RecurrenceFreq;
+        components_mode: 'additive' | 'breakdown';
+        category: { kind: 'income' | 'expense' } | null;
+        components: { amount: number }[];
+      }[]>(),
+    supabase
+      .from('transfers')
+      .select('from_account_id, to_account_id, amount, recurrence')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once'),
+  ]);
+
+  if (txnsRes.error) throw txnsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
+
+  const perAccount = new Map<string, AccountCashflowDetail>();
+  const detailFor = (id: string) => {
+    let d = perAccount.get(id);
+    if (!d) {
+      d = { income: 0, expense: 0, transfersIn: 0, transfersOut: 0 };
+      perAccount.set(id, d);
+    }
+    return d;
+  };
+
+  // Aggregér income/expense pr. konto (kanten Indtægter→konto eller
+  // konto→Udgifter er summen af alle transaktioner, ikke én pr. række).
+  for (const t of txnsRes.data ?? []) {
+    const componentsSum = (t.components ?? []).reduce((s, c) => s + c.amount, 0);
+    const effective =
+      t.components_mode === 'breakdown' ? t.amount : t.amount + componentsSum;
+    const monthly = monthlyEquivalent(effective, t.recurrence);
+    if (t.category?.kind === 'income') detailFor(t.account_id).income += monthly;
+    else if (t.category?.kind === 'expense') detailFor(t.account_id).expense += monthly;
+  }
+
+  // Aggregér transfers pr. (from, to) par så samme rute ikke giver flere
+  // kanter på grafen.
+  const transferKey = (from: string, to: string) => `${from}→${to}`;
+  const transferAggregate = new Map<string, { from: string; to: string; monthly: number }>();
+  for (const tr of transfersRes.data ?? []) {
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    detailFor(tr.from_account_id).transfersOut += monthly;
+    detailFor(tr.to_account_id).transfersIn += monthly;
+    const k = transferKey(tr.from_account_id, tr.to_account_id);
+    const prev = transferAggregate.get(k);
+    if (prev) prev.monthly += monthly;
+    else transferAggregate.set(k, { from: tr.from_account_id, to: tr.to_account_id, monthly });
+  }
+
+  // Byg kant-listen. Synthetic node-ids: 'income' (kilden) og 'expense'
+  // (slutter). De håndteres specielt i graf-komponenten.
+  const edges: CashflowEdge[] = [];
+  for (const [accountId, d] of perAccount) {
+    if (d.income > 0) edges.push({ from: 'income', to: accountId, monthly: d.income, kind: 'income' });
+    if (d.expense > 0) edges.push({ from: accountId, to: 'expense', monthly: d.expense, kind: 'expense' });
+  }
+  for (const tr of transferAggregate.values()) {
+    edges.push({ from: tr.from, to: tr.to, monthly: tr.monthly, kind: 'transfer' });
+  }
+
+  return { perAccount, edges };
+}
+
+// "Hvor går pengene hen?" — pr.-kategori-fordeling af alle faste udgifter
+// (recurring), normaliseret til månedligt beløb. Bruges af dashboardets
+// kategori-graf og er bevidst steady-state (monthlyEquivalent) i stedet for
+// "denne måneds bogførte poster" så folk kan se den gennemsnitlige
+// kategori-vægt uanset om en post er ugentlig, kvartalvis eller årlig.
+export type CategoryExpenseSummary = {
+  category: { id: string; name: string; color: string };
+  monthly: number;
+};
+
+export async function getMonthlyExpensesByCategory(): Promise<CategoryExpenseSummary[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      'amount, recurrence, components_mode, category:categories(id, name, color, kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', householdId)
+    .neq('recurrence', 'once')
+    .returns<{
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      category: { id: string; name: string; color: string; kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>();
+  if (error) throw error;
+
+  const map = new Map<string, CategoryExpenseSummary>();
+  for (const t of data ?? []) {
+    if (!t.category || t.category.kind !== 'expense') continue;
+    const componentsSum = (t.components ?? []).reduce((s, c) => s + c.amount, 0);
+    const effective =
+      t.components_mode === 'breakdown' ? t.amount : t.amount + componentsSum;
+    const monthly = monthlyEquivalent(effective, t.recurrence);
+    const existing = map.get(t.category.id);
+    if (existing) existing.monthly += monthly;
+    else
+      map.set(t.category.id, {
+        category: { id: t.category.id, name: t.category.name, color: t.category.color },
+        monthly,
+      });
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.monthly - a.monthly);
+}
+
+// Top-N største enkelt-udgifter normaliseret til månedlig sats. Praktisk på
+// dashboardet til "hvor er de store sten?" — typisk husleje, lån, afdragene.
+export type TopExpenseRow = {
+  id: string;
+  description: string | null;
+  category: { name: string; color: string } | null;
+  monthly: number;
+  recurrence: RecurrenceFreq;
+};
+
+export async function getTopRecurringExpenses(limit = 5): Promise<TopExpenseRow[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      'id, description, amount, recurrence, components_mode, category:categories(name, color, kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', householdId)
+    .neq('recurrence', 'once')
+    .returns<{
+      id: string;
+      description: string | null;
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      category: { name: string; color: string; kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>();
+  if (error) throw error;
+
+  const rows: TopExpenseRow[] = [];
+  for (const t of data ?? []) {
+    if (t.category?.kind !== 'expense') continue;
+    const componentsSum = (t.components ?? []).reduce((s, c) => s + c.amount, 0);
+    const effective =
+      t.components_mode === 'breakdown' ? t.amount : t.amount + componentsSum;
+    const monthly = monthlyEquivalent(effective, t.recurrence);
+    rows.push({
+      id: t.id,
+      description: t.description,
+      category: t.category ? { name: t.category.name, color: t.category.color } : null,
+      monthly,
+      recurrence: t.recurrence,
+    });
+  }
+  rows.sort((a, b) => b.monthly - a.monthly);
+  return rows.slice(0, limit);
+}
+
 // ----------------------------------------------------------------------------
 // Categories
 // ----------------------------------------------------------------------------
@@ -316,9 +582,10 @@ export async function getTransferById(id: string): Promise<Transfer> {
 // ----------------------------------------------------------------------------
 // Budget wizard
 // ----------------------------------------------------------------------------
-// Account kinds we surface in /budget. Excludes 'savings' (no expenses
-// typically), 'credit' (payments go TO, not FROM), and 'cash' (rare). Users
-// who do want to add expenses on those accounts can still use /poster.
+// Account kinds we surface in /budget. Excludes 'savings' / 'investment' (no
+// expenses typically — depoter modtager indskud, ikke udgifter), 'credit'
+// (payments go TO, not FROM), and 'cash' (rare). Users who do want to add
+// expenses on those accounts can still use /poster.
 export const BUDGET_ACCOUNT_KINDS: AccountKind[] = [
   'checking',
   'budget',

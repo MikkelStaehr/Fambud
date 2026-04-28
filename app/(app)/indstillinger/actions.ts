@@ -154,6 +154,10 @@ export async function restoreCategory(formData: FormData) {
 // ----------------------------------------------------------------------------
 // Family members
 // ----------------------------------------------------------------------------
+// Lightweight email validation — Postgres citext + the global unique index
+// handle the canonical checks. We just guard against obvious typos here.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function createFamilyMember(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   if (!name) {
@@ -164,6 +168,15 @@ export async function createFamilyMember(formData: FormData) {
   const birthdate = birthdateRaw && /^\d{4}-\d{2}-\d{2}$/.test(birthdateRaw)
     ? birthdateRaw
     : null;
+
+  const emailRaw = String(formData.get('email') ?? '').trim().toLowerCase();
+  let email: string | null = null;
+  if (emailRaw) {
+    if (!EMAIL_RE.test(emailRaw)) {
+      redirect('/indstillinger?error=' + encodeURIComponent('Ugyldig email'));
+    }
+    email = emailRaw;
+  }
 
   const { supabase, householdId } = await getHouseholdContext();
 
@@ -182,10 +195,16 @@ export async function createFamilyMember(formData: FormData) {
     household_id: householdId,
     name,
     birthdate,
+    email,
     position: nextPos,
   });
   if (error) {
-    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+    // Friendlier copy for the unique-email collision (handle_new_user uses
+    // this index to claim signups, so duplicates are a real risk).
+    const msg = error.message.includes('family_members_email_unique')
+      ? 'Den email er allerede brugt på et familiemedlem'
+      : error.message;
+    redirect('/indstillinger?error=' + encodeURIComponent(msg));
   }
 
   revalidatePath('/indstillinger');

@@ -155,3 +155,63 @@ export function monthlyEquivalent(amount: number, recurrence: RecurrenceFreq): n
     case 'yearly':     return Math.round(amount / 12);
   }
 }
+
+// Add `months` to a date, clamping the day to the last day of the target
+// month (Jan 31 + 1 month → Feb 28/29, not Mar 3). Mirrors Postgres
+// `date + INTERVAL '1 month'`. Used to roll a loan's anchor date forward
+// to the next occurrence.
+function addMonthsClamped(d: Date, months: number): Date {
+  const targetMonth = d.getMonth() + months;
+  const targetYear = d.getFullYear() + Math.floor(targetMonth / 12);
+  const normMonth = ((targetMonth % 12) + 12) % 12;
+  const lastDay = new Date(targetYear, normMonth + 1, 0).getDate();
+  const next = new Date(targetYear, normMonth, Math.min(d.getDate(), lastDay));
+  return next;
+}
+
+function recurrenceStepMonths(freq: RecurrenceFreq): number {
+  switch (freq) {
+    case 'monthly':    return 1;
+    case 'quarterly':  return 3;
+    case 'semiannual': return 6;
+    case 'yearly':     return 12;
+    case 'weekly':     return 0; // step in weeks instead — handled separately
+    case 'once':       return 0;
+  }
+}
+
+// Given an anchor date (a known occurrence — typically the user's last
+// payment) and a recurrence, return the next date strictly after `today`.
+// If the anchor is already in the future, it IS the next occurrence.
+//
+// `anchorISO` is 'YYYY-MM-DD' from a Postgres date column.
+export function nextOccurrenceAfter(
+  anchorISO: string,
+  recurrence: RecurrenceFreq,
+  today: Date = new Date()
+): string {
+  const [y, m, d] = anchorISO.split('-').map(Number);
+  let next = new Date(y, m - 1, d);
+  // Strip time on `today` so the comparison is date-only — otherwise an
+  // anchor of "today" is sometimes < today by a few hours.
+  const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const stepMonths = recurrenceStepMonths(recurrence);
+
+  if (recurrence === 'weekly') {
+    while (next <= todayDateOnly) {
+      next = new Date(next);
+      next.setDate(next.getDate() + 7);
+    }
+  } else if (stepMonths > 0) {
+    while (next <= todayDateOnly) {
+      next = addMonthsClamped(next, stepMonths);
+    }
+  }
+  // 'once' falls through and just returns the anchor.
+
+  const yyyy = next.getFullYear();
+  const mm = String(next.getMonth() + 1).padStart(2, '0');
+  const dd = String(next.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}

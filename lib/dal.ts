@@ -28,7 +28,7 @@ export async function requireUser() {
 export async function getHouseholdContext() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
-    .from('household_members')
+    .from('family_members')
     .select('household_id')
     .eq('user_id', user.id)
     .maybeSingle();
@@ -47,7 +47,7 @@ export async function getHouseholdContext() {
 export async function getMyMembership() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
-    .from('household_members')
+    .from('family_members')
     .select('household_id, role, setup_completed_at, joined_at')
     .eq('user_id', user.id)
     .maybeSingle();
@@ -68,13 +68,6 @@ export type DashboardData = {
   yearMonth: string;
 };
 
-export type SettingsMember = {
-  user_id: string;
-  email: string;
-  role: string;
-  joined_at: string;
-};
-
 export type SettingsInvite = Pick<
   HouseholdInvite,
   'id' | 'code' | 'created_at' | 'expires_at'
@@ -82,7 +75,6 @@ export type SettingsInvite = Pick<
 
 export type SettingsData = {
   household: Pick<Household, 'id' | 'name' | 'created_at'>;
-  members: SettingsMember[];
   invites: SettingsInvite[];
   familyMembers: FamilyMemberRow[];
   currentUserId: string;
@@ -91,16 +83,12 @@ export type SettingsData = {
 export async function getSettingsData(): Promise<SettingsData> {
   const { supabase, householdId, user } = await getHouseholdContext();
 
-  // Four parallel reads.
-  const [householdRes, membersRes, invitesRes, familyRes] = await Promise.all([
+  const [householdRes, invitesRes, familyRes] = await Promise.all([
     supabase
       .from('households')
       .select('id, name, created_at')
       .eq('id', householdId)
       .single(),
-    // Bypasses auth-table RLS via SECURITY DEFINER; the function itself enforces
-    // that the caller must be a member of `hid`.
-    supabase.rpc('get_household_members', { hid: householdId }),
     supabase
       .from('household_invites')
       .select('id, code, created_at, expires_at')
@@ -110,20 +98,18 @@ export async function getSettingsData(): Promise<SettingsData> {
       .order('created_at', { ascending: false }),
     supabase
       .from('family_members')
-      .select('id, name, birthdate, user_id, position')
+      .select('id, name, birthdate, user_id, position, email, role, joined_at')
       .eq('household_id', householdId)
       .order('position', { ascending: true })
       .order('created_at', { ascending: true }),
   ]);
 
   if (householdRes.error) throw householdRes.error;
-  if (membersRes.error) throw membersRes.error;
   if (invitesRes.error) throw invitesRes.error;
   if (familyRes.error) throw familyRes.error;
 
   return {
     household: householdRes.data,
-    members: (membersRes.data ?? []) as SettingsMember[],
     invites: invitesRes.data ?? [],
     familyMembers: familyRes.data ?? [],
     currentUserId: user.id,
@@ -431,21 +417,128 @@ export async function getRecurringExpensesForAccount(
     }));
 }
 
-// Family members — anyone in the household, with or without a login.
-// Used as the source for "Tilhører"-dropdowns on expenses + components.
+// ----------------------------------------------------------------------------
+// Loans — credit accounts with the loan-metadata fields populated
+// ----------------------------------------------------------------------------
+// /laan surfaces every kind='credit' account regardless of whether the
+// loan-specific fields (loan_type, original_principal, term_months, lender,
+// monthly_payment) are set, since the wizard creates them empty and the
+// /laan edit form is where the user fills them in.
+export type LoanRow = Account;
+
+export async function getLoans(): Promise<LoanRow[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('household_id', householdId)
+    .eq('kind', 'credit')
+    .eq('archived', false)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getLoanById(id: string): Promise<LoanRow> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .eq('kind', 'credit')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ----------------------------------------------------------------------------
+// Income — convenience wrappers around income-category transactions
+// ----------------------------------------------------------------------------
+// We treat any transaction whose category.kind = 'income' as income. The
+// /indkomst page filters and decorates these with family-member tags and
+// optional gross/pension fields.
+export type IncomeRow = Pick<
+  Transaction,
+  | 'id'
+  | 'account_id'
+  | 'category_id'
+  | 'amount'
+  | 'description'
+  | 'occurs_on'
+  | 'recurrence'
+  | 'recurrence_until'
+  | 'family_member_id'
+  | 'gross_amount'
+  | 'pension_own_pct'
+  | 'pension_employer_pct'
+> & {
+  account: Pick<Account, 'id' | 'name'> | null;
+  family_member: { id: string; name: string } | null;
+};
+
+export async function getIncomeTransactions(): Promise<IncomeRow[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  // !inner makes this filter via a join — PostgREST only allows filtering
+  // through joined columns when the join is inner.
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      `id, account_id, category_id, amount, description, occurs_on,
+       recurrence, recurrence_until, family_member_id,
+       gross_amount, pension_own_pct, pension_employer_pct,
+       account:accounts(id, name),
+       family_member:family_members(id, name),
+       category:categories!inner(kind)`
+    )
+    .eq('household_id', householdId)
+    .eq('category.kind', 'income')
+    .order('occurs_on', { ascending: false })
+    .order('created_at', { ascending: false })
+    .returns<(IncomeRow & { category: { kind: 'income' } })[]>();
+
+  if (error) throw error;
+  // Strip the join-only `category` field — callers don't need it.
+  return (data ?? []).map(({ category: _c, ...rest }) => rest);
+}
+
+export async function getIncomeById(id: string): Promise<IncomeRow> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      `id, account_id, category_id, amount, description, occurs_on,
+       recurrence, recurrence_until, family_member_id,
+       gross_amount, pension_own_pct, pension_employer_pct,
+       account:accounts(id, name),
+       family_member:family_members(id, name)`
+    )
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .single<IncomeRow>();
+  if (error) throw error;
+  return data;
+}
+
+// Family members — anyone in the household. user_id NOT NULL means they have
+// a login; email NOT NULL with user_id NULL means they're pre-approved and
+// will be auto-claimed when they sign up with that email.
 export type FamilyMemberRow = {
   id: string;
   name: string;
   birthdate: string | null;
   user_id: string | null;
   position: number;
+  email: string | null;
+  role: string | null;
+  joined_at: string | null;
 };
 
 export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   const { supabase, householdId } = await getHouseholdContext();
   const { data, error } = await supabase
     .from('family_members')
-    .select('id, name, birthdate, user_id, position')
+    .select('id, name, birthdate, user_id, position, email, role, joined_at')
     .eq('household_id', householdId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });

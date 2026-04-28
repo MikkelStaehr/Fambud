@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getBudgetAccounts } from '@/lib/dal';
 import { SidebarNav } from './_components/SidebarNav';
 import { signOut } from './actions';
 
@@ -22,11 +23,15 @@ export default async function AppLayout({
   // Wizard gate. We don't go through the full DAL here because the (app)
   // layout runs on every page load — keep this query minimal.
   const { data: membership } = await supabase
-    .from('household_members')
+    .from('family_members')
     .select('setup_completed_at')
     .eq('user_id', user.id)
     .maybeSingle();
   if (!membership?.setup_completed_at) redirect('/wizard');
+
+  // Fetched at the layout level so the sidebar can render the user's budget
+  // accounts as nested links under the Budget item.
+  const budgetAccounts = await getBudgetAccounts();
 
   return (
     <div className="flex min-h-screen">
@@ -37,7 +42,9 @@ export default async function AppLayout({
           </span>
         </div>
 
-        <SidebarNav />
+        <SidebarNav
+          budgetAccounts={budgetAccounts.map((a) => ({ id: a.id, name: a.name }))}
+        />
 
         <div className="mt-auto px-1 pt-4">
           <form action={signOut}>

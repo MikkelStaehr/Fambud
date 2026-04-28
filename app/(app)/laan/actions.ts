@@ -1,0 +1,361 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { getHouseholdContext } from '@/lib/dal';
+import { parseAmountToOere, nextOccurrenceAfter } from '@/lib/format';
+import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
+
+const VALID_LOAN_TYPES: readonly LoanType[] = [
+  'kreditkort',
+  'realkredit',
+  'banklan',
+  'kassekredit',
+  'andet',
+];
+
+const VALID_INTERVALS: readonly RecurrenceFreq[] = [
+  'monthly',
+  'quarterly',
+  'semiannual',
+  'yearly',
+];
+
+function parsePct(raw: string): number | null {
+  const trimmed = raw.trim().replace(/,/g, '.');
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseOptionalAmount(raw: string): { ok: true; value: number | null } | { ok: false } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: null };
+  const v = parseAmountToOere(trimmed);
+  if (v === null) return { ok: false };
+  return { ok: true, value: v };
+}
+
+type ParsedLoan = {
+  name: string;
+  owner_name: string | null;
+  loan_type: LoanType | null;
+  lender: string | null;
+  opening_balance: number;
+  original_principal: number | null;
+  payment_amount: number | null;
+  payment_interval: RecurrenceFreq;
+  payment_start_date: string | null;
+  payment_rente: number | null;
+  payment_afdrag: number | null;
+  payment_bidrag: number | null;
+  payment_rabat: number | null;
+  term_months: number | null;
+  interest_rate: number | null;
+  apr: number | null;
+};
+
+// Like parseOptionalAmount but for the rabat column, which we allow to be
+// signed (KundeKroner are negative). parseAmountToOere already handles a
+// leading '-'.
+function parseOptionalSignedAmount(raw: string): { ok: true; value: number | null } | { ok: false } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: null };
+  const v = parseAmountToOere(trimmed);
+  if (v === null) return { ok: false };
+  return { ok: true, value: v };
+}
+
+function readLoanForm(formData: FormData):
+  | { error: string }
+  | { data: ParsedLoan } {
+  const name = String(formData.get('name') ?? '').trim();
+  if (!name) return { error: 'Navn er påkrævet' };
+
+  const ownership = String(formData.get('ownership') ?? 'personal');
+  const owner_name = ownership === 'shared' ? 'Fælles' : null;
+
+  const loanTypeRaw = String(formData.get('loan_type') ?? '').trim();
+  const loan_type = loanTypeRaw && VALID_LOAN_TYPES.includes(loanTypeRaw as LoanType)
+    ? (loanTypeRaw as LoanType)
+    : null;
+
+  const lenderRaw = String(formData.get('lender') ?? '').trim();
+  const lender = lenderRaw || null;
+
+  // opening_balance is the only "balance" column on accounts; we treat it as
+  // restgæld (current balance, typically negative). Default to 0 if empty so
+  // the NOT NULL constraint stays happy.
+  const balanceRaw = String(formData.get('opening_balance') ?? '').trim();
+  let opening_balance = 0;
+  if (balanceRaw) {
+    const v = parseAmountToOere(balanceRaw);
+    if (v === null) return { error: 'Ugyldig restgæld' };
+    opening_balance = v;
+  }
+
+  const principal = parseOptionalAmount(String(formData.get('original_principal') ?? ''));
+  if (!principal.ok) return { error: 'Ugyldig hovedstol' };
+
+  const payment = parseOptionalAmount(String(formData.get('payment_amount') ?? ''));
+  if (!payment.ok) return { error: 'Ugyldig samlet ydelse' };
+
+  const intervalRaw = String(formData.get('payment_interval') ?? 'monthly');
+  if (!VALID_INTERVALS.includes(intervalRaw as RecurrenceFreq)) {
+    return { error: 'Ugyldigt betalingsinterval' };
+  }
+  const payment_interval = intervalRaw as RecurrenceFreq;
+
+  const startDateRaw = String(formData.get('payment_start_date') ?? '').trim();
+  const payment_start_date =
+    startDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(startDateRaw) ? startDateRaw : null;
+
+  const rente = parseOptionalAmount(String(formData.get('payment_rente') ?? ''));
+  if (!rente.ok) return { error: 'Ugyldig rente' };
+  const afdrag = parseOptionalAmount(String(formData.get('payment_afdrag') ?? ''));
+  if (!afdrag.ok) return { error: 'Ugyldig afdrag' };
+  const bidrag = parseOptionalAmount(String(formData.get('payment_bidrag') ?? ''));
+  if (!bidrag.ok) return { error: 'Ugyldig bidrag' };
+  const rabat = parseOptionalSignedAmount(String(formData.get('payment_rabat') ?? ''));
+  if (!rabat.ok) return { error: 'Ugyldig rabat' };
+
+  // Auto-compute payment_amount from breakdown if user didn't enter it
+  // explicitly but did fill the breakdown — saves them from typing the sum.
+  let payment_amount = payment.value;
+  const anyBreakdown =
+    rente.value != null || afdrag.value != null || bidrag.value != null || rabat.value != null;
+  if (payment_amount == null && anyBreakdown) {
+    payment_amount =
+      (rente.value ?? 0) + (afdrag.value ?? 0) + (bidrag.value ?? 0) + (rabat.value ?? 0);
+  }
+
+  const termRaw = String(formData.get('term_months') ?? '').trim();
+  let term_months: number | null = null;
+  if (termRaw) {
+    const n = Number(termRaw);
+    if (!Number.isFinite(n) || n <= 0) return { error: 'Løbetid skal være et positivt tal' };
+    term_months = Math.floor(n);
+  }
+
+  const interest_rate = parsePct(String(formData.get('interest_rate') ?? ''));
+  const apr = parsePct(String(formData.get('apr') ?? ''));
+
+  return {
+    data: {
+      name,
+      owner_name,
+      loan_type,
+      lender,
+      opening_balance,
+      original_principal: principal.value,
+      payment_amount,
+      payment_interval,
+      payment_start_date,
+      payment_rente: rente.value,
+      payment_afdrag: afdrag.value,
+      payment_bidrag: bidrag.value,
+      payment_rabat: rabat.value,
+      term_months,
+      interest_rate,
+      apr,
+    },
+  };
+}
+
+export async function createLoan(formData: FormData) {
+  const parsed = readLoanForm(formData);
+  if ('error' in parsed) {
+    redirect('/laan/ny?error=' + encodeURIComponent(parsed.error));
+  }
+
+  const { supabase, householdId, user } = await getHouseholdContext();
+  const { error } = await supabase.from('accounts').insert({
+    household_id: householdId,
+    kind: 'credit',
+    editable_by_all: true,
+    created_by: user.id,
+    ...parsed.data,
+  });
+  if (error) {
+    redirect('/laan/ny?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/laan');
+  revalidatePath('/konti');
+  redirect('/laan');
+}
+
+export async function updateLoan(id: string, formData: FormData) {
+  const parsed = readLoanForm(formData);
+  if ('error' in parsed) {
+    redirect(`/laan/${encodeURIComponent(id)}?error=` + encodeURIComponent(parsed.error));
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('accounts')
+    .update(parsed.data)
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) {
+    redirect(`/laan/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/laan');
+  revalidatePath('/konti');
+  redirect('/laan');
+}
+
+export async function deleteLoan(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('accounts')
+    .delete()
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .eq('kind', 'credit');
+  if (error) throw new Error(error.message);
+  revalidatePath('/laan');
+  revalidatePath('/konti');
+}
+
+// "Tilføj som ydelse på Budgetkonto X" — creates a recurring expense on
+// `account_id` mirroring the loan's payment_amount + interval, with the
+// loan's name as the description. Categorised under 'Lån' (created on demand
+// if missing, same idempotent pattern as 'Løn' for income).
+//
+// If the loan has a payment breakdown (rente / afdrag / bidrag / rabat),
+// we also create transaction_components with components_mode='breakdown' so
+// the budget view shows the same decomposition.
+export async function pushLoanToBudget(loanId: string, formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '').trim();
+  if (!accountId) {
+    redirect(`/laan/${encodeURIComponent(loanId)}?error=` + encodeURIComponent('Vælg en budgetkonto'));
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const { data: loan, error: loanErr } = await supabase
+    .from('accounts')
+    .select(
+      'name, payment_amount, payment_interval, payment_start_date, payment_rente, payment_afdrag, payment_bidrag, payment_rabat'
+    )
+    .eq('id', loanId)
+    .eq('household_id', householdId)
+    .eq('kind', 'credit')
+    .single();
+  if (loanErr) throw new Error(loanErr.message);
+  if (!loan.payment_amount || loan.payment_amount <= 0) {
+    redirect(
+      `/laan/${encodeURIComponent(loanId)}?error=` +
+        encodeURIComponent('Udfyld samlet ydelse på lånet før det kan lægges på budget')
+    );
+  }
+
+  // Lookup-or-create 'Lån' category. Same pattern as 'Løn' for income.
+  let categoryId: string;
+  const { data: existing } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('household_id', householdId)
+    .eq('name', 'Lån')
+    .eq('kind', 'expense')
+    .maybeSingle();
+  if (existing?.id) {
+    categoryId = existing.id;
+  } else {
+    const { data: created, error: catErr } = await supabase
+      .from('categories')
+      .insert({ household_id: householdId, name: 'Lån', kind: 'expense', color: '#dc2626' })
+      .select('id')
+      .single();
+    if (catErr) throw new Error(catErr.message);
+    categoryId = created.id;
+  }
+
+  // occurs_on = next future occurrence based on the loan's anchor date +
+  // interval. If the user entered "31.03.2026" as their last payment and
+  // interval is quarterly, this rolls forward to the upcoming 30.06.2026
+  // (or whichever future date matches). Falls back to today if no anchor.
+  let occurs_on: string;
+  if (loan.payment_start_date) {
+    occurs_on = nextOccurrenceAfter(loan.payment_start_date, loan.payment_interval);
+  } else {
+    const today = new Date();
+    occurs_on = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  }
+
+  // Decide if we have a breakdown worth surfacing as components. We use
+  // breakdown-mode (parent IS the total; components are informational) so
+  // the cashflow stays exactly equal to payment_amount.
+  const hasBreakdown =
+    loan.payment_rente != null ||
+    loan.payment_afdrag != null ||
+    loan.payment_bidrag != null ||
+    loan.payment_rabat != null;
+
+  const { data: tx, error: txErr } = await supabase
+    .from('transactions')
+    .insert({
+      household_id: householdId,
+      account_id: accountId,
+      category_id: categoryId,
+      amount: loan.payment_amount,
+      description: loan.name,
+      occurs_on,
+      recurrence: loan.payment_interval,
+      components_mode: hasBreakdown ? 'breakdown' : 'additive',
+    })
+    .select('id')
+    .single();
+  if (txErr) {
+    redirect(`/laan/${encodeURIComponent(loanId)}?error=` + encodeURIComponent(txErr.message));
+  }
+
+  if (hasBreakdown) {
+    const components: { label: string; amount: number; position: number }[] = [];
+    let pos = 0;
+    if (loan.payment_rente != null)
+      components.push({ label: 'Rente', amount: loan.payment_rente, position: pos++ });
+    if (loan.payment_afdrag != null)
+      components.push({ label: 'Afdrag', amount: loan.payment_afdrag, position: pos++ });
+    if (loan.payment_bidrag != null)
+      components.push({ label: 'Bidrag', amount: loan.payment_bidrag, position: pos++ });
+    if (loan.payment_rabat != null)
+      // Show rabat as a positive amount with a "Rabat" label — keeping the
+      // stored value signed, but transaction_components only allow >= 0
+      // (per migration 0010). Use absolute value; the label communicates
+      // that it's a discount rather than an addition.
+      components.push({
+        label: 'Rabat',
+        amount: Math.abs(loan.payment_rabat),
+        position: pos++,
+      });
+
+    const { error: compErr } = await supabase.from('transaction_components').insert(
+      components.map((c) => ({
+        household_id: householdId,
+        transaction_id: tx.id,
+        label: c.label,
+        amount: c.amount,
+        position: c.position,
+      }))
+    );
+    if (compErr) {
+      // Components failed but parent transaction was created. Surface the
+      // error so the user knows; they can re-do or edit manually.
+      redirect(
+        `/laan/${encodeURIComponent(loanId)}?error=` +
+          encodeURIComponent('Lån oprettet på budget, men nedbrydning fejlede: ' + compErr.message)
+      );
+    }
+  }
+
+  revalidatePath('/laan');
+  revalidatePath('/budget', 'layout');
+  revalidatePath('/poster');
+  revalidatePath('/dashboard');
+  redirect(`/laan/${encodeURIComponent(loanId)}`);
+}

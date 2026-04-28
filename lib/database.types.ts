@@ -11,6 +11,12 @@ export type AccountKind =
   | 'credit'
   | 'cash'
   | 'other';
+export type LoanType =
+  | 'kreditkort'
+  | 'realkredit'
+  | 'banklan'
+  | 'kassekredit'
+  | 'andet';
 export type CategoryKind = 'income' | 'expense';
 export type RecurrenceFreq =
   | 'once'
@@ -31,30 +37,6 @@ export type Database = {
         Update: { id?: string; name?: string; created_at?: string };
         Relationships: [];
       };
-      household_members: {
-        Row: {
-          household_id: string;
-          user_id: string;
-          role: string;
-          joined_at: string;
-          setup_completed_at: string | null;
-        };
-        Insert: {
-          household_id: string;
-          user_id: string;
-          role?: string;
-          joined_at?: string;
-          setup_completed_at?: string | null;
-        };
-        Update: {
-          household_id?: string;
-          user_id?: string;
-          role?: string;
-          joined_at?: string;
-          setup_completed_at?: string | null;
-        };
-        Relationships: [];
-      };
       accounts: {
         Row: {
           id: string;
@@ -73,6 +55,17 @@ export type Database = {
           created_by: string | null;
           interest_rate: number | null;
           apr: number | null;
+          loan_type: LoanType | null;
+          original_principal: number | null;
+          term_months: number | null;
+          lender: string | null;
+          payment_amount: number | null;
+          payment_interval: RecurrenceFreq;
+          payment_start_date: string | null;
+          payment_rente: number | null;
+          payment_afdrag: number | null;
+          payment_bidrag: number | null;
+          payment_rabat: number | null;
         };
         Insert: {
           id?: string;
@@ -91,6 +84,17 @@ export type Database = {
           created_by?: string | null;
           interest_rate?: number | null;
           apr?: number | null;
+          loan_type?: LoanType | null;
+          original_principal?: number | null;
+          term_months?: number | null;
+          lender?: string | null;
+          payment_amount?: number | null;
+          payment_interval?: RecurrenceFreq;
+          payment_start_date?: string | null;
+          payment_rente?: number | null;
+          payment_afdrag?: number | null;
+          payment_bidrag?: number | null;
+          payment_rabat?: number | null;
         };
         Update: {
           id?: string;
@@ -109,6 +113,17 @@ export type Database = {
           created_by?: string | null;
           interest_rate?: number | null;
           apr?: number | null;
+          loan_type?: LoanType | null;
+          original_principal?: number | null;
+          term_months?: number | null;
+          lender?: string | null;
+          payment_amount?: number | null;
+          payment_interval?: RecurrenceFreq;
+          payment_start_date?: string | null;
+          payment_rente?: number | null;
+          payment_afdrag?: number | null;
+          payment_bidrag?: number | null;
+          payment_rabat?: number | null;
         };
         Relationships: [];
       };
@@ -190,6 +205,9 @@ export type Database = {
           group_label: string | null;
           components_mode: 'additive' | 'breakdown';
           family_member_id: string | null;
+          gross_amount: number | null;
+          pension_own_pct: number | null;
+          pension_employer_pct: number | null;
         };
         Insert: {
           id?: string;
@@ -205,6 +223,9 @@ export type Database = {
           group_label?: string | null;
           components_mode?: 'additive' | 'breakdown';
           family_member_id?: string | null;
+          gross_amount?: number | null;
+          pension_own_pct?: number | null;
+          pension_employer_pct?: number | null;
         };
         Update: {
           id?: string;
@@ -220,6 +241,9 @@ export type Database = {
           group_label?: string | null;
           components_mode?: 'additive' | 'breakdown';
           family_member_id?: string | null;
+          gross_amount?: number | null;
+          pension_own_pct?: number | null;
+          pension_employer_pct?: number | null;
         };
         Relationships: [];
       };
@@ -265,6 +289,10 @@ export type Database = {
           user_id: string | null;
           position: number;
           created_at: string;
+          email: string | null;
+          role: string | null;
+          setup_completed_at: string | null;
+          joined_at: string | null;
         };
         Insert: {
           id?: string;
@@ -274,6 +302,10 @@ export type Database = {
           user_id?: string | null;
           position?: number;
           created_at?: string;
+          email?: string | null;
+          role?: string | null;
+          setup_completed_at?: string | null;
+          joined_at?: string | null;
         };
         Update: {
           id?: string;
@@ -283,6 +315,10 @@ export type Database = {
           user_id?: string | null;
           position?: number;
           created_at?: string;
+          email?: string | null;
+          role?: string | null;
+          setup_completed_at?: string | null;
+          joined_at?: string | null;
         };
         Relationships: [];
       };
@@ -375,7 +411,6 @@ export type Transfer = Database['public']['Tables']['transfers']['Row'];
 export type TransactionComponent = Database['public']['Tables']['transaction_components']['Row'];
 export type FamilyMember = Database['public']['Tables']['family_members']['Row'];
 export type Household = Database['public']['Tables']['households']['Row'];
-export type HouseholdMember = Database['public']['Tables']['household_members']['Row'];
 export type HouseholdInvite = Database['public']['Tables']['household_invites']['Row'];
 
 // Suppresses unused-export lint while we boot.

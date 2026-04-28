@@ -18,6 +18,15 @@ const ROLE_LABEL_DA: Record<string, string> = {
   member: 'Medlem',
 };
 
+function memberStatus(fm: {
+  user_id: string | null;
+  email: string | null;
+}): { label: string; tone: 'login' | 'pending' | 'none' } {
+  if (fm.user_id) return { label: 'Kan logge ind', tone: 'login' };
+  if (fm.email) return { label: 'Afventer signup', tone: 'pending' };
+  return { label: 'Ingen login', tone: 'none' };
+}
+
 function expiresLabel(expires_at: string | null): string {
   if (!expires_at) return 'Aldrig';
   const ms = new Date(expires_at).getTime() - Date.now();
@@ -42,7 +51,7 @@ export default async function IndstillingerPage({
   const sp = await searchParams;
   const showArchivedCategories = sp.archivedCategories === '1';
 
-  const [{ household, members, invites, familyMembers, currentUserId }, categories] = await Promise.all([
+  const [{ household, invites, familyMembers, currentUserId }, categories] = await Promise.all([
     getSettingsData(),
     getCategories({ includeArchived: showArchivedCategories }),
   ]);
@@ -68,47 +77,15 @@ export default async function IndstillingerPage({
         </div>
       </section>
 
-      {/* Medlemmer */}
+      {/* Familie */}
       <section className="mt-8">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Medlemmer
-        </h2>
-        <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-          <table className="w-full">
-            <tbody>
-              {members.map((m) => (
-                <tr
-                  key={m.user_id}
-                  className="border-b border-neutral-100 last:border-b-0"
-                >
-                  <td className="px-4 py-3">
-                    <div className="text-sm text-neutral-900">
-                      {m.email}
-                      {m.user_id === currentUserId && (
-                        <span className="ml-1.5 text-xs text-neutral-400">(dig)</span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-xs text-neutral-500">
-                      {ROLE_LABEL_DA[m.role] ?? m.role} · tilsluttet{' '}
-                      {formatShortDateDA(m.joined_at.slice(0, 10))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Familiemedlemmer */}
-      <section className="mt-8">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Familiemedlemmer
+          Familie
         </h2>
         <p className="mb-3 text-xs text-neutral-500">
-          Alle i familien — også børn og andre uden login. Bruges til at tagge
-          udgifter (fx Theodors daginstitution) eller komponenter af en udgift
-          (fx en delt ulykkesforsikring).
+          Alle i familien — voksne med login og børn uden. Tilføj en email på
+          en voksen for at pre-godkende dem: når de signer up med præcis den
+          email, bliver de automatisk tilknyttet husstanden.
         </p>
 
         <form
@@ -124,7 +101,19 @@ export default async function IndstillingerPage({
               name="name"
               type="text"
               required
-              placeholder="F.eks. Theodor"
+              placeholder="F.eks. Louise eller Theodor"
+              className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+            />
+          </div>
+          <div className="flex-1 min-w-52">
+            <label htmlFor="fm_email" className="block text-xs font-medium text-neutral-600">
+              Email <span className="text-neutral-400">(voksne med login)</span>
+            </label>
+            <input
+              id="fm_email"
+              name="email"
+              type="email"
+              placeholder="louise@example.com"
               className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
             />
           </div>
@@ -155,34 +144,69 @@ export default async function IndstillingerPage({
           ) : (
             <table className="w-full">
               <tbody>
-                {familyMembers.map((fm) => (
-                  <tr
-                    key={fm.id}
-                    className="border-b border-neutral-100 last:border-b-0"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-neutral-900">{fm.name}</div>
-                      {fm.birthdate && (
-                        <div className="mt-0.5 text-xs text-neutral-500">
-                          Født {formatShortDateDA(fm.birthdate)}
+                {familyMembers.map((fm) => {
+                  const status = memberStatus(fm);
+                  const isSelf = fm.user_id === currentUserId;
+                  const toneClass =
+                    status.tone === 'login'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : status.tone === 'pending'
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-neutral-100 text-neutral-500';
+                  return (
+                    <tr
+                      key={fm.id}
+                      className="border-b border-neutral-100 last:border-b-0"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-neutral-900">{fm.name}</span>
+                          {isSelf && (
+                            <span className="text-xs text-neutral-400">(dig)</span>
+                          )}
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${toneClass}`}
+                          >
+                            {status.label}
+                          </span>
+                          {fm.role && fm.user_id && (
+                            <span className="text-xs text-neutral-500">
+                              {ROLE_LABEL_DA[fm.role] ?? fm.role}
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </td>
-                    <td className="w-px whitespace-nowrap px-4 py-3 text-right">
-                      <form action={deleteFamilyMember}>
-                        <input type="hidden" name="id" value={fm.id} />
-                        <button
-                          type="submit"
-                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-red-50 hover:text-red-700"
-                          title="Fjern familiemedlem"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Fjern
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
+                        <div className="mt-0.5 text-xs text-neutral-500">
+                          {fm.email && <span>{fm.email}</span>}
+                          {fm.email && fm.birthdate && <span> · </span>}
+                          {fm.birthdate && (
+                            <span>Født {formatShortDateDA(fm.birthdate)}</span>
+                          )}
+                          {fm.joined_at && (
+                            <span>
+                              {(fm.email || fm.birthdate) && ' · '}
+                              tilsluttet {formatShortDateDA(fm.joined_at.slice(0, 10))}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="w-px whitespace-nowrap px-4 py-3 text-right">
+                        {!isSelf && (
+                          <form action={deleteFamilyMember}>
+                            <input type="hidden" name="id" value={fm.id} />
+                            <button
+                              type="submit"
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-red-50 hover:text-red-700"
+                              title="Fjern familiemedlem"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Fjern
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

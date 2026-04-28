@@ -94,11 +94,11 @@ export async function createMonthlyIncome(formData: FormData) {
 
   // Look up role to know where to send them next.
   const { data: membership } = await supabase
-    .from('household_members')
+    .from('family_members')
     .select('role')
     .eq('user_id', user.id)
     .maybeSingle();
 
   revalidatePath('/wizard');
-  redirect(nextStepFor(membership?.role));
+  redirect(nextStepFor(membership?.role ?? undefined));
 }

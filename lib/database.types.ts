@@ -27,6 +27,13 @@ export type InvestmentType =
 // Specialfunktion for kind='savings'. Bruges til at identificere konti
 // med beregnede målbeløb baseret på brugerens egne tal.
 export type SavingsPurpose = 'buffer' | 'predictable_unexpected';
+// Indkomst-rolle på en transaktion. 'primary' = hovedindkomst (løn /
+// understøttelse), 'secondary' = biindkomst (freelance, B-skat, udbytte).
+// null = ikke kategoriseret (eksisterende rækker før migration 0026).
+export type IncomeRole = 'primary' | 'secondary';
+// Hvilken slags hovedindkomst en person har. Styrer hvilken UI-flow
+// vi guider dem ind i (lønseddel-wizard vs. ydelsestabel).
+export type PrimaryIncomeSource = 'salary' | 'benefits';
 export type CategoryKind = 'income' | 'expense';
 export type RecurrenceFreq =
   | 'once'
@@ -229,6 +236,7 @@ export type Database = {
           pension_employer_pct: number | null;
           other_deduction_amount: number | null;
           other_deduction_label: string | null;
+          income_role: IncomeRole | null;
         };
         Insert: {
           id?: string;
@@ -249,6 +257,7 @@ export type Database = {
           pension_employer_pct?: number | null;
           other_deduction_amount?: number | null;
           other_deduction_label?: string | null;
+          income_role?: IncomeRole | null;
         };
         Update: {
           id?: string;
@@ -269,6 +278,7 @@ export type Database = {
           pension_employer_pct?: number | null;
           other_deduction_amount?: number | null;
           other_deduction_label?: string | null;
+          income_role?: IncomeRole | null;
         };
         Relationships: [];
       };
@@ -318,6 +328,7 @@ export type Database = {
           role: string | null;
           setup_completed_at: string | null;
           joined_at: string | null;
+          primary_income_source: PrimaryIncomeSource | null;
         };
         Insert: {
           id?: string;
@@ -331,6 +342,7 @@ export type Database = {
           role?: string | null;
           setup_completed_at?: string | null;
           joined_at?: string | null;
+          primary_income_source?: PrimaryIncomeSource | null;
         };
         Update: {
           id?: string;
@@ -344,6 +356,7 @@ export type Database = {
           role?: string | null;
           setup_completed_at?: string | null;
           joined_at?: string | null;
+          primary_income_source?: PrimaryIncomeSource | null;
         };
         Relationships: [];
       };

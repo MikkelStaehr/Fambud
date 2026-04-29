@@ -41,6 +41,7 @@ import {
   monthlyEquivalent,
 } from '@/lib/format';
 import type { Account, AccountKind, RecurrenceFreq } from '@/lib/database.types';
+import { EmptyState } from '../_components/EmptyState';
 import { MonthFilter } from '../_components/MonthFilter';
 import { deleteTransfer } from './actions';
 
@@ -263,12 +264,13 @@ export default async function OverforslerPage({
             </span>
           </div>
         </div>
-        <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-          {oneTimers.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-neutral-500">
-              Ingen engangs-overførsler i denne måned.
-            </div>
-          ) : (
+        {oneTimers.length === 0 ? (
+          <EmptyState
+            message="Ingen engangs-overførsler i denne måned. Skift måned ovenfor eller opret én."
+            cta={{ href: '/overforsler/ny', label: 'Ny overførsel' }}
+          />
+        ) : (
+          <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
             <table className="w-full">
               <tbody>
                 {oneTimers.map((t) => (
@@ -317,8 +319,8 @@ export default async function OverforslerPage({
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </section>
     </div>
   );

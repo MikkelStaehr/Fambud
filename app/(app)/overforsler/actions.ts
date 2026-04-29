@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseRequiredAmount } from '@/lib/format';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -36,10 +36,12 @@ function readTransferForm(formData: FormData):
     return { error: 'Fra-konto og til-konto skal være forskellige' };
   }
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount <= 0) {
-    return { error: 'Beløb skal være større end 0' };
-  }
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb'
+  );
+  if (!amountRes.ok) return { error: amountRes.error };
+  const amount = amountRes.value;
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
   if (!occurs_on) return { error: 'Dato er påkrævet' };

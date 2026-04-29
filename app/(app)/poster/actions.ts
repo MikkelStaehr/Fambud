@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseRequiredAmount } from '@/lib/format';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -36,8 +36,13 @@ function readTransactionForm(formData: FormData):
   const category_id = String(formData.get('category_id') ?? '').trim();
   if (!category_id) return { error: 'Vælg en kategori' };
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount < 0) return { error: 'Beløb skal være et tal' };
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb',
+    { allowZero: true }
+  );
+  if (!amountRes.ok) return { error: amountRes.error };
+  const amount = amountRes.value;
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
   if (!occurs_on) return { error: 'Dato er påkrævet' };

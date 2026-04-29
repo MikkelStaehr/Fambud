@@ -56,7 +56,7 @@ export default async function LaanPage() {
           className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
         >
           <Plus className="h-4 w-4" />
-          Tilføj lån
+          Nyt lån
         </Link>
       </header>
 
@@ -72,7 +72,7 @@ export default async function LaanPage() {
             className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
             <Plus className="h-4 w-4" />
-            Tilføj lån
+            Nyt lån
           </Link>
         </div>
       ) : (

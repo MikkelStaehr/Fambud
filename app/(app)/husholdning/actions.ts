@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseOptionalAmount, parseRequiredAmount } from '@/lib/format';
 
 // /husholdning er et forbrugsspor pr. husholdningskonto. Hvert "køb" er en
 // almindelig transaction med recurrence='once' på den valgte dato. Vi
@@ -53,12 +53,16 @@ export async function addHouseholdPurchase(
     );
   }
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount <= 0) {
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb'
+  );
+  if (!amountRes.ok) {
     redirect(
-      '/husholdning?error=' + encodeURIComponent('Indtast et beløb større end 0')
+      '/husholdning?error=' + encodeURIComponent(amountRes.error)
     );
   }
+  const amount = amountRes.value;
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
   if (!occurs_on || !/^\d{4}-\d{2}-\d{2}$/.test(occurs_on)) {
@@ -72,7 +76,7 @@ export async function addHouseholdPurchase(
     household_id: householdId,
     account_id: accountId,
     category_id: categoryId,
-    amount: amount as number,
+    amount,
     description,
     occurs_on,
     recurrence: 'once',
@@ -95,21 +99,16 @@ export async function setMonthlyBudget(
 ) {
   if (!accountId) redirect('/husholdning');
 
-  const raw = String(formData.get('amount') ?? '').trim();
-  // Tomt felt = brugeren vil fjerne budgettet (sætter til null). Det betyder
-  // bare "intet budget sat" — siden falder så tilbage til kun at vise spend.
-  let amount: number | null;
-  if (!raw) {
-    amount = null;
-  } else {
-    const parsed = parseAmountToOere(raw);
-    if (parsed === null || parsed < 0) {
-      redirect(
-        '/husholdning?error=' + encodeURIComponent('Ugyldigt beløb')
-      );
-    }
-    amount = parsed as number;
+  // Tomt felt = brugeren vil fjerne budgettet (null). Det betyder bare
+  // "intet budget sat" — siden falder tilbage til kun at vise spend.
+  const amountRes = parseOptionalAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb'
+  );
+  if (!amountRes.ok) {
+    redirect('/husholdning?error=' + encodeURIComponent(amountRes.error));
   }
+  const amount = amountRes.value;
 
   const { supabase, householdId } = await getHouseholdContext();
   const { error } = await supabase

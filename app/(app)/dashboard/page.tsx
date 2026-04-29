@@ -7,6 +7,7 @@ import {
   formatMonthYearDA,
 } from '@/lib/format';
 import { CashflowAdvisor } from './_components/CashflowAdvisor';
+import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { MonthlyCategoryChart } from './_components/MonthlyCategoryChart';
 import { TopExpensesList } from './_components/TopExpensesList';
 
@@ -64,6 +65,8 @@ export default async function DashboardPage() {
           </Link>
         </div>
       )}
+
+      <IncomeForecastBanner />
 
       {/* Måneds-overblik øverst — denne måneds tal til venstre, kategori-
           fordelingen til højre. Erstatter den tidligere "Forecast"-placeholder

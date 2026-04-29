@@ -148,6 +148,54 @@ export function parseAmountToOere(raw: string): number | null {
   return Math.round(n * 100);
 }
 
+// Result-typer til de validerende parsers nedenfor. Server actions bruger
+// `{ ok: false, error }` mønstret til at returnere fejlbesked til redirect
+// uden at throw'e — så den helper-trio matcher det stilistisk.
+export type AmountParseResult =
+  | { ok: true; value: number }
+  | { ok: false; error: string };
+
+export type OptionalAmountParseResult =
+  | { ok: true; value: number | null }
+  | { ok: false; error: string };
+
+// Validér og parse et beløb der SKAL være sat. Tom værdi → fejl med givet
+// label ("X er påkrævet"). Negativ → fejl, medmindre allowNegative=true.
+//
+// Sparer mønsteret `parseAmountToOere(raw); if (v === null || v < 0) return
+// { error: '...' };` der ellers gentages ~10 steder i actions.
+export function parseRequiredAmount(
+  raw: string,
+  label: string,
+  opts: { allowNegative?: boolean; allowZero?: boolean } = {}
+): AmountParseResult {
+  const v = parseAmountToOere(raw);
+  if (v === null) return { ok: false, error: `${label} er påkrævet` };
+  if (!opts.allowNegative && v < 0)
+    return { ok: false, error: `${label} skal være et positivt tal` };
+  if (!opts.allowZero && v === 0)
+    return { ok: false, error: `${label} skal være større end 0` };
+  return { ok: true, value: v };
+}
+
+// Tom værdi → null (ok, ikke fejl). Sat værdi → samme regler som
+// parseRequiredAmount. Bruges til valgfrie felter (mål, fradrag, etc.).
+export function parseOptionalAmount(
+  raw: string,
+  label: string,
+  opts: { allowNegative?: boolean; allowZero?: boolean } = { allowZero: true }
+): OptionalAmountParseResult {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: null };
+  const v = parseAmountToOere(trimmed);
+  if (v === null) return { ok: false, error: `Ugyldigt beløb i ${label}` };
+  if (!opts.allowNegative && v < 0)
+    return { ok: false, error: `${label} skal være et positivt tal` };
+  if (!opts.allowZero && v === 0)
+    return { ok: false, error: `${label} skal være større end 0` };
+  return { ok: true, value: v };
+}
+
 // Renders an øre value as the string that should appear in an AmountInput's
 // defaultValue — period-decimal, exactly two digits.
 export function formatOereForInput(oere: number): string {

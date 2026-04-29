@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { formatAmount, formatOereForInput, parseAmountToOere } from '@/lib/format';
-import type { Account, RecurrenceFreq } from '@/lib/database.types';
+import type { Account, IncomeRole, RecurrenceFreq } from '@/lib/database.types';
 import type { FamilyMemberRow } from '@/lib/dal';
 
 type Props = {
@@ -25,6 +25,7 @@ type Props = {
     pension_employer_pct?: number | null;
     other_deduction_amount?: number | null;
     other_deduction_label?: string | null;
+    income_role?: IncomeRole | null;
   };
   submitLabel: string;
   cancelHref: string;
@@ -129,6 +130,12 @@ export function IncomeForm({
 
   return (
     <form action={action} onInput={handleInput} className="space-y-5">
+      {/* Hovedindkomst vs biindkomst — hidden hvis det er sat fra parent
+          (lønudbetaling-flow forudvælger 'primary'). Ellers null = ikke
+          klassificeret, og /indkomst-listen viser banneret "fordel disse poster". */}
+      {dv.income_role && (
+        <input type="hidden" name="income_role" value={dv.income_role} />
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="family_member_id" className={labelClass}>

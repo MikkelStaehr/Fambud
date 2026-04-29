@@ -9,6 +9,7 @@ import {
 } from '@/lib/format';
 import { MonthFilter } from '../_components/MonthFilter';
 import { deleteTransaction } from './actions';
+import { EmptyState } from '../_components/EmptyState';
 
 // Sanity-check the month parameter so a malformed URL doesn't blow up the
 // SQL query — fall back to the current month silently.
@@ -38,8 +39,8 @@ export default async function PosterPage({
   const net = totals.income - totals.expense;
 
   return (
-    <div className="px-8 py-6">
-      <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-3 border-b border-neutral-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">Poster</h1>
           <p className="mt-1 text-sm text-neutral-500">
@@ -59,19 +60,19 @@ export default async function PosterPage({
       </header>
 
       {/* Månedssammendrag */}
-      <section className="mt-6 grid grid-cols-3 gap-3">
-        <div className="rounded-md border border-neutral-200 bg-white px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">Indtægter</div>
-          <div className="tabnum mt-1 font-mono text-lg text-green-700">+ {formatAmount(totals.income)}</div>
+      <section className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Indtægter</div>
+          <div className="tabnum mt-1 font-mono text-sm text-green-700 sm:text-lg">+ {formatAmount(totals.income)}</div>
         </div>
-        <div className="rounded-md border border-neutral-200 bg-white px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">Udgifter</div>
-          <div className="tabnum mt-1 font-mono text-lg text-red-700">− {formatAmount(totals.expense)}</div>
+        <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Udgifter</div>
+          <div className="tabnum mt-1 font-mono text-sm text-red-700 sm:text-lg">− {formatAmount(totals.expense)}</div>
         </div>
-        <div className="rounded-md border border-neutral-200 bg-white px-4 py-3">
-          <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">Netto</div>
+        <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Netto</div>
           <div
-            className={`tabnum mt-1 font-mono text-lg ${net >= 0 ? 'text-neutral-900' : 'text-red-700'}`}
+            className={`tabnum mt-1 font-mono text-sm sm:text-lg ${net >= 0 ? 'text-neutral-900' : 'text-red-700'}`}
           >
             {net >= 0 ? '+ ' : '− '}
             {formatAmount(Math.abs(net))}
@@ -80,12 +81,15 @@ export default async function PosterPage({
       </section>
 
       {/* Posterlisten */}
-      <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
-        {transactions.length === 0 ? (
-          <div className="px-4 py-12 text-center text-sm text-neutral-500">
-            Ingen poster i denne måned.
-          </div>
-        ) : (
+      {transactions.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            message="Ingen poster i denne måned. Tilføj din første eller skift måned ovenfor."
+            cta={{ href: '/poster/ny', label: 'Ny post' }}
+          />
+        </div>
+      ) : (
+        <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
           <table className="w-full">
             <tbody>
               {transactions.map((t) => {
@@ -161,8 +165,8 @@ export default async function PosterPage({
               })}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

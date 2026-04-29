@@ -57,7 +57,7 @@ export default async function IndstillingerPage({
   ]);
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-neutral-200 pb-6">
         <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
           Indstillinger

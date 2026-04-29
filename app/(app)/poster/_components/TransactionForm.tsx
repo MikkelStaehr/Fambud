@@ -52,7 +52,7 @@ export function TransactionForm({
 
   return (
     <form action={action} className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="account_id" className={labelClass}>Konto</label>
           <select
@@ -100,7 +100,7 @@ export function TransactionForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="amount" className={labelClass}>
             Beløb <span className="text-neutral-400">(kr.)</span>

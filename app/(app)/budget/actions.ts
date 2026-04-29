@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseRequiredAmount } from '@/lib/format';
 import {
   nextFixedDayOccurrence,
   nextLastBankingDay,
@@ -32,10 +32,12 @@ export async function addExpense(formData: FormData) {
   const description = String(formData.get('description') ?? '').trim();
   if (!description) bounceWithError(accountId, 'Navn er påkrævet');
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount <= 0) {
-    bounceWithError(accountId, 'Indtast et beløb større end 0');
-  }
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb'
+  );
+  if (!amountRes.ok) bounceWithError(accountId, amountRes.error);
+  const amount = amountRes.value;
 
   const categoryId = String(formData.get('category_id') ?? '').trim();
   if (!categoryId) bounceWithError(accountId, 'Vælg en kategori');
@@ -141,12 +143,15 @@ export async function addComponent(formData: FormData) {
   if (!transactionId) bounceWithError(accountId, 'Manglende transaktion');
   if (!label) bounceWithError(accountId, 'Indtast et navn');
 
-  // Negative amounts are allowed (e.g. rabat / KundeKroner) — see migration
-  // 0019 which dropped the >= 0 check.
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null) {
-    bounceWithError(accountId, 'Ugyldigt beløb');
-  }
+  // Negative amounts are allowed (e.g. rabat / KundeKroner) — se migration
+  // 0019 der droppede >= 0-check'et. Zero accepteres også.
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb',
+    { allowNegative: true, allowZero: true }
+  );
+  if (!amountRes.ok) bounceWithError(accountId, amountRes.error);
+  const amount = amountRes.value;
 
   const { supabase, householdId } = await getHouseholdContext();
 
@@ -210,11 +215,14 @@ export async function updateComponent(
   const label = String(formData.get('label') ?? '').trim();
   if (!label) return { ok: false, error: 'Navn er påkrævet' };
 
-  // Negative amounts allowed (rabat) — see migration 0019.
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null) {
-    return { ok: false, error: 'Ugyldigt beløb' };
-  }
+  // Negative amounts allowed (rabat) — se migration 0019.
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb',
+    { allowNegative: true, allowZero: true }
+  );
+  if (!amountRes.ok) return { ok: false, error: amountRes.error };
+  const amount = amountRes.value;
 
   const familyRaw = String(formData.get('family_member_id') ?? '').trim();
   const family_member_id = familyRaw || null;
@@ -250,10 +258,12 @@ export async function updateBudgetExpense(
   const description = String(formData.get('description') ?? '').trim();
   if (!description) return { ok: false, error: 'Navn er påkrævet' };
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount <= 0) {
-    return { ok: false, error: 'Indtast et beløb større end 0' };
-  }
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Beløb'
+  );
+  if (!amountRes.ok) return { ok: false, error: amountRes.error };
+  const amount = amountRes.value;
 
   const categoryId = String(formData.get('category_id') ?? '').trim();
   if (!categoryId) return { ok: false, error: 'Vælg en kategori' };

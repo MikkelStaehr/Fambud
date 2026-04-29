@@ -23,7 +23,7 @@ export default async function EditIndkomstPage({
   const action = updateIncome.bind(null, id);
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <Link
         href="/indkomst"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900"
@@ -56,6 +56,7 @@ export default async function EditIndkomstPage({
             pension_employer_pct: income.pension_employer_pct,
             other_deduction_amount: income.other_deduction_amount,
             other_deduction_label: income.other_deduction_label,
+            income_role: income.income_role,
           }}
           submitLabel="Gem ændringer"
           cancelHref="/indkomst"

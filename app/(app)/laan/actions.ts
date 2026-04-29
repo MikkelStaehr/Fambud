@@ -3,7 +3,11 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere, nextOccurrenceAfter } from '@/lib/format';
+import {
+  parseAmountToOere,
+  parseOptionalAmount,
+  nextOccurrenceAfter,
+} from '@/lib/format';
 import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_LOAN_TYPES: readonly LoanType[] = [
@@ -28,14 +32,6 @@ function parsePct(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function parseOptionalAmount(raw: string): { ok: true; value: number | null } | { ok: false } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { ok: true, value: null };
-  const v = parseAmountToOere(trimmed);
-  if (v === null) return { ok: false };
-  return { ok: true, value: v };
-}
-
 type ParsedLoan = {
   name: string;
   owner_name: string | null;
@@ -54,17 +50,6 @@ type ParsedLoan = {
   interest_rate: number | null;
   apr: number | null;
 };
-
-// Like parseOptionalAmount but for the rabat column, which we allow to be
-// signed (KundeKroner are negative). parseAmountToOere already handles a
-// leading '-'.
-function parseOptionalSignedAmount(raw: string): { ok: true; value: number | null } | { ok: false } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { ok: true, value: null };
-  const v = parseAmountToOere(trimmed);
-  if (v === null) return { ok: false };
-  return { ok: true, value: v };
-}
 
 function readLoanForm(formData: FormData):
   | { error: string }
@@ -95,11 +80,17 @@ function readLoanForm(formData: FormData):
     opening_balance = v === 0 ? 0 : -Math.abs(v);
   }
 
-  const principal = parseOptionalAmount(String(formData.get('original_principal') ?? ''));
-  if (!principal.ok) return { error: 'Ugyldig hovedstol' };
+  const principal = parseOptionalAmount(
+    String(formData.get('original_principal') ?? ''),
+    'Hovedstol'
+  );
+  if (!principal.ok) return { error: principal.error };
 
-  const payment = parseOptionalAmount(String(formData.get('payment_amount') ?? ''));
-  if (!payment.ok) return { error: 'Ugyldig samlet ydelse' };
+  const payment = parseOptionalAmount(
+    String(formData.get('payment_amount') ?? ''),
+    'Samlet ydelse'
+  );
+  if (!payment.ok) return { error: payment.error };
 
   const intervalRaw = String(formData.get('payment_interval') ?? 'monthly');
   if (!VALID_INTERVALS.includes(intervalRaw as RecurrenceFreq)) {
@@ -111,14 +102,28 @@ function readLoanForm(formData: FormData):
   const payment_start_date =
     startDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(startDateRaw) ? startDateRaw : null;
 
-  const rente = parseOptionalAmount(String(formData.get('payment_rente') ?? ''));
-  if (!rente.ok) return { error: 'Ugyldig rente' };
-  const afdrag = parseOptionalAmount(String(formData.get('payment_afdrag') ?? ''));
-  if (!afdrag.ok) return { error: 'Ugyldig afdrag' };
-  const bidrag = parseOptionalAmount(String(formData.get('payment_bidrag') ?? ''));
-  if (!bidrag.ok) return { error: 'Ugyldig bidrag' };
-  const rabat = parseOptionalSignedAmount(String(formData.get('payment_rabat') ?? ''));
-  if (!rabat.ok) return { error: 'Ugyldig rabat' };
+  const rente = parseOptionalAmount(
+    String(formData.get('payment_rente') ?? ''),
+    'Rente'
+  );
+  if (!rente.ok) return { error: rente.error };
+  const afdrag = parseOptionalAmount(
+    String(formData.get('payment_afdrag') ?? ''),
+    'Afdrag'
+  );
+  if (!afdrag.ok) return { error: afdrag.error };
+  const bidrag = parseOptionalAmount(
+    String(formData.get('payment_bidrag') ?? ''),
+    'Bidrag'
+  );
+  if (!bidrag.ok) return { error: bidrag.error };
+  // Rabat (KundeKroner) er negativ — derfor allowNegative.
+  const rabat = parseOptionalAmount(
+    String(formData.get('payment_rabat') ?? ''),
+    'Rabat',
+    { allowNegative: true }
+  );
+  if (!rabat.ok) return { error: rabat.error };
 
   // Auto-compute payment_amount from breakdown if user didn't enter it
   // explicitly but did fill the breakdown — saves them from typing the sum.

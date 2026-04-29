@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseAmountToOere, parseOptionalAmount } from '@/lib/format';
 import type {
   AccountKind,
   InvestmentType,
@@ -87,11 +87,13 @@ function readAccountForm(formData: FormData):
   const openingRaw = String(formData.get('opening_balance') ?? '0');
   const opening_balance = parseAmountToOere(openingRaw) ?? 0;
 
-  const goalAmountRaw = String(formData.get('goal_amount') ?? '').trim();
-  const goal_amount = goalAmountRaw ? parseAmountToOere(goalAmountRaw) : null;
-  if (goalAmountRaw && (goal_amount === null || goal_amount <= 0)) {
-    return { error: 'Målbeløb skal være et positivt tal' };
-  }
+  const goalRes = parseOptionalAmount(
+    String(formData.get('goal_amount') ?? ''),
+    'Målbeløb',
+    { allowZero: false }
+  );
+  if (!goalRes.ok) return { error: goalRes.error };
+  const goal_amount = goalRes.value;
 
   const goalDateRaw = String(formData.get('goal_date') ?? '').trim();
   const goal_date = goalDateRaw || null;

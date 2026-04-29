@@ -27,6 +27,7 @@ import {
   formatShortDateDA,
   monthBounds,
 } from '@/lib/format';
+import { EmptyState } from '../_components/EmptyState';
 import { MonthFilter } from '../_components/MonthFilter';
 import { AmountInput } from '../_components/AmountInput';
 import {
@@ -274,8 +275,11 @@ function HouseholdAccountCard({
       </form>
 
       {purchases.length === 0 ? (
-        <div className="px-4 py-12 text-center text-sm text-neutral-500 sm:px-5">
-          Ingen køb registreret i denne måned. Tilføj dit første ovenfor.
+        <div className="border-t border-neutral-100">
+          <EmptyState
+            message="Ingen køb registreret i denne måned. Tilføj dit første ovenfor."
+            compact
+          />
         </div>
       ) : (
         <ul className="divide-y divide-neutral-100">

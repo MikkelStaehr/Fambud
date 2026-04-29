@@ -3,8 +3,15 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
-import type { RecurrenceFreq } from '@/lib/database.types';
+import {
+  parseOptionalAmount,
+  parseRequiredAmount,
+} from '@/lib/format';
+import type {
+  IncomeRole,
+  PrimaryIncomeSource,
+  RecurrenceFreq,
+} from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
   'once',
@@ -14,6 +21,10 @@ const VALID_FREQS: readonly RecurrenceFreq[] = [
   'semiannual',
   'yearly',
 ];
+
+const VALID_INCOME_ROLES: readonly IncomeRole[] = ['primary', 'secondary'];
+
+const VALID_PRIMARY_SOURCES: readonly PrimaryIncomeSource[] = ['salary', 'benefits'];
 
 // Income gets its own form / action pair so we don't have to conditionally
 // expose pension fields in the generic TransactionForm. Behind the scenes
@@ -33,6 +44,7 @@ type ParsedIncome = {
   pension_employer_pct: number | null;
   other_deduction_amount: number | null;
   other_deduction_label: string | null;
+  income_role: IncomeRole | null;
 };
 
 function parsePct(raw: string): number | null {
@@ -41,18 +53,6 @@ function parsePct(raw: string): number | null {
   const n = Number(trimmed.replace(',', '.'));
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   return n;
-}
-
-// Empty → null. Otherwise must be a valid non-negative øre amount.
-function parseOptionalDeduction(
-  raw: string,
-  errorLabel: string
-): { ok: true; value: number | null } | { ok: false; error: string } {
-  const t = raw.trim();
-  if (!t) return { ok: true, value: null };
-  const v = parseAmountToOere(t);
-  if (v === null || v < 0) return { ok: false, error: errorLabel };
-  return { ok: true, value: v };
 }
 
 function readIncomeForm(formData: FormData):
@@ -64,8 +64,13 @@ function readIncomeForm(formData: FormData):
   const fmRaw = String(formData.get('family_member_id') ?? '').trim();
   const family_member_id = fmRaw || null;
 
-  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
-  if (amount === null || amount < 0) return { error: 'Nettoløn skal være et tal' };
+  const amountRes = parseRequiredAmount(
+    String(formData.get('amount') ?? ''),
+    'Nettoløn',
+    { allowZero: true }
+  );
+  if (!amountRes.ok) return { error: amountRes.error };
+  const amount = amountRes.value;
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
   if (!occurs_on) return { error: 'Dato er påkrævet' };
@@ -84,13 +89,12 @@ function readIncomeForm(formData: FormData):
 
   // Optional gross + pension. Empty strings parse to null; non-empty must be
   // valid. We don't reject "0%" as invalid — explicit zero may be meaningful.
-  const grossRaw = String(formData.get('gross_amount') ?? '').trim();
-  let gross_amount: number | null = null;
-  if (grossRaw) {
-    const g = parseAmountToOere(grossRaw);
-    if (g === null || g < 0) return { error: 'Bruttoløn skal være et tal' };
-    gross_amount = g;
-  }
+  const grossRes = parseOptionalAmount(
+    String(formData.get('gross_amount') ?? ''),
+    'Bruttoløn'
+  );
+  if (!grossRes.ok) return { error: grossRes.error };
+  const gross_amount = grossRes.value;
 
   const pension_own_pct =
     String(formData.get('pension_own_pct') ?? '').trim() === ''
@@ -111,9 +115,9 @@ function readIncomeForm(formData: FormData):
     return { error: 'Pension firma skal være mellem 0 og 100' };
   }
 
-  const deductionRes = parseOptionalDeduction(
+  const deductionRes = parseOptionalAmount(
     String(formData.get('other_deduction_amount') ?? ''),
-    'Fradrag skal være et tal'
+    'Fradrag'
   );
   if (!deductionRes.ok) return { error: deductionRes.error };
 
@@ -121,6 +125,18 @@ function readIncomeForm(formData: FormData):
   // alone so we don't accumulate orphan strings.
   const labelRaw = String(formData.get('other_deduction_label') ?? '').trim();
   const other_deduction_label = deductionRes.value != null && labelRaw ? labelRaw : null;
+
+  // income_role: hovedindkomst eller biindkomst. Tom værdi → null (uklassificeret).
+  // UI'et sætter denne via en hidden input afhængig af hvilket flow brugeren
+  // kommer fra (lønudbetaling-flow → 'primary').
+  const roleRaw = String(formData.get('income_role') ?? '').trim();
+  let income_role: IncomeRole | null = null;
+  if (roleRaw) {
+    if (!VALID_INCOME_ROLES.includes(roleRaw as IncomeRole)) {
+      return { error: 'Ugyldig indkomst-rolle' };
+    }
+    income_role = roleRaw as IncomeRole;
+  }
 
   return {
     data: {
@@ -136,6 +152,7 @@ function readIncomeForm(formData: FormData):
       pension_employer_pct,
       other_deduction_amount: deductionRes.value,
       other_deduction_label,
+      income_role,
     },
   };
 }
@@ -226,4 +243,35 @@ export async function deleteIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
+}
+
+// Vælger en families primære indkomst-kilde. Styrer hvilken UI-flow vi guider
+// dem ind i (lønseddel-builder vs. ydelse). Tom value rydder feltet.
+export async function setPrimaryIncomeSource(formData: FormData) {
+  const familyMemberId = String(formData.get('family_member_id') ?? '').trim();
+  if (!familyMemberId) {
+    redirect('/indkomst?error=' + encodeURIComponent('Vælg et familiemedlem'));
+  }
+  const sourceRaw = String(formData.get('primary_income_source') ?? '').trim();
+  let primary_income_source: PrimaryIncomeSource | null = null;
+  if (sourceRaw) {
+    if (!VALID_PRIMARY_SOURCES.includes(sourceRaw as PrimaryIncomeSource)) {
+      redirect('/indkomst?error=' + encodeURIComponent('Ugyldig indkomst-kilde'));
+    }
+    primary_income_source = sourceRaw as PrimaryIncomeSource;
+  }
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('family_members')
+    .update({ primary_income_source })
+    .eq('id', familyMemberId)
+    .eq('household_id', householdId);
+  if (error) {
+    redirect('/indkomst?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/indkomst');
+  revalidatePath('/dashboard');
+  redirect('/indkomst');
 }

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, parseOptionalAmount } from '@/lib/format';
+import { noticeUrl } from '@/lib/flash';
 import type {
   AccountKind,
   InvestmentType,
@@ -132,7 +133,7 @@ export async function createAccount(formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect('/konti');
+  redirect(noticeUrl('/konti', `${parsed.data.name} oprettet`));
 }
 
 export async function updateAccount(id: string, formData: FormData) {
@@ -153,7 +154,7 @@ export async function updateAccount(id: string, formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect('/konti');
+  redirect(noticeUrl('/konti', `${parsed.data.name} gemt`));
 }
 
 // Soft-delete: transactions/transfers reference accounts ON DELETE RESTRICT,
@@ -172,6 +173,7 @@ export async function archiveAccount(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  redirect(noticeUrl('/konti', 'Konto arkiveret'));
 }
 
 export async function restoreAccount(formData: FormData) {
@@ -186,4 +188,5 @@ export async function restoreAccount(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  redirect(noticeUrl('/konti?archived=1', 'Konto gendannet'));
 }

@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getAccounts, getFamilyMembers } from '@/lib/dal';
+import {
+  getAccounts,
+  getFamilyMembers,
+  getMostRecentPaycheck,
+} from '@/lib/dal';
 import { IncomeForm } from '../_components/IncomeForm';
 import { createIncome } from '../actions';
 import type { IncomeRole, RecurrenceFreq } from '@/lib/database.types';
@@ -31,6 +35,41 @@ export default async function NyIndkomstPage({
   const isPaycheckFlow = role === 'primary' && sp.recurrence === 'once';
   const recurrenceDefault: RecurrenceFreq | undefined =
     sp.recurrence === 'once' ? 'once' : undefined;
+
+  // I paycheck-flow forsøger vi at hente medlemmets seneste lønudbetaling
+  // og pre-fylde brutto, pension, trækprocent, skattefradrag og konto fra
+  // den. Det er den ene ting der ændrer sig sjældent — næsten alt undtagen
+  // dato + netto er konstant fra måned til måned. Returnerer null hvis det
+  // er medlemmets første registrering.
+  const recentDefaults =
+    isPaycheckFlow && sp.member
+      ? await getMostRecentPaycheck(sp.member)
+      : null;
+
+  // Default-konto: prefer seneste lønudbetalings konto. Hvis ingen
+  // foregående lønudbetaling, foreslå medlemmets lønkonto (kind='checking',
+  // oprettet af deres user_id).
+  const member = sp.member
+    ? familyMembers.find((m) => m.id === sp.member)
+    : null;
+  const defaultAccountId =
+    recentDefaults?.account_id ??
+    (isPaycheckFlow
+      ? (
+          // 1. konto oprettet af medlemmet selv
+          accounts.find(
+            (a) => a.kind === 'checking' && a.created_by === member?.user_id
+          )
+          // 2. fald tilbage til konto med owner_name = medlemmets fornavn
+          ?? accounts.find(
+            (a) =>
+              a.kind === 'checking' &&
+              a.owner_name?.split(/\s+/)[0] === member?.name.split(/\s+/)[0]
+          )
+          // 3. sidste fallback: første checking-konto i husstanden
+          ?? accounts.find((a) => a.kind === 'checking')
+        )?.id
+      : undefined);
 
   const heading = isPaycheckFlow ? 'Registrer lønudbetaling' : 'Ny indkomst';
   const subline = isPaycheckFlow
@@ -72,9 +111,18 @@ export default async function NyIndkomstPage({
             familyMembers={familyMembers}
             defaultValues={{
               family_member_id: sp.member ?? undefined,
+              account_id: defaultAccountId,
               recurrence: recurrenceDefault,
               income_role: role,
               description: isPaycheckFlow ? 'Lønudbetaling' : undefined,
+              // Pre-fyld lønseddel-felter fra seneste udbetaling. Brutto,
+              // pension og trækprocent ændrer sig sjældent — kun dato +
+              // netto behøver brugeren faktisk indtaste hver gang.
+              gross_amount: recentDefaults?.gross_amount,
+              pension_own_pct: recentDefaults?.pension_own_pct,
+              pension_employer_pct: recentDefaults?.pension_employer_pct,
+              other_deduction_amount: recentDefaults?.other_deduction_amount,
+              tax_rate_pct: recentDefaults?.tax_rate_pct,
             }}
             submitLabel={isPaycheckFlow ? 'Registrer lønudbetaling' : 'Opret indkomst'}
             cancelHref="/indkomst"

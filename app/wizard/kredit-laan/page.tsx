@@ -57,7 +57,7 @@ export default async function WizardKreditLaanPage({
                   <span
                     className={`rounded px-1.5 py-0.5 text-xs font-normal ${
                       a.owner_name === 'Fælles'
-                        ? 'bg-blue-50 text-blue-700'
+                        ? 'bg-emerald-50 text-emerald-800'
                         : 'bg-neutral-100 text-neutral-600'
                     }`}
                   >

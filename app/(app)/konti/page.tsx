@@ -193,7 +193,7 @@ function AccountRow({
             </span>
           )}
           {a.kind === 'investment' && a.investment_type && (
-            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-indigo-700">
+            <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-900">
               {INVESTMENT_TYPE_LABEL_DA[a.investment_type]}
             </span>
           )}

@@ -237,6 +237,7 @@ export type Database = {
           other_deduction_amount: number | null;
           other_deduction_label: string | null;
           income_role: IncomeRole | null;
+          tax_rate_pct: number | null;
         };
         Insert: {
           id?: string;
@@ -258,6 +259,7 @@ export type Database = {
           other_deduction_amount?: number | null;
           other_deduction_label?: string | null;
           income_role?: IncomeRole | null;
+          tax_rate_pct?: number | null;
         };
         Update: {
           id?: string;
@@ -279,6 +281,7 @@ export type Database = {
           other_deduction_amount?: number | null;
           other_deduction_label?: string | null;
           income_role?: IncomeRole | null;
+          tax_rate_pct?: number | null;
         };
         Relationships: [];
       };

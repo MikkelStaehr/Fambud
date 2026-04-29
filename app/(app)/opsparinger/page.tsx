@@ -178,7 +178,7 @@ function BufferCard({
   return (
     <RecommendedCard
       icon={<Shield className="h-5 w-5" />}
-      iconTone="bg-blue-50 text-blue-700"
+      iconTone="bg-emerald-50 text-emerald-800"
       label={SAVINGS_PURPOSE_LABEL_DA[purpose]}
       description={SAVINGS_PURPOSE_DESC_DA[purpose]}
       account={account}
@@ -199,7 +199,7 @@ function BufferCard({
       ) : (
         <p className="text-xs text-amber-700">
           Indtast jeres faste udgifter på{' '}
-          <Link href="/budget" className="underline">
+          <Link href="/faste-udgifter" className="underline">
             Faste udgifter
           </Link>{' '}
           så kan vi beregne målet.
@@ -226,7 +226,7 @@ function PredictableCard({
   return (
     <RecommendedCard
       icon={<CalendarRange className="h-5 w-5" />}
-      iconTone="bg-violet-50 text-violet-700"
+      iconTone="bg-amber-50 text-amber-800"
       label={SAVINGS_PURPOSE_LABEL_DA[purpose]}
       description={SAVINGS_PURPOSE_DESC_DA[purpose]}
       account={account}
@@ -306,7 +306,7 @@ function RecommendedCard({
                 <span
                   className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                     isShared
-                      ? 'bg-blue-50 text-blue-700'
+                      ? 'bg-emerald-50 text-emerald-800'
                       : 'bg-neutral-100 text-neutral-700'
                   }`}
                 >
@@ -399,7 +399,7 @@ function SavingsCard({ account }: { account: SavingsAccountWithFlow }) {
             <span
               className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                 isShared
-                  ? 'bg-blue-50 text-blue-700'
+                  ? 'bg-emerald-50 text-emerald-800'
                   : 'bg-neutral-100 text-neutral-700'
               }`}
             >

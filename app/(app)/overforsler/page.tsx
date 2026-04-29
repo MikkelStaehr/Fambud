@@ -72,7 +72,7 @@ const GROUP_META: Record<
     description:
       'Overførsler til budget- og husholdningskonti — det der dækker husstandens fælles forpligtelser.',
     icon: Home,
-    tone: 'bg-blue-50 text-blue-700',
+    tone: 'bg-emerald-50 text-emerald-800',
   },
   savings: {
     title: 'Til opsparing & investering',
@@ -464,12 +464,12 @@ type Insight = {
 
 function InsightCard({ insight }: { insight: Insight }) {
   return (
-    <div className="flex items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
         <div className="font-medium">{insight.message}</div>
         {insight.detail && (
-          <div className="mt-0.5 text-xs text-blue-800">{insight.detail}</div>
+          <div className="mt-0.5 text-xs text-amber-800">{insight.detail}</div>
         )}
       </div>
     </div>

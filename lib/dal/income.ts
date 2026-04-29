@@ -23,6 +23,7 @@ export type IncomeRow = Pick<
   | 'other_deduction_amount'
   | 'other_deduction_label'
   | 'income_role'
+  | 'tax_rate_pct'
 > & {
   account: Pick<Account, 'id' | 'name'> | null;
   family_member: { id: string; name: string } | null;
@@ -31,7 +32,7 @@ export type IncomeRow = Pick<
 const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_on,
    recurrence, recurrence_until, family_member_id,
    gross_amount, pension_own_pct, pension_employer_pct,
-   other_deduction_amount, other_deduction_label, income_role,
+   other_deduction_amount, other_deduction_label, income_role, tax_rate_pct,
    account:accounts(id, name),
    family_member:family_members(id, name)`;
 
@@ -63,6 +64,40 @@ export async function getIncomeById(id: string): Promise<IncomeRow> {
     .single<IncomeRow>();
   if (error) throw error;
   return data;
+}
+
+// "Min seneste lønudbetaling" — bruges til at pre-fylde formen for nye
+// paychecks. Brutto, pension-procent, trækprocent, skattefradrag og konto
+// ændrer sig sjældent; ved at hente dem fra sidste udbetaling sparer vi
+// brugeren for at indtaste dem hver måned. Den ene ting der typisk varierer
+// (netto pga. overtid, sygdom, ferie) lader vi stå tom.
+export type RecentPaycheckDefaults = {
+  account_id: string;
+  gross_amount: number | null;
+  pension_own_pct: number | null;
+  pension_employer_pct: number | null;
+  other_deduction_amount: number | null;
+  tax_rate_pct: number | null;
+};
+
+export async function getMostRecentPaycheck(
+  familyMemberId: string
+): Promise<RecentPaycheckDefaults | null> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      'account_id, gross_amount, pension_own_pct, pension_employer_pct, other_deduction_amount, tax_rate_pct'
+    )
+    .eq('household_id', householdId)
+    .eq('family_member_id', familyMemberId)
+    .eq('income_role', 'primary')
+    .eq('recurrence', 'once')
+    .order('occurs_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
 }
 
 // ----------------------------------------------------------------------------

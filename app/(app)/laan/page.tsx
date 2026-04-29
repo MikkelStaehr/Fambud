@@ -114,7 +114,7 @@ export default async function LaanPage() {
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           isShared
-                            ? 'bg-blue-50 text-blue-700'
+                            ? 'bg-emerald-50 text-emerald-800'
                             : 'bg-neutral-100 text-neutral-700'
                         }`}
                       >

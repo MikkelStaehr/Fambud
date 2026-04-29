@@ -81,3 +81,18 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   if (error) throw error;
   return data ?? [];
 }
+
+// Fornavn på den indloggede bruger — bruges til at personliggøre headings
+// ("Godmorgen, Mikkel"). Returnerer null hvis brugeren ikke har navn sat.
+export async function getCurrentMemberFirstName(): Promise<string | null> {
+  const { supabase, user } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('family_members')
+    .select('name')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.name) return null;
+  // Fornavn = første ord. "Mikkel Stæhr" → "Mikkel".
+  return data.name.split(/\s+/)[0] ?? null;
+}

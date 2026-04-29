@@ -12,7 +12,13 @@ import {
   effectiveAmount,
   monthBounds,
   monthlyEquivalent,
+  nextOccurrenceAfter,
 } from '@/lib/format';
+import {
+  CATEGORY_GROUP_COLOR,
+  categoryGroupFor,
+  type CategoryGroup,
+} from '@/lib/categories';
 import { getHouseholdContext } from './auth';
 
 // ----------------------------------------------------------------------------
@@ -108,7 +114,16 @@ export type CashflowGraphData = {
 export async function getCashflowGraph(): Promise<CashflowGraphData> {
   const { supabase, householdId } = await getHouseholdContext();
 
-  const [txnsRes, transfersRes] = await Promise.all([
+  // Vi henter tre datasæt parallelt:
+  //   1. Recurring (ikke-once) transaktioner — almindelig income/expense
+  //      hvor monthlyEquivalent giver mening
+  //   2. Recurring transfers — transfers mellem konti (også monthlyEquivalent)
+  //   3. Primary-once paychecks — individuelle lønudbetalinger som er gemt
+  //      med recurrence='once'. De har ikke en "monthly recurrence" men vi
+  //      bruger gennemsnit af de seneste 3 som forecast pr. konto, så
+  //      lønindkomst dukker op i grafen lige som den tidligere
+  //      "Månedsløn"-recurring-transaktion gjorde.
+  const [txnsRes, transfersRes, paychecksRes] = await Promise.all([
     supabase
       .from('transactions')
       .select(
@@ -129,10 +144,24 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
       .select('from_account_id, to_account_id, amount, recurrence')
       .eq('household_id', householdId)
       .neq('recurrence', 'once'),
+    supabase
+      .from('transactions')
+      .select('account_id, family_member_id, amount, occurs_on')
+      .eq('household_id', householdId)
+      .eq('income_role', 'primary')
+      .eq('recurrence', 'once')
+      .order('occurs_on', { ascending: false })
+      .returns<{
+        account_id: string;
+        family_member_id: string | null;
+        amount: number;
+        occurs_on: string;
+      }[]>(),
   ]);
 
   if (txnsRes.error) throw txnsRes.error;
   if (transfersRes.error) throw transfersRes.error;
+  if (paychecksRes.error) throw paychecksRes.error;
 
   const perAccount = new Map<string, AccountCashflowDetail>();
   const detailFor = (id: string) => {
@@ -151,6 +180,25 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
     const monthly = monthlyEquivalent(eff, t.recurrence);
     if (t.category?.kind === 'income') detailFor(t.account_id).income += monthly;
     else if (t.category?.kind === 'expense') detailFor(t.account_id).expense += monthly;
+  }
+
+  // Forecast fra primary-once paychecks: gruppér efter (account, member),
+  // tag de seneste 3 og brug gennemsnit som månedlig income. Det matcher
+  // PrimaryIncomeForecast-logikken i income.ts. Hvis der er færre end 3
+  // paychecks, bruger vi gennemsnittet af det vi har — bedre end ingenting,
+  // selvom forecastet er mindre præcist.
+  const paycheckGroups = new Map<string, number[]>();
+  for (const p of paychecksRes.data ?? []) {
+    const key = `${p.account_id}|${p.family_member_id ?? ''}`;
+    const arr = paycheckGroups.get(key) ?? [];
+    if (arr.length < 3) arr.push(p.amount);
+    paycheckGroups.set(key, arr);
+  }
+  for (const [key, amounts] of paycheckGroups) {
+    if (amounts.length === 0) continue;
+    const accountId = key.split('|')[0];
+    const avg = Math.round(amounts.reduce((s, a) => s + a, 0) / amounts.length);
+    detailFor(accountId).income += avg;
   }
 
   // Aggregér transfers pr. (from, to) par så samme rute ikke giver flere
@@ -335,6 +383,67 @@ export async function getMonthlyExpensesByCategory(): Promise<CategoryExpenseSum
   return Array.from(map.values()).sort((a, b) => b.monthly - a.monthly);
 }
 
+// "Udgifter pr. gruppe" — samme data som getMonthlyExpensesByCategory, men
+// rullet op til de tematiske kategori-grupper (Bolig & lån, Transport, Børn …)
+// og opdelt på private vs. fælles konti. Splittet sker ved konto-ejerskab:
+// `accounts.owner_name === 'Fælles'` → fælles, alt andet → privat.
+//
+// Returnerer begge scopes i ét kald så dashboard-tab'et kan toggle uden et
+// nyt server-roundtrip.
+export type CategoryGroupSummary = {
+  group: CategoryGroup;
+  color: string;
+  monthly: number;
+};
+
+export type ExpenseGroupBuckets = {
+  private: CategoryGroupSummary[];
+  shared: CategoryGroupSummary[];
+};
+
+export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      'amount, recurrence, components_mode, account:accounts(owner_name), category:categories(name, kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', householdId)
+    .neq('recurrence', 'once')
+    .returns<{
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      account: { owner_name: string | null } | null;
+      category: { name: string; kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>();
+  if (error) throw error;
+
+  const privateTotals = new Map<CategoryGroup, number>();
+  const sharedTotals = new Map<CategoryGroup, number>();
+  for (const t of data ?? []) {
+    if (!t.category || t.category.kind !== 'expense') continue;
+    const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
+    const monthly = monthlyEquivalent(eff, t.recurrence);
+    const group = categoryGroupFor(t.category.name);
+    const isShared = t.account?.owner_name === 'Fælles';
+    const bucket = isShared ? sharedTotals : privateTotals;
+    bucket.set(group, (bucket.get(group) ?? 0) + monthly);
+  }
+
+  const toSorted = (m: Map<CategoryGroup, number>): CategoryGroupSummary[] =>
+    Array.from(m.entries())
+      .map(([group, monthly]) => ({
+        group,
+        color: CATEGORY_GROUP_COLOR[group],
+        monthly,
+      }))
+      .sort((a, b) => b.monthly - a.monthly);
+
+  return { private: toSorted(privateTotals), shared: toSorted(sharedTotals) };
+}
+
 // Top-N største enkelt-udgifter normaliseret til månedlig sats. Praktisk på
 // dashboardet til "hvor er de store sten?" — typisk husleje, lån, afdragene.
 export type TopExpenseRow = {
@@ -380,6 +489,129 @@ export async function getTopRecurringExpenses(limit = 5): Promise<TopExpenseRow[
   }
   rows.sort((a, b) => b.monthly - a.monthly);
   return rows.slice(0, limit);
+}
+
+// ----------------------------------------------------------------------------
+// Næste 7 dages begivenheder — kommende regninger og overførsler
+// ----------------------------------------------------------------------------
+// Dashboard-modulet "Næste begivenheder" viser hvad der sker økonomisk i den
+// nære fremtid. Vi beregner det forlæns:
+//   - For recurring transaktioner: rul deres anchor-dato frem til næste
+//     forekomst efter today via nextOccurrenceAfter() — hvis dato er
+//     inden for vinduet, inkluderes posten
+//   - For 'once'-transaktioner: inkluderes hvis deres occurs_on er i
+//     fremtiden inden for vinduet (fx en planlagt enkelt-betaling)
+// Income-paychecks med income_role='primary' inkluderes ikke — de er
+// historiske registreringer, ikke fremtidige forekomster (vi kender kun
+// gennemsnit, ikke næste konkrete dato).
+//
+// Hver event-tagges med scope ('private' eller 'shared') afhængig af om
+// kilde-kontoens owner_name === 'Fælles'. Det matcher den samme privat/fælles-
+// opdeling som CategoryGroupChart bruger og lader UI'et toggle uden ekstra
+// roundtrip.
+export type EventScope = 'private' | 'shared';
+
+export type UpcomingEvent = {
+  id: string;
+  kind: 'expense' | 'transfer';
+  scope: EventScope;
+  date: string;          // ISO YYYY-MM-DD — den fremtidige forekomst
+  description: string;
+  amount: number;        // positivt øre, fortegnet håndteres af kind
+  account: { id: string; name: string } | null;
+  destination: { id: string; name: string } | null; // kun for transfers
+  category: { name: string; color: string } | null;  // kun for expenses
+};
+
+export async function getUpcomingEvents(days: number = 7): Promise<UpcomingEvent[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const today = new Date();
+  const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const horizon = new Date(todayDateOnly);
+  horizon.setDate(horizon.getDate() + days);
+
+  const [txnsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select(
+        'id, account_id, amount, description, occurs_on, recurrence, account:accounts(id, name, owner_name), category:categories!inner(name, color, kind)'
+      )
+      .eq('household_id', householdId)
+      .eq('category.kind', 'expense')
+      .returns<{
+        id: string;
+        account_id: string;
+        amount: number;
+        description: string | null;
+        occurs_on: string;
+        recurrence: RecurrenceFreq;
+        account: { id: string; name: string; owner_name: string | null } | null;
+        category: { name: string; color: string; kind: 'expense' } | null;
+      }[]>(),
+    supabase
+      .from('transfers')
+      .select(
+        'id, amount, description, occurs_on, recurrence, from_account:accounts!from_account_id(id, name, owner_name), to_account:accounts!to_account_id(id, name)'
+      )
+      .eq('household_id', householdId)
+      .returns<{
+        id: string;
+        amount: number;
+        description: string | null;
+        occurs_on: string;
+        recurrence: RecurrenceFreq;
+        from_account: { id: string; name: string; owner_name: string | null } | null;
+        to_account: { id: string; name: string } | null;
+      }[]>(),
+  ]);
+
+  if (txnsRes.error) throw txnsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
+
+  const events: UpcomingEvent[] = [];
+  const horizonISO = horizon.toISOString().slice(0, 10);
+  const todayISO = todayDateOnly.toISOString().slice(0, 10);
+  const scopeFor = (ownerName: string | null | undefined): EventScope =>
+    ownerName === 'Fælles' ? 'shared' : 'private';
+
+  for (const t of txnsRes.data ?? []) {
+    const nextDate =
+      t.recurrence === 'once' ? t.occurs_on : nextOccurrenceAfter(t.occurs_on, t.recurrence, today);
+    if (nextDate < todayISO || nextDate > horizonISO) continue;
+    events.push({
+      id: t.id,
+      kind: 'expense',
+      scope: scopeFor(t.account?.owner_name),
+      date: nextDate,
+      description: t.description ?? t.category?.name ?? 'Regning',
+      amount: t.amount,
+      account: t.account ? { id: t.account.id, name: t.account.name } : null,
+      destination: null,
+      category: t.category ? { name: t.category.name, color: t.category.color } : null,
+    });
+  }
+
+  for (const tr of transfersRes.data ?? []) {
+    const nextDate =
+      tr.recurrence === 'once' ? tr.occurs_on : nextOccurrenceAfter(tr.occurs_on, tr.recurrence, today);
+    if (nextDate < todayISO || nextDate > horizonISO) continue;
+    events.push({
+      id: tr.id,
+      kind: 'transfer',
+      scope: scopeFor(tr.from_account?.owner_name),
+      date: nextDate,
+      description: tr.description ?? `Overførsel til ${tr.to_account?.name ?? '?'}`,
+      amount: tr.amount,
+      account: tr.from_account
+        ? { id: tr.from_account.id, name: tr.from_account.name }
+        : null,
+      destination: tr.to_account,
+      category: null,
+    });
+  }
+
+  events.sort((a, b) => a.date.localeCompare(b.date));
+  return events;
 }
 
 // ----------------------------------------------------------------------------

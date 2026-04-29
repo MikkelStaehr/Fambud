@@ -8,6 +8,7 @@ import {
   parseOptionalAmount,
   nextOccurrenceAfter,
 } from '@/lib/format';
+import { noticeUrl } from '@/lib/flash';
 import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_LOAN_TYPES: readonly LoanType[] = [
@@ -188,7 +189,7 @@ export async function createLoan(formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
-  redirect('/laan');
+  redirect(noticeUrl('/laan', `${parsed.data.name} oprettet`));
 }
 
 export async function updateLoan(id: string, formData: FormData) {
@@ -209,7 +210,7 @@ export async function updateLoan(id: string, formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
-  redirect('/laan');
+  redirect(noticeUrl('/laan', `${parsed.data.name} gemt`));
 }
 
 export async function deleteLoan(formData: FormData) {
@@ -225,6 +226,7 @@ export async function deleteLoan(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath('/laan');
   revalidatePath('/konti');
+  redirect(noticeUrl('/laan', 'Lån slettet'));
 }
 
 // "Tilføj som ydelse på Budgetkonto X" — creates a recurring expense on
@@ -391,11 +393,12 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     .single();
 
   revalidatePath('/laan');
-  revalidatePath('/budget', 'layout');
+  revalidatePath('/faste-udgifter', 'layout');
+  revalidatePath('/budget');
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  const pushedQs = targetAccount?.name
-    ? `?pushed=${encodeURIComponent(targetAccount.name)}`
-    : '?pushed=1';
-  redirect(`/laan/${encodeURIComponent(loanId)}${pushedQs}`);
+  const message = targetAccount?.name
+    ? `Tilføjet på ${targetAccount.name}`
+    : 'Tilføjet på budget';
+  redirect(noticeUrl(`/laan/${encodeURIComponent(loanId)}`, message));
 }

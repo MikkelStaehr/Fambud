@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { getBudgetAccounts, getLoanById } from '@/lib/dal';
 import { LoanForm } from '../_components/LoanForm';
 import { AmortisationProjection } from '../_components/AmortisationProjection';
@@ -11,10 +11,10 @@ export default async function EditLaanPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; pushed?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
-  const { error, pushed } = await searchParams;
+  const { error } = await searchParams;
 
   const [loan, budgetAccounts] = await Promise.all([
     getLoanById(id),
@@ -39,17 +39,6 @@ export default async function EditLaanPage({
           Rediger lån
         </h1>
       </header>
-
-      {pushed && (
-        <div className="mt-4 max-w-2xl flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          <Check className="h-4 w-4 shrink-0" />
-          <span>
-            {pushed === '1'
-              ? 'Lånet er tilføjet som månedlig udgift på budgetkontoen.'
-              : `Lånet er tilføjet som månedlig udgift på ${pushed}.`}
-          </span>
-        </div>
-      )}
 
       <div className="mt-6 max-w-2xl">
         <LoanForm

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount } from '@/lib/format';
+import { noticeUrl } from '@/lib/flash';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -80,7 +81,7 @@ export async function createTransfer(formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
-  redirect('/overforsler');
+  redirect(noticeUrl('/overforsler', 'Overførsel oprettet'));
 }
 
 export async function updateTransfer(id: string, formData: FormData) {
@@ -105,7 +106,7 @@ export async function updateTransfer(id: string, formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
-  redirect('/overforsler');
+  redirect(noticeUrl('/overforsler', 'Overførsel gemt'));
 }
 
 export async function deleteTransfer(formData: FormData) {
@@ -120,4 +121,5 @@ export async function deleteTransfer(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  redirect(noticeUrl('/overforsler', 'Overførsel slettet'));
 }

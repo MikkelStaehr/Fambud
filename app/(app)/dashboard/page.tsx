@@ -1,21 +1,73 @@
 import Link from 'next/link';
 import { ClipboardList } from 'lucide-react';
-import { getDashboardData, hasAnyRecurringExpenses } from '@/lib/dal';
 import {
-  formatAmount,
+  getAccounts,
+  getAdvisorContext,
+  getCashflowGraph,
+  getCurrentMemberFirstName,
+  getDashboardData,
+  getMonthlyExpensesByGroup,
+  getUpcomingEvents,
+  hasAnyRecurringExpenses,
+} from '@/lib/dal';
+import {
   formatLongDateDA,
   formatMonthYearDA,
 } from '@/lib/format';
-import { CashflowAdvisor } from './_components/CashflowAdvisor';
+import { buildFixFor, detectCashflowIssues } from '@/lib/cashflow-analysis';
+import { CashflowGraph } from './_components/CashflowGraph';
+import { CashflowWarnings } from './_components/CashflowWarnings';
+import { CategoryGroupChart } from './_components/CategoryGroupChart';
+import { HeroStatus } from './_components/HeroStatus';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
-import { MonthlyCategoryChart } from './_components/MonthlyCategoryChart';
-import { TopExpensesList } from './_components/TopExpensesList';
+import { UpcomingEvents } from './_components/UpcomingEvents';
+
+// Tidsbestemt hilsen — dansk, fire buckets der dækker normale vågne timer.
+// "Godnat" er en farvel-frase på dansk, ikke en hilsen, så vi falder tilbage
+// til "Hej" om natten i stedet.
+function greetingFor(date: Date): string {
+  const h = date.getHours();
+  if (h >= 5 && h < 10) return 'Godmorgen';
+  if (h >= 10 && h < 18) return 'Goddag';
+  if (h >= 18 && h < 22) return 'Godaften';
+  return 'Hej';
+}
 
 export default async function DashboardPage() {
-  const [{ monthlyTotals, yearMonth }, hasRecurringExpenses] = await Promise.all([
+  // Alt dashboard-data hentes parallelt. Vi henter cashflow-data i page.tsx
+  // (ikke i hver komponent) så CashflowWarnings og CashflowGraph kan dele
+  // resultatet — de afhænger begge af accounts + graph.
+  const [
+    { monthlyTotals, yearMonth },
+    hasRecurringExpenses,
+    firstName,
+    accounts,
+    graph,
+    ctx,
+    expenseGroups,
+    upcomingEvents,
+  ] = await Promise.all([
     getDashboardData(),
     hasAnyRecurringExpenses(),
+    getCurrentMemberFirstName(),
+    getAccounts(),
+    getCashflowGraph(),
+    getAdvisorContext(),
+    getMonthlyExpensesByGroup(),
+    getUpcomingEvents(),
   ]);
+
+  const issues = detectCashflowIssues(accounts, graph.perAccount);
+  const fixes = issues
+    .map((issue) => ({ issue, fix: buildFixFor(issue, accounts, graph.perAccount, ctx) }))
+    .filter((entry) => entry.fix !== null) as {
+    issue: typeof issues[number];
+    fix: NonNullable<ReturnType<typeof buildFixFor>>;
+  }[];
+  const visibleAccounts = accounts.filter(
+    (a) => !a.archived && a.kind !== 'credit'
+  );
+  const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
@@ -23,22 +75,18 @@ export default async function DashboardPage() {
   const monthLabel = formatMonthYearDA(yearMonth);
   const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
+  const greeting = greetingFor(today);
+  const personalGreeting = firstName ? `${greeting}, ${firstName}` : greeting;
+
   const { income, expense, net } = monthlyTotals;
-  const netSign = net >= 0 ? '+' : '−';
-  const netClass =
-    net > 0
-      ? 'text-emerald-700'
-      : net < 0
-        ? 'text-red-700'
-        : 'text-neutral-900';
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-neutral-200 pb-6">
-        <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Dashboard
+        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
+          {personalGreeting}
         </h1>
-        <p className="mt-1 text-sm text-neutral-700">{longDateCapitalised}</p>
+        <p className="mt-1.5 text-sm text-neutral-500">{longDateCapitalised}</p>
       </header>
 
       {/* CTA: only shown until the user has any recurring transactions. After
@@ -50,70 +98,58 @@ export default async function DashboardPage() {
           </div>
           <div className="flex-1">
             <div className="text-sm font-medium text-amber-900">
-              Sæt dine faste udgifter op
+              Lad os fylde budgettet op
             </div>
             <p className="mt-0.5 text-sm text-amber-800">
-              Lige nu er der ingen faste udgifter registreret, så cashflowet er
-              tomt. Gå igennem dine konti og fortæl hvad der bliver trukket.
+              Når du har lagt dine faste udgifter ind, kan vi vise dig hvor pengene
+              løber hen — og hvor du sparer mest.
             </p>
           </div>
           <Link
-            href="/budget"
-            className="shrink-0 self-start rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            href="/faste-udgifter"
+            className="shrink-0 self-start rounded-md bg-emerald-800 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-900"
           >
-            Sæt budget op
+            Kom i gang
           </Link>
         </div>
       )}
 
       <IncomeForecastBanner />
 
-      {/* Måneds-overblik øverst — denne måneds tal til venstre, kategori-
-          fordelingen til højre. Erstatter den tidligere "Forecast"-placeholder
-          med et chart der faktisk siger noget om hvor pengene går hen. */}
-      <section className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
-            {monthCap}
-          </h2>
-          <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-            <div className="grid grid-cols-3 divide-x divide-neutral-100">
-              <div className="px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
-                  Indtægter
-                </div>
-                <div className="tabnum mt-1 font-mono text-sm text-emerald-700 sm:text-base">
-                  + {formatAmount(income)}
-                </div>
-              </div>
-              <div className="px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
-                  Udgifter
-                </div>
-                <div className="tabnum mt-1 font-mono text-sm text-red-700 sm:text-base">
-                  − {formatAmount(expense)}
-                </div>
-              </div>
-              <div className="px-3 py-3 sm:px-4">
-                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
-                  Netto
-                </div>
-                <div className={`tabnum mt-1 font-mono text-sm font-semibold sm:text-base ${netClass}`}>
-                  {netSign} {formatAmount(Math.abs(net))}
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Tier 1 — det brugeren skal se lynhurtigt:
+          1. HeroStatus: "Er du på rette spor?" (netto + statustekst)
+          2. Cashflow-tjek (advarsler — kompakt, fuld bredde)
+          3. To-kolonne: Næste 7 dage + Udgifter pr. gruppe */}
+      <HeroStatus
+        income={income}
+        expense={expense}
+        net={net}
+        monthLabel={monthCap}
+      />
 
-          <div className="mt-4">
-            <TopExpensesList limit={5} />
-          </div>
-        </div>
+      <div className="mt-8">
+        <CashflowWarnings fixes={fixes} pendingMembers={ctx.pendingMembers} />
+      </div>
 
-        <MonthlyCategoryChart limit={8} />
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <UpcomingEvents events={upcomingEvents} />
+        <CategoryGroupChart
+          privateGroups={expenseGroups.private}
+          sharedGroups={expenseGroups.shared}
+        />
+      </div>
+
+      {/* Tier 2 — pengestrømmen visualiseret */}
+      <section className="mt-8">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
+          Pengestrøm
+        </h2>
+        <CashflowGraph
+          accounts={visibleAccounts}
+          graph={graph}
+          deficitAccountIds={deficitAccountIds}
+        />
       </section>
-
-      <CashflowAdvisor />
     </div>
   );
 }

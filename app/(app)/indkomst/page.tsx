@@ -41,15 +41,24 @@ export default async function IndkomstPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const sp = await searchParams;
-  const [familyMembers, incomes] = await Promise.all([
+  const [allFamilyMembers, incomes] = await Promise.all([
     getFamilyMembers(),
     getIncomeTransactions(),
   ]);
 
+  // Børn (begge user_id og email er null) har pr. definition ingen
+  // hovedindkomst — de tjener ikke. Børneopsparingsindbetalinger gemmes
+  // som transfers, ikke som income, så de hører ikke til her.
+  // Vi viser kun voksne (logged-in eller pre-godkendt med email) i
+  // Hovedindkomst-sektionen.
+  const incomeContributors = allFamilyMembers.filter(
+    (m) => m.user_id != null || m.email != null
+  );
+
   // For hver person der har primary_income_source sat, forudbeg vi forecastet
   // i parallel så page-render ikke serialiserer N opslag.
   const forecasts = await Promise.all(
-    familyMembers
+    incomeContributors
       .filter((m) => m.primary_income_source)
       .map(async (m) => ({ memberId: m.id, forecast: await getPrimaryIncomeForecast(m.id) }))
   );
@@ -60,10 +69,17 @@ export default async function IndkomstPage({
   const secondaryIncomes = incomes.filter((i) => i.income_role === 'secondary');
   const unclassifiedIncomes = incomes.filter((i) => i.income_role == null);
 
-  const monthlyTotal = incomes.reduce(
-    (sum, i) => sum + monthlyEquivalent(i.amount, i.recurrence),
+  // Sum til header. Primary-paychecks bruger recurrence='once' så
+  // monthlyEquivalent giver 0 — vi falder tilbage til forecast-summen
+  // for dem og monthlyEquivalent for resten (sekundære recurrencer + biindkomst).
+  const forecastSum = forecasts.reduce(
+    (sum, f) => sum + (f.forecast.status === 'ready' ? f.forecast.monthlyNet : 0),
     0
   );
+  const nonPrimaryMonthlySum = incomes
+    .filter((i) => i.income_role !== 'primary')
+    .reduce((sum, i) => sum + monthlyEquivalent(i.amount, i.recurrence), 0);
+  const monthlyTotal = forecastSum + nonPrimaryMonthlySum;
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -92,9 +108,9 @@ export default async function IndkomstPage({
           <Sparkles className="h-3 w-3" />
           Hovedindkomst
         </h2>
-        {familyMembers.length === 0 ? (
+        {incomeContributors.length === 0 ? (
           <div className="rounded-md border border-dashed border-neutral-300 bg-white px-4 py-6 text-center text-sm text-neutral-500">
-            Tilføj familiemedlemmer på{' '}
+            Tilføj voksne familiemedlemmer på{' '}
             <Link href="/indstillinger" className="underline hover:text-neutral-900">
               Indstillinger
             </Link>{' '}
@@ -102,7 +118,7 @@ export default async function IndkomstPage({
           </div>
         ) : (
           <div className="space-y-4">
-            {familyMembers.map((m) => (
+            {incomeContributors.map((m) => (
               <HovedindkomstCard
                 key={m.id}
                 member={m}
@@ -215,7 +231,7 @@ function HovedindkomstCard({
             </span>
           )}
           {!member.user_id && member.email && (
-            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-blue-700">
+            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-800">
               Pre-godkendt
             </span>
           )}

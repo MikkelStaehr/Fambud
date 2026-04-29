@@ -1,15 +1,26 @@
+// /poster — overblik over faktiske posteringer i en valgt måned. Til
+// forskel fra /budget der viser theoretical kr/md (monthlyEquivalent),
+// viser denne side hvad der faktisk er bogført — så fx en årlig forsikring
+// står med fuld pris i den måned den falder, ikke 1/12.
+//
+// Hierarkisk tabel grupperet på kategori-grupper med Fælles/Private-tab.
+// Indkomst rulles op i en lille summary-card række øverst (sammen med
+// udgifter og netto), og udgifter går i selve tabellen.
+
 import Link from 'next/link';
-import { Plus, Pencil, Trash2, Repeat } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { getTransactionsForMonth } from '@/lib/dal';
 import {
-  RECURRENCE_LABEL_DA,
+  CATEGORY_GROUP_COLOR,
+  categoryGroupFor,
+} from '@/lib/categories';
+import {
   currentYearMonth,
   formatAmount,
-  formatShortDateDA,
+  formatMonthYearDA,
 } from '@/lib/format';
 import { MonthFilter } from '../_components/MonthFilter';
-import { deleteTransaction } from './actions';
-import { EmptyState } from '../_components/EmptyState';
+import { PosterTable, type PosterRow } from './_components/PosterTable';
 
 // Sanity-check the month parameter so a malformed URL doesn't blow up the
 // SQL query — fall back to the current month silently.
@@ -27,7 +38,7 @@ export default async function PosterPage({
   const month = normaliseYearMonth(sp.month);
   const transactions = await getTransactionsForMonth(month);
 
-  // Monthly summary: sum income and expenses by category kind.
+  // Månedssammendrag på tværs af både indkomst og udgifter.
   const totals = transactions.reduce(
     (acc, t) => {
       if (t.category?.kind === 'income') acc.income += t.amount;
@@ -38,13 +49,43 @@ export default async function PosterPage({
   );
   const net = totals.income - totals.expense;
 
+  // Tabel-rækker — kun udgifts-poster (indkomst hører til /indkomst og er
+  // sammenfattet i kortene øverst). Hver række inkluderer den joined konto-
+  // og kategori-info så client-komponenten kan filtrere/gruppere uden
+  // ekstra queries.
+  const rows: PosterRow[] = transactions
+    .filter((t) => t.category?.kind === 'expense')
+    .map<PosterRow>((t) => {
+      const group = categoryGroupFor(t.category?.name ?? '');
+      return {
+        id: t.id,
+        description: t.description ?? t.category?.name ?? 'Uden beskrivelse',
+        group,
+        groupColor: CATEGORY_GROUP_COLOR[group],
+        categoryName: t.category?.name ?? '–',
+        categoryColor: t.category?.color ?? '#94a3b8',
+        occursOn: t.occurs_on,
+        recurrence: t.recurrence,
+        accountId: t.account?.id ?? '',
+        accountName: t.account?.name ?? '–',
+        isShared: t.account?.owner_name === 'Fælles',
+        amount: t.amount,
+      };
+    });
+
+  const monthLabel = formatMonthYearDA(month);
+  const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-3 border-b border-neutral-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-3 border-b border-neutral-200 pb-6 sm:flex-row sm:items-baseline sm:justify-between">
         <div>
-          <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">Poster</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            {transactions.length} {transactions.length === 1 ? 'post' : 'poster'}
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
+            Poster
+          </h1>
+          <p className="mt-1.5 text-sm text-neutral-500">
+            {monthCap} · {transactions.length}{' '}
+            {transactions.length === 1 ? 'post' : 'poster'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -59,20 +100,32 @@ export default async function PosterPage({
         </div>
       </header>
 
-      {/* Månedssammendrag */}
+      {/* Månedssammendrag — indtægter, udgifter, netto */}
       <section className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Indtægter</div>
-          <div className="tabnum mt-1 font-mono text-sm text-green-700 sm:text-lg">+ {formatAmount(totals.income)}</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
+            Indtægter
+          </div>
+          <div className="tabnum mt-1 font-mono text-sm font-semibold text-emerald-800 sm:text-lg">
+            + {formatAmount(totals.income)}
+          </div>
         </div>
         <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Udgifter</div>
-          <div className="tabnum mt-1 font-mono text-sm text-red-700 sm:text-lg">− {formatAmount(totals.expense)}</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
+            Udgifter
+          </div>
+          <div className="tabnum mt-1 font-mono text-sm font-semibold text-red-900 sm:text-lg">
+            − {formatAmount(totals.expense)}
+          </div>
         </div>
         <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">Netto</div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
+            Netto
+          </div>
           <div
-            className={`tabnum mt-1 font-mono text-sm sm:text-lg ${net >= 0 ? 'text-neutral-900' : 'text-red-700'}`}
+            className={`tabnum mt-1 font-mono text-sm font-semibold sm:text-lg ${
+              net > 0 ? 'text-emerald-800' : net < 0 ? 'text-red-900' : 'text-neutral-900'
+            }`}
           >
             {net >= 0 ? '+ ' : '− '}
             {formatAmount(Math.abs(net))}
@@ -80,93 +133,10 @@ export default async function PosterPage({
         </div>
       </section>
 
-      {/* Posterlisten */}
-      {transactions.length === 0 ? (
-        <div className="mt-6">
-          <EmptyState
-            message="Ingen poster i denne måned. Tilføj din første eller skift måned ovenfor."
-            cta={{ href: '/poster/ny', label: 'Ny post' }}
-          />
-        </div>
-      ) : (
-        <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
-          <table className="w-full">
-            <tbody>
-              {transactions.map((t) => {
-                const isIncome = t.category?.kind === 'income';
-                return (
-                  <tr key={t.id} className="border-b border-neutral-100 last:border-b-0">
-                    <td className="w-24 whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
-                      {formatShortDateDA(t.occurs_on)}
-                    </td>
-                    <td className="px-2 py-3">
-                      <div className="flex items-center gap-2 text-sm text-neutral-900">
-                        {t.category && (
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: t.category.color }}
-                            aria-hidden
-                          />
-                        )}
-                        <span className="font-medium">
-                          {t.description ?? t.category?.name ?? 'Uden beskrivelse'}
-                        </span>
-                        {t.recurrence !== 'once' && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500"
-                            title={`Gentages ${RECURRENCE_LABEL_DA[t.recurrence]}`}
-                          >
-                            <Repeat className="h-2.5 w-2.5" />
-                            {RECURRENCE_LABEL_DA[t.recurrence]}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                        <span>{t.account?.name ?? '—'}</span>
-                        {t.category && (
-                          <>
-                            <span className="text-neutral-300">·</span>
-                            <span>{t.category.name}</span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={`tabnum font-mono text-sm ${isIncome ? 'text-green-700' : 'text-neutral-900'}`}
-                      >
-                        {isIncome ? '+ ' : '− '}
-                        {formatAmount(t.amount)}
-                      </span>
-                    </td>
-                    <td className="w-px whitespace-nowrap px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <Link
-                          href={`/poster/${t.id}`}
-                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          Rediger
-                        </Link>
-                        <form action={deleteTransaction}>
-                          <input type="hidden" name="id" value={t.id} />
-                          <button
-                            type="submit"
-                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Slet
-                          </button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Hierarkisk udgifts-tabel med Fælles/Private-tab */}
+      <section className="mt-8">
+        <PosterTable rows={rows} />
+      </section>
     </div>
   );
 }

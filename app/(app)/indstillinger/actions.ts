@@ -208,8 +208,9 @@ export async function createFamilyMember(formData: FormData) {
   }
 
   revalidatePath('/indstillinger');
-  // Budget pages also use the family list in dropdowns — refresh those too.
-  revalidatePath('/budget', 'layout');
+  // Faste-udgifter og budget-overblik bruger family list i dropdowns/visning.
+  revalidatePath('/faste-udgifter', 'layout');
+  revalidatePath('/budget');
 }
 
 export async function deleteFamilyMember(formData: FormData) {
@@ -227,5 +228,6 @@ export async function deleteFamilyMember(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath('/indstillinger');
-  revalidatePath('/budget', 'layout');
+  revalidatePath('/faste-udgifter', 'layout');
+  revalidatePath('/budget');
 }

@@ -7,6 +7,7 @@ import {
   parseOptionalAmount,
   parseRequiredAmount,
 } from '@/lib/format';
+import { noticeUrl } from '@/lib/flash';
 import type {
   IncomeRole,
   PrimaryIncomeSource,
@@ -45,6 +46,7 @@ type ParsedIncome = {
   other_deduction_amount: number | null;
   other_deduction_label: string | null;
   income_role: IncomeRole | null;
+  tax_rate_pct: number | null;
 };
 
 function parsePct(raw: string): number | null {
@@ -138,6 +140,14 @@ function readIncomeForm(formData: FormData):
     income_role = roleRaw as IncomeRole;
   }
 
+  // Trækprocent — bruges sammen med skattefradrag til at forudsige netto.
+  // Genbruger parsePct (0-100, accepterer komma-decimal).
+  const taxRateRaw = String(formData.get('tax_rate_pct') ?? '').trim();
+  const tax_rate_pct = taxRateRaw === '' ? null : parsePct(taxRateRaw);
+  if (tax_rate_pct === null && taxRateRaw !== '') {
+    return { error: 'Trækprocent skal være mellem 0 og 100' };
+  }
+
   return {
     data: {
       account_id,
@@ -153,6 +163,7 @@ function readIncomeForm(formData: FormData):
       other_deduction_amount: deductionRes.value,
       other_deduction_label,
       income_role,
+      tax_rate_pct,
     },
   };
 }
@@ -203,7 +214,7 @@ export async function createIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  redirect('/indkomst');
+  redirect(noticeUrl('/indkomst', 'Indkomst registreret'));
 }
 
 export async function updateIncome(id: string, formData: FormData) {
@@ -226,7 +237,7 @@ export async function updateIncome(id: string, formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  redirect('/indkomst');
+  redirect(noticeUrl('/indkomst', 'Indkomst gemt'));
 }
 
 export async function deleteIncome(formData: FormData) {
@@ -243,6 +254,7 @@ export async function deleteIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
+  redirect(noticeUrl('/indkomst', 'Indkomst slettet'));
 }
 
 // Vælger en families primære indkomst-kilde. Styrer hvilken UI-flow vi guider
@@ -273,5 +285,5 @@ export async function setPrimaryIncomeSource(formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
-  redirect('/indkomst');
+  redirect(noticeUrl('/indkomst', 'Indkomst-kilde gemt'));
 }

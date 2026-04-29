@@ -45,3 +45,61 @@ export const PRIVATE_ONLY_CATEGORY_NAMES: ReadonlySet<string> = new Set([
   'Hobby',
   'Personlig pleje',
 ]);
+
+// Højere-ordens grupper bruges af dashboardets "Udgifter pr. gruppe"-chart.
+// Den fulde kategori-liste er for detaljeret når man bare vil have et hurtigt
+// "hvor går pengene hen?"-overblik. Grupperne er tematiske (bolig, transport,
+// børn, …) og hver gruppe har en stabil farve uafhængig af hvilke
+// underkategorier der er aktive denne måned.
+//
+// Mapping er forbunden via kategori-NAVN — det er stabilt nok til formålet
+// (alle standard-kategorier følger STANDARD_EXPENSE_CATEGORIES) og kategorier
+// brugeren selv opretter falder ned i 'Andet'.
+export type CategoryGroup =
+  | 'Bolig & lån'
+  | 'Forsyning & forsikring'
+  | 'Transport'
+  | 'Børn'
+  | 'Mad'
+  | 'Underholdning'
+  | 'A-kasse'
+  | 'Personligt'
+  | 'Andet';
+
+export const CATEGORY_GROUP_COLOR: Record<CategoryGroup, string> = {
+  'Bolig & lån':            '#7c3aed', // purple
+  'Forsyning & forsikring': '#0891b2', // cyan
+  'Transport':              '#2563eb', // blue
+  'Børn':                   '#eab308', // yellow
+  'Mad':                    '#16a34a', // green
+  'Underholdning':          '#9333ea', // violet
+  'A-kasse':                '#0ea5e9', // light blue
+  'Personligt':             '#be185d', // pink
+  'Andet':                  '#64748b', // gray
+};
+
+// Map fra kategori-navn → gruppe. Ukendte kategorier (custom) → 'Andet'.
+const CATEGORY_TO_GROUP_RAW: Record<string, CategoryGroup> = {
+  'Bolig':                  'Bolig & lån',
+  'Lån':                    'Bolig & lån',
+  'Forsyning':              'Forsyning & forsikring',
+  'Forsikring':             'Forsyning & forsikring',
+  'Privat forsikring':      'Forsyning & forsikring',
+  'Transport':              'Transport',
+  'Bil':                    'Transport',
+  'Institution':            'Børn',
+  'Mad':                    'Mad',
+  'Abonnement':             'Underholdning',
+  'Medie':                  'Underholdning',
+  'A-kasse & Fagforening':  'A-kasse',
+  'Træning':                'Personligt',
+  'Frisør':                 'Personligt',
+  'Tøj':                    'Personligt',
+  'Hobby':                  'Personligt',
+  'Personlig pleje':        'Personligt',
+  'Andet':                  'Andet',
+};
+
+export function categoryGroupFor(categoryName: string): CategoryGroup {
+  return CATEGORY_TO_GROUP_RAW[categoryName] ?? 'Andet';
+}

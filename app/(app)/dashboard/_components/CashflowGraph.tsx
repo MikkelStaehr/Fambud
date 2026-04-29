@@ -1,11 +1,20 @@
-// SVG-graf der viser pengestrømmen mellem konti og to syntetiske noder
-// (Indtægter / Udgifter). Kanter er farvet efter type — grøn = løn-input,
-// grå = overførsel mellem konti, rød = udgifter ud af systemet. Linjernes
-// tykkelse er proportional med beløbet pr. måned.
+// Sankey-graf der viser hvordan pengene flyder ud af Lønkontoen. Inspireret
+// af Apple's cashflow-statement: én kilde i venstre side (Lønkonto), bånd
+// flyder ud til højre med BREDDE proportional med beløbet, og hver
+// destination får sin egen rektangel.
 //
-// Vi laver det selv i SVG i stedet for at trække en graph-library ind: dataet
-// er småt (10-20 noder), kanterne er forudsigelige (4-kolonne DAG) og vi får
-// fuld kontrol over visuelt sprog der matcher resten af appen.
+// Vi viser én Sankey pr. lønkonto. Når Mikkel har sin egen lønkonto og
+// Louise har sin, får de hver deres pengestrøms-historie.
+//
+// Bandene farves efter destination's "type":
+//   • Privat (rød)     — udgifter direkte fra lønkontoen + transfers til
+//                         egne ikke-fælles konti
+//   • Fælles (amber)   — transfers til fælles-konti (budget, husholdning)
+//   • Opsparing (grå)  — transfers til savings/investment
+//
+// I modsætning til en strikt Sankey kan summen af outflows godt være større
+// end income (saldoen falder). Vi skalerer alt efter det største af de to
+// så banderne tegnes korrekt — og viser net som et lille badge øverst.
 
 import type { Account } from '@/lib/database.types';
 import type { CashflowGraphData } from '@/lib/dal';
@@ -14,150 +23,78 @@ import { formatAmount, ACCOUNT_KIND_LABEL_DA } from '@/lib/format';
 type Props = {
   accounts: Account[];        // allerede filtreret (ikke arkiveret, ikke credit)
   graph: CashflowGraphData;
-  deficitAccountIds?: Set<string>; // konti CashflowAdvisor har flagget som problematiske
+  deficitAccountIds?: Set<string>;
 };
 
-// Layout-konstanter. Alle kolonner har 60-70px gap så edge-labels (fx
-// "162.830 kr") kan stå mellem boxes uden at overlappe. Tidligere udgave
-// havde kun 30px gap mellem Indtægter og kolonne 1 — labels var hidden
-// halvvejs bag næste box.
-const COL_X = [10, 220, 420, 640];
-const NODE_W = 140;
-const NODE_H = 34;
-const ROW_GAP = 8;
-const PADDING_Y = 12;
+type OutflowType = 'private' | 'shared' | 'savings';
+
+const TYPE_FILL: Record<OutflowType, string> = {
+  private: '#fca5a5',     // red-300 — bands
+  shared: '#fcd34d',      // amber-300
+  savings: '#a3a3a3',     // neutral-400
+};
+
+const TYPE_STROKE: Record<OutflowType, string> = {
+  private: '#b91c1c',     // red-700 — destination border
+  shared: '#b45309',      // amber-700
+  savings: '#525252',     // neutral-600
+};
+
+const TYPE_LABEL: Record<OutflowType, string> = {
+  private: 'privat',
+  shared: 'fælles',
+  savings: 'opsparing',
+};
+
+// Layout-konstanter. To-kolonne layout fortæller historien: Lønkonto til
+// venstre, så privat-udgifter tæt på (du betaler dig selv først), så
+// overførsler længere til højre (du fordeler resten til fælles/opsparing).
+//
+//   [Lønkonto] ─→ [Private udgifter]                  (kort distance)
+//   [Lønkonto] ─→ ─→ ─→ ─→ [Budgetkonto/Husholdning..] (lang distance)
+//
+// Bands der går til private destinationer kommer fra TOPPEN af Lønkontoens
+// outflow; transfer-bands fra BUNDEN. Da private destinationer er
+// vertikalt øverst og transfer-destinationer nederst, krydser bandene
+// aldrig hinanden.
+const W = 580;
+const PADDING_X = 12;
+const PADDING_Y = 22;
+const SOURCE_W = 70;
+const SOURCE_X = PADDING_X;
+const DEST_W = 5;            // tynd lodret bar pr. destination
+
+// Kolonne 1: private udgifter — TÆT på Lønkonto for at signalere
+// "betalt først".
+const COL_PRIVATE_X = 195;
+const LABEL_PRIVATE_X = COL_PRIVATE_X + DEST_W + 8;
+
+// Kolonne 2: overførsler — LÆNGERE til højre. Visuelt distance kommunikerer
+// "kommer i anden runde, efter du har betalt dig selv".
+const COL_TRANSFER_X = 380;
+const LABEL_TRANSFER_X = COL_TRANSFER_X + DEST_W + 8;
+
+const DEST_GAP = 3;          // luft mellem destinationer
+const BAR_BASELINE = 140;    // flow-højde-skala
+const MIN_BAND_HEIGHT = 4;   // små bånd stadig synlige
 
 export function CashflowGraph({
   accounts,
   graph,
   deficitAccountIds = new Set(),
 }: Props) {
-  if (accounts.length === 0 || graph.edges.length === 0) {
+  const lonkontos = accounts.filter((a) => a.kind === 'checking');
+
+  if (lonkontos.length === 0 || graph.edges.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-neutral-300 bg-white px-4 py-8 text-center text-sm text-neutral-500">
-        Ingen pengestrømme registreret endnu. Tilføj indtægter, udgifter og
-        overførsler for at se grafen.
+      <div className="rounded-md border border-dashed border-neutral-300 bg-white px-4 py-6 text-center text-sm text-neutral-500">
+        Ingen pengestrømme registreret endnu. Tilføj indtægter og overførsler
+        for at se hvordan pengene flyder.
       </div>
     );
   }
 
-  // Klassificering: konti der modtager indkomst direkte (kind=income-edges)
-  // hører i kolonne 1, øvrige (modtager kun via overførsel) i kolonne 2.
-  const incomeReceivers = new Set(
-    graph.edges.filter((e) => e.kind === 'income').map((e) => e.to)
-  );
-  const col1 = accounts.filter((a) => incomeReceivers.has(a.id));
-  const col2 = accounts.filter((a) => !incomeReceivers.has(a.id));
-
-  // Sortér hver kolonne efter total flow så de tungeste konti vises øverst.
-  const totalFlowFor = (id: string) => {
-    const d = graph.perAccount.get(id);
-    if (!d) return 0;
-    return d.income + d.expense + d.transfersIn + d.transfersOut;
-  };
-  col1.sort((a, b) => totalFlowFor(b.id) - totalFlowFor(a.id));
-  col2.sort((a, b) => totalFlowFor(b.id) - totalFlowFor(a.id));
-
-  const positions = new Map<string, { x: number; y: number; w: number; h: number }>();
-  const placeColumn = (items: Account[], colIdx: number) => {
-    items.forEach((a, i) => {
-      positions.set(a.id, {
-        x: COL_X[colIdx],
-        y: PADDING_Y + i * (NODE_H + ROW_GAP),
-        w: NODE_W,
-        h: NODE_H,
-      });
-    });
-  };
-  placeColumn(col1, 1);
-  placeColumn(col2, 2);
-
-  // Split "Udgifter" i to noder: private (fra konti der IKKE har owner_name='Fælles')
-  // og fælles (fra konti med owner_name='Fælles'). Det adskiller den private
-  // pengeloop fra fælles-økonomien — to separate "regneark" i samme app.
-  const accountsById = new Map(accounts.map((a) => [a.id, a]));
-  const isSharedAccount = (id: string) =>
-    accountsById.get(id)?.owner_name === 'Fælles';
-
-  const personalExpenseTotal = graph.edges
-    .filter((e) => e.kind === 'expense' && !isSharedAccount(e.from))
-    .reduce((s, e) => s + e.monthly, 0);
-  const sharedExpenseTotal = graph.edges
-    .filter((e) => e.kind === 'expense' && isSharedAccount(e.from))
-    .reduce((s, e) => s + e.monthly, 0);
-  const hasPersonalExpense = personalExpenseTotal > 0;
-  const hasSharedExpense = sharedExpenseTotal > 0;
-
-  // Private udgifter placeres på VENSTRE side (col 0) under Indtægter — så
-  // privat-loop'en (Lønkonto → personlige udgifter) holder sig på venstre
-  // halvdel og ikke krydser bag fælles-konti i col 2. Den læser baglæns
-  // (Lønkonto → Private udgifter går højre-til-venstre) hvilket vi
-  // håndterer i path-tegningen længere nede.
-  //
-  // Vi reserverer en ekstra række i col 0 hvis begge skal være der, så
-  // totalH er højt nok.
-  const requiredCol0Rows = 1 + (hasPersonalExpense ? 1 : 0);
-  const maxRows = Math.max(col1.length, col2.length, requiredCol0Rows, 1);
-  const totalH = PADDING_Y * 2 + maxRows * (NODE_H + ROW_GAP) - ROW_GAP;
-
-  if (hasPersonalExpense) {
-    positions.set('income', {
-      x: COL_X[0],
-      y: PADDING_Y,
-      w: NODE_W,
-      h: NODE_H,
-    });
-    positions.set('expense-personal', {
-      x: COL_X[0],
-      y: PADDING_Y + NODE_H + ROW_GAP,
-      w: NODE_W,
-      h: NODE_H,
-    });
-  } else {
-    positions.set('income', {
-      x: COL_X[0],
-      y: totalH / 2 - NODE_H / 2,
-      w: NODE_W,
-      h: NODE_H,
-    });
-  }
-  if (hasSharedExpense) {
-    positions.set('expense-shared', {
-      x: COL_X[3],
-      y: totalH / 2 - NODE_H / 2,
-      w: NODE_W,
-      h: NODE_H,
-    });
-  }
-
-  // Hjælper der mapper en expense-edge til den korrekte synthetic destination
-  // baseret på source-kontoens ejerskab.
-  const expenseTargetFor = (fromId: string): 'expense-personal' | 'expense-shared' =>
-    isSharedAccount(fromId) ? 'expense-shared' : 'expense-personal';
-
-  const totalW = COL_X[3] + NODE_W + 20;
-
-  // Linjetykkelse normaliseret til max-edge. Holder tegningen visuelt
-  // afbalanceret uanset om beløbene varierer 10x eller 100x.
-  const maxFlow = Math.max(...graph.edges.map((e) => e.monthly), 1);
-  const flowToWidth = (flow: number) => 1.5 + (flow / maxFlow) * 5;
-
-  // Kompakt label: drop decimaler og vis kr i hele tal. Sparer plads og
-  // fjerner det visuelle støj på en graf hvor den eksakte øre ikke betyder
-  // noget i overblikket.
-  const formatCompactKr = (oere: number) =>
-    new Intl.NumberFormat('da-DK', { maximumFractionDigits: 0 }).format(
-      Math.round(oere / 100)
-    );
-
-  // Vis edge-labels på alle ikke-trivielle kanter. Threshold på 2% af
-  // største flow filtrerer kun mikrotransfers fra (fx en 50kr-overførsel
-  // når lønnen er 80k) som ellers ville støje.
-  const labelThreshold = maxFlow * 0.02;
-
-  const totalIncome = graph.edges
-    .filter((e) => e.kind === 'income')
-    .reduce((s, e) => s + e.monthly, 0);
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
 
   return (
     <div className="rounded-md border border-neutral-200 bg-white p-4">
@@ -169,255 +106,369 @@ export function CashflowGraph({
           stryg vandret →
         </span>
       </div>
-      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <svg
-          viewBox={`0 0 ${totalW} ${totalH}`}
-          className="block"
-          style={{ minWidth: totalW, width: '100%', height: 'auto' }}
-        >
-          {/* Kanter tegnes først så de ligger UNDER nodernes rect — en almindelig
-              SVG z-order-konvention som er enklere end at flytte alt ind i et
-              <g>-lag. */}
-          {graph.edges.map((edge, i) => {
-            const from = positions.get(edge.from);
-            // Expense-kanter peger på den split-specifikke destination:
-            // 'expense-personal' eller 'expense-shared'. Income- og transfer-
-            // kanter bruger deres oprindelige edge.to.
-            const toId =
-              edge.kind === 'expense' ? expenseTargetFor(edge.from) : edge.to;
-            const to = positions.get(toId);
-            if (!from || !to) return null;
-            // Detect "backward" flow: target sidder til VENSTRE for source.
-            // Det opstår fordi 'expense-personal' nu placeres på venstre
-            // side (col 0) for at undgå at krydse fælles-kolonnen. For
-            // baglæns-flow forlader linjen source ved venstre kant og
-            // ankommer ved target's højre kant — modsat normal forward.
-            const isBackward = to.x + to.w <= from.x;
-            const x1 = isBackward ? from.x : from.x + from.w;
-            const y1 = from.y + from.h / 2;
-            const x2 = isBackward ? to.x + to.w : to.x;
-            const y2 = to.y + to.h / 2;
-            // dx må ALDRIG overstige halvdelen af det vandrette gap, ellers
-            // overshooter Bezier-kurven ind i nabo-boxes. For baglæns-flow
-            // skifter vi tegnen så kontrolpunkterne stadig pegger UDAD fra
-            // begge endepunkter (cp1 venstre, cp2 højre i stedet for omvendt).
-            const gap = Math.abs(x2 - x1);
-            const dxMag = Math.max(8, gap * 0.45);
-            const dx = isBackward ? -dxMag : dxMag;
-            const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-            // Klassisk +/- palet: grøn for indkomst, rød for udgifter, slate
-            // for overførsler. Vi prøvede neutrale toner men udgifterne
-            // forsvandt visuelt — den øjeblikkelige genkendelse af "hvor
-            // pengene går ud" er vigtigere end at undgå farveassociationer.
-            const stroke =
-              edge.kind === 'income'
-                ? '#10b981'
-                : edge.kind === 'expense'
-                  ? '#ef4444'
-                  : '#94a3b8';
-            // Edge-labels får fortegn baseret på retning: + for indkomst,
-            // − for udgifter, intet for overførsler (de er per definition
-            // value-neutrale — bare flytning fra konto til konto).
-            const sign =
-              edge.kind === 'income' ? '+' : edge.kind === 'expense' ? '−' : '';
-            return (
-              <g key={i}>
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={stroke}
-                  strokeWidth={flowToWidth(edge.monthly)}
-                  strokeOpacity={0.5}
-                  strokeLinecap="round"
-                />
-                {edge.monthly >= labelThreshold && (
-                  <text
-                    x={(x1 + x2) / 2}
-                    y={(y1 + y2) / 2 - 5}
-                    fontSize={9}
-                    fill="#475569"
-                    textAnchor="middle"
-                    style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}
-                  >
-                    {sign}
-                    {formatCompactKr(edge.monthly)} kr
-                  </text>
-                )}
-              </g>
-            );
-          })}
 
-          <NodeSVG
-            x={positions.get('income')!.x}
-            y={positions.get('income')!.y}
-            w={NODE_W}
-            h={NODE_H}
-            title="Indtægter"
-            subtitle={`+${formatCompactKr(totalIncome)} kr/md`}
-            color="income"
+      <div className="space-y-6">
+        {lonkontos.map((lonkonto) => (
+          <LonkontoSankey
+            key={lonkonto.id}
+            lonkonto={lonkonto}
+            graph={graph}
+            accountById={accountById}
+            isDeficit={deficitAccountIds.has(lonkonto.id)}
           />
-          {hasPersonalExpense && (
-            <NodeSVG
-              x={positions.get('expense-personal')!.x}
-              y={positions.get('expense-personal')!.y}
-              w={NODE_W}
-              h={NODE_H}
-              title="Private udgifter"
-              subtitle={`−${formatCompactKr(personalExpenseTotal)} kr/md`}
-              color="expense"
-            />
-          )}
-          {hasSharedExpense && (
-            <NodeSVG
-              x={positions.get('expense-shared')!.x}
-              y={positions.get('expense-shared')!.y}
-              w={NODE_W}
-              h={NODE_H}
-              title="Fælles udgifter"
-              subtitle={`−${formatCompactKr(sharedExpenseTotal)} kr/md`}
-              color="expense"
-            />
-          )}
-
-          {accounts.map((a) => {
-            const pos = positions.get(a.id);
-            if (!pos) return null;
-            const d = graph.perAccount.get(a.id) ?? {
-              income: 0,
-              expense: 0,
-              transfersIn: 0,
-              transfersOut: 0,
-            };
-            const inflow = d.income + d.transfersIn;
-            const outflow = d.expense + d.transfersOut;
-            const net = inflow - outflow;
-            const isDeficit = deficitAccountIds.has(a.id);
-            const hasFlow = inflow > 0 || outflow > 0;
-            // Underdækkede konti vises i amber/gul — det er en "kræver
-            // opmærksomhed"-signal, ikke et "noget er galt"-signal som rød
-            // ville give. Almindelige konti bruger neutral grå.
-            const color: NodeColor = isDeficit ? 'warning' : 'neutral';
-            // Vis net på ALLE konti med flow så brugeren kan se hvor meget
-            // hver konto bidrager. Konti uden flow dæmpes så de ikke
-            // forstyrrer det visuelle (de eksisterer, men er ikke en del af
-            // pengestrømmen).
-            const right = !hasFlow
-              ? ''
-              : net > 0
-                ? `+${formatCompactKr(net)} kr`
-                : net < 0
-                  ? `−${formatCompactKr(-net)} kr`
-                  : '';
-            return (
-              <NodeSVG
-                key={a.id}
-                x={pos.x}
-                y={pos.y}
-                w={pos.w}
-                h={pos.h}
-                title={a.name}
-                subtitle={ACCOUNT_KIND_LABEL_DA[a.kind] ?? a.kind}
-                right={right}
-                color={color}
-                dim={!hasFlow}
-              />
-            );
-          })}
-        </svg>
+        ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-500">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-1 w-6 rounded-full bg-emerald-500/70" />
-          Indtægter (+)
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-1 w-6 rounded-full bg-slate-400/70" />
-          Overførsler
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-1 w-6 rounded-full bg-red-500/70" />
-          Udgifter (−)
-        </span>
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-500">
+        <Legend color={TYPE_FILL.private} label="Private udgifter" />
+        <Legend color={TYPE_FILL.shared} label="Til fælles" />
+        <Legend color={TYPE_FILL.savings} label="Til opsparing" />
       </div>
     </div>
   );
 }
 
-// Værdineutral palet — ingen rød/grøn. Ind = blå (fremadlænende), ud = slate
-// (faktuel), warning = amber (kræver opmærksomhed, ikke "fejl"), neutral =
-// grå. "right"-tallet på en konto bruger samme tone som node-rammen, men
-// holder amber-konti subtilt distinkte fra normale.
-type NodeColor = 'income' | 'expense' | 'warning' | 'neutral';
-
-function NodeSVG({
-  x,
-  y,
-  w,
-  h,
-  title,
-  subtitle,
-  right,
-  color,
-  dim = false,
+function LonkontoSankey({
+  lonkonto,
+  graph,
+  accountById,
+  isDeficit,
 }: {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  title: string;
-  subtitle: string;
-  right?: string;
-  color: NodeColor;
-  dim?: boolean;
+  lonkonto: Account;
+  graph: CashflowGraphData;
+  accountById: Map<string, Account>;
+  isDeficit: boolean;
 }) {
-  // Node-paletten matcher edge-paletten ovenfor: grøn for indkomst, rød
-  // for udgifter, amber for advarsel (separat fra rød så underdækkede
-  // konti ikke smelter sammen med udgifts-noderne), neutral grå for resten.
-  const palette: Record<NodeColor, { fill: string; stroke: string; title: string; right: string }> = {
-    income:  { fill: '#ecfdf5', stroke: '#10b981', title: '#065f46', right: '#059669' },
-    expense: { fill: '#fef2f2', stroke: '#ef4444', title: '#991b1b', right: '#dc2626' },
-    warning: { fill: '#fef3c7', stroke: '#d97706', title: '#92400e', right: '#b45309' },
-    neutral: { fill: '#f9fafb', stroke: '#d1d5db', title: '#0f172a', right: '#475569' },
-  };
-  const { fill, stroke, title: titleColor, right: rightColor } = palette[color];
+  const detail =
+    graph.perAccount.get(lonkonto.id) ??
+    { income: 0, expense: 0, transfersIn: 0, transfersOut: 0 };
 
-  // 140px brede bokses giver plads til ca. 14 tegn i title, eller ~10 hvis
-  // vi også viser right-label.
-  const maxTitleLen = right ? 11 : 16;
-  const titleTrunc = title.length > maxTitleLen ? title.slice(0, maxTitleLen - 1) + '…' : title;
+  // Saml outflows: private udgifter (sum) + alle transfers ud individuelt.
+  type Outflow = { label: string; type: OutflowType; amount: number };
+  const outflows: Outflow[] = [];
+
+  if (detail.expense > 0) {
+    outflows.push({
+      label: 'Private udgifter',
+      type: 'private',
+      amount: detail.expense,
+    });
+  }
+
+  for (const edge of graph.edges) {
+    if (edge.kind !== 'transfer' || edge.from !== lonkonto.id) continue;
+    const dest = accountById.get(edge.to);
+    if (!dest) continue;
+    const type: OutflowType =
+      dest.kind === 'savings' || dest.kind === 'investment'
+        ? 'savings'
+        : dest.owner_name === 'Fælles'
+          ? 'shared'
+          : 'private';
+    outflows.push({ label: dest.name, type, amount: edge.monthly });
+  }
+
+  // Sortér outflows: privat først (rød), fælles, opsparing — og inden for
+  // hver gruppe efter beløb desc. Det gør visuelt sprog konsistent (rød
+  // øverst, opsparing nederst).
+  const TYPE_ORDER: Record<OutflowType, number> = {
+    private: 0,
+    shared: 1,
+    savings: 2,
+  };
+  outflows.sort((a, b) => {
+    const t = TYPE_ORDER[a.type] - TYPE_ORDER[b.type];
+    if (t !== 0) return t;
+    return b.amount - a.amount;
+  });
+
+  if (outflows.length === 0) {
+    return (
+      <div className="text-xs text-neutral-500">
+        Ingen pengestrømme fra {lonkonto.name} endnu.
+      </div>
+    );
+  }
+
+  const totalOut = outflows.reduce((s, o) => s + o.amount, 0);
+  const totalIn = detail.income;
+  // Skalerer Sankey efter den største af de to (income eller udgifter).
+  // Normalt er income lidt større, men hvis du bruger mere end du tjener
+  // (deficit), skaleres efter udgifterne så banderne stadig fylder korrekt.
+  const scaleTotal = Math.max(totalIn, totalOut, 1);
+  const net = totalIn - totalOut;
+
+  // Beregn hver destination-rektangels højde (proportional til beløb).
+  // Pad små bånd til MIN_BAND_HEIGHT så de er synlige.
+  const heights = outflows.map((o) =>
+    Math.max(MIN_BAND_HEIGHT, (o.amount / scaleTotal) * BAR_BASELINE)
+  );
+  const destTotalHeight =
+    heights.reduce((s, h) => s + h, 0) + (outflows.length - 1) * DEST_GAP;
+
+  // Source-blok: højden = totalOut's andel af scaleTotal × baseline.
+  // Hvis totalOut < totalIn (overskud), er source-blokken kortere end
+  // BAR_BASELINE og vi tegner et lille "overskud"-band ovenfor den.
+  const sourceFlowHeight = (totalOut / scaleTotal) * BAR_BASELINE;
+  const surplusHeight =
+    totalIn > totalOut
+      ? ((totalIn - totalOut) / scaleTotal) * BAR_BASELINE
+      : 0;
+
+  // Vertikal centrering: vælg det højeste af de to kolonner som canvas-højde.
+  const contentHeight = Math.max(
+    sourceFlowHeight + surplusHeight,
+    destTotalHeight
+  );
+  const H = contentHeight + PADDING_Y * 2;
+
+  const sourceTopY =
+    PADDING_Y + (contentHeight - sourceFlowHeight - surplusHeight) / 2;
+  const surplusY = sourceTopY;
+  const sourceFlowTopY = sourceTopY + surplusHeight;
+  const sourceFlowBottomY = sourceFlowTopY + sourceFlowHeight;
+
+  const destTopY = PADDING_Y + (contentHeight - destTotalHeight) / 2;
+
+  // Beregn hver båndets top/bottom y-koordinater både på source-siden og
+  // destination-siden. Source-siden er flush (ingen gaps); destination-siden
+  // har DEST_GAP mellem rektanglerne.
+  let cumulativeSource = sourceFlowTopY;
+  let cumulativeDest = destTopY;
+  const bands = outflows.map((o, i) => {
+    const h = heights[i];
+    const sourceTop = cumulativeSource;
+    const sourceBottom =
+      sourceTop + (o.amount / scaleTotal) * BAR_BASELINE;
+    const destTop = cumulativeDest;
+    const destBottom = destTop + h;
+    cumulativeSource = sourceBottom;
+    cumulativeDest = destBottom + DEST_GAP;
+    return {
+      ...o,
+      sourceTop,
+      sourceBottom,
+      destTop,
+      destBottom,
+      destLabelMid: (destTop + destBottom) / 2,
+    };
+  });
+
+  // Bezier-control-punkter beregnes pr. band fordi destinationerne nu
+  // kan være i to forskellige kolonner (private tæt på, overførsler langt
+  // væk). Helper der regner X-position + control-punkter for et givet band.
+  const SOURCE_RIGHT = SOURCE_X + SOURCE_W;
+  const destXFor = (type: OutflowType): number =>
+    type === 'private' ? COL_PRIVATE_X : COL_TRANSFER_X;
+  const labelXFor = (type: OutflowType): number =>
+    type === 'private' ? LABEL_PRIVATE_X : LABEL_TRANSFER_X;
+
+  // Tjek om vi har bands i hver af de to kolonner — bruges til at
+  // beslutte om kolonne-headerne skal vises.
+  const hasPrivateBands = bands.some((b) => b.type === 'private');
+  const hasTransferBands = bands.some((b) => b.type !== 'private');
 
   return (
-    <g opacity={dim ? 0.4 : 1}>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={4}
-        ry={4}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={1}
-      />
-      <text x={x + 8} y={y + 14} fontSize={11} fontWeight={600} fill={titleColor}>
-        {titleTrunc}
-      </text>
-      <text x={x + 8} y={y + 26} fontSize={9} fill="#64748b">
-        {subtitle}
-      </text>
-      {right && (
-        <text
-          x={x + w - 8}
-          y={y + 14}
-          fontSize={9}
-          fontWeight={600}
-          fill={rightColor}
-          textAnchor="end"
+    <div>
+      {/* Header med kontonavn + nettobevægelse */}
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-medium text-neutral-900">
+            {lonkonto.name}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-neutral-400">
+            {ACCOUNT_KIND_LABEL_DA[lonkonto.kind] ?? lonkonto.kind}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-3 text-xs">
+          <span className="tabnum font-mono text-emerald-800">
+            + {formatAmount(totalIn)} ind
+          </span>
+          <span className="tabnum font-mono text-neutral-700">
+            − {formatAmount(totalOut)} ud
+          </span>
+          <span
+            className={`tabnum font-mono font-semibold ${
+              net < 0 ? 'text-red-900' : 'text-emerald-800'
+            }`}
+          >
+            Net {net >= 0 ? '+' : '−'} {formatAmount(Math.abs(net))}
+          </span>
+        </div>
+      </div>
+
+      <div
+        className={`overflow-x-auto rounded-md ${
+          isDeficit ? 'border border-red-200 bg-red-50/30' : ''
+        }`}
+      >
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="block"
+          // Cap render-bredden så grafen ikke vokser ukontrollabelt på
+          // brede skærme. På smalle skærme scroller den horisontalt
+          // inde i overflow-x-auto-containeren.
+          style={{ width: '100%', maxWidth: 680, minWidth: 480, height: 'auto' }}
         >
-          {right}
-        </text>
-      )}
-    </g>
+          {/* Bands (tegnes først så rektangler ligger ovenpå) */}
+          {bands.map((b, i) => {
+            const destLeft = destXFor(b.type);
+            const cpx = SOURCE_RIGHT + (destLeft - SOURCE_RIGHT) * 0.5;
+            const path =
+              `M ${SOURCE_RIGHT} ${b.sourceTop} ` +
+              `C ${cpx} ${b.sourceTop}, ${cpx} ${b.destTop}, ${destLeft} ${b.destTop} ` +
+              `L ${destLeft} ${b.destBottom} ` +
+              `C ${cpx} ${b.destBottom}, ${cpx} ${b.sourceBottom}, ${SOURCE_RIGHT} ${b.sourceBottom} Z`;
+            return (
+              <path
+                key={i}
+                d={path}
+                fill={TYPE_FILL[b.type]}
+                fillOpacity={0.6}
+              />
+            );
+          })}
+
+          {/* Kolonne-headers — placeret over destinations-bjælkerne. Vi
+              viser kun en header hvis dens kolonne har destinationer.
+              "PRIVATE" og "OVERFØRSLER" fortæller historien: betal dig
+              selv først, så fordel resten til andre konti. */}
+          {hasPrivateBands && (
+            <text
+              x={COL_PRIVATE_X}
+              y={PADDING_Y - 8}
+              fontSize={9}
+              fontWeight={600}
+              fill="#737373"
+              letterSpacing={0.6}
+            >
+              PRIVATE
+            </text>
+          )}
+          {hasTransferBands && (
+            <text
+              x={COL_TRANSFER_X}
+              y={PADDING_Y - 8}
+              fontSize={9}
+              fontWeight={600}
+              fill="#737373"
+              letterSpacing={0.6}
+            >
+              OVERFØRSLER
+            </text>
+          )}
+
+          {/* Source-rectangle (Lønkonto) — overskud (hvis der er) i lys grøn,
+              flow-del i mørkere neutral. */}
+          {surplusHeight > 0 && (
+            <rect
+              x={SOURCE_X}
+              y={surplusY}
+              width={SOURCE_W}
+              height={surplusHeight}
+              fill="#d1fae5"  /* emerald-100 */
+              stroke="#10b981" /* emerald-500 */
+              strokeWidth={1.5}
+              rx={3}
+            />
+          )}
+          <rect
+            x={SOURCE_X}
+            y={sourceFlowTopY}
+            width={SOURCE_W}
+            height={sourceFlowHeight}
+            fill="#f5f5f4"  /* stone-100 */
+            stroke="#525252"
+            strokeWidth={1.5}
+            rx={3}
+          />
+
+          {/* Source-label */}
+          <text
+            x={SOURCE_X + SOURCE_W / 2}
+            y={sourceTopY + (sourceFlowHeight + surplusHeight) / 2 - 4}
+            fontSize={11}
+            fontWeight={600}
+            fill="#171717"
+            textAnchor="middle"
+          >
+            {lonkonto.name}
+          </text>
+          <text
+            x={SOURCE_X + SOURCE_W / 2}
+            y={sourceTopY + (sourceFlowHeight + surplusHeight) / 2 + 9}
+            fontSize={9}
+            fill="#737373"
+            textAnchor="middle"
+          >
+            {formatAmount(totalIn)} kr/md
+          </text>
+
+          {/* Surplus-label, hvis der er overskud */}
+          {surplusHeight > 8 && (
+            <text
+              x={SOURCE_X + SOURCE_W + 6}
+              y={surplusY + surplusHeight / 2}
+              fontSize={9}
+              fill="#065f46"
+              dominantBaseline="middle"
+            >
+              + {formatAmount(totalIn - totalOut)} ↗ saldo
+            </text>
+          )}
+
+          {/* Destination rectangles + labels — X afhænger af type så
+              private-destinationer sidder i kolonne 1 (tæt på Lønkonto)
+              og overførsler i kolonne 2 (længere væk). */}
+          {bands.map((b, i) => {
+            const destX = destXFor(b.type);
+            const labelX = labelXFor(b.type);
+            return (
+              <g key={i}>
+                <rect
+                  x={destX}
+                  y={b.destTop}
+                  width={DEST_W}
+                  height={b.destBottom - b.destTop}
+                  fill={TYPE_STROKE[b.type]}
+                  rx={1}
+                />
+                <text
+                  x={labelX}
+                  y={b.destLabelMid - 4}
+                  fontSize={11}
+                  fontWeight={500}
+                  fill="#171717"
+                  dominantBaseline="middle"
+                >
+                  {b.label}
+                </text>
+                <text
+                  x={labelX}
+                  y={b.destLabelMid + 8}
+                  fontSize={9}
+                  fill="#737373"
+                  dominantBaseline="middle"
+                >
+                  {formatAmount(b.amount)} kr · {TYPE_LABEL[b.type]}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-block h-2 w-4 rounded-sm"
+        style={{ backgroundColor: color, opacity: 0.6 }}
+      />
+      {label}
+    </span>
   );
 }

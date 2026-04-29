@@ -57,6 +57,7 @@ export default async function EditIndkomstPage({
             other_deduction_amount: income.other_deduction_amount,
             other_deduction_label: income.other_deduction_label,
             income_role: income.income_role,
+            tax_rate_pct: income.tax_rate_pct,
           }}
           submitLabel="Gem ændringer"
           cancelHref="/indkomst"

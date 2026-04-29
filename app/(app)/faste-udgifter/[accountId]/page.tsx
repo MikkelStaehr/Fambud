@@ -43,15 +43,15 @@ export default async function BudgetAccountPage({
   const { error } = await searchParams;
 
   // Make sure the standard categories exist even if the user lands here
-  // directly via deep link without hitting /budget first.
+  // directly via deep link without hitting /faste-udgifter first.
   await ensureStandardExpenseCategories();
 
   const accounts = await getBudgetAccounts();
   const idx = accounts.findIndex((a) => a.id === accountId);
   if (idx === -1) {
     // Husholdningskonto har sin egen side. Andre kind=savings/investment/credit
-    // havner også her — men /budget overview viser dem som links der peger
-    // andre steder hen, så et direkte deep-link til /budget/[savingsId] er
+    // havner også her — men /faste-udgifter overview viser dem som links der peger
+    // andre steder hen, så et direkte deep-link til /faste-udgifter/[savingsId] er
     // sjældent og bouncer bare tilbage til oversigten.
     const { supabase, householdId } = await getHouseholdContext();
     const { data: a } = await supabase
@@ -61,7 +61,7 @@ export default async function BudgetAccountPage({
       .eq('household_id', householdId)
       .maybeSingle();
     if (a?.kind === 'household') redirect('/husholdning');
-    redirect('/budget');
+    redirect('/faste-udgifter');
   }
   const account = accounts[idx];
   const prev = idx > 0 ? accounts[idx - 1] : null;
@@ -197,7 +197,7 @@ export default async function BudgetAccountPage({
           <div className="mt-6 flex items-center gap-3">
             {prev ? (
               <Link
-                href={`/budget/${prev.id}`}
+                href={`/faste-udgifter/${prev.id}`}
                 className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -209,7 +209,7 @@ export default async function BudgetAccountPage({
 
             {next ? (
               <Link
-                href={`/budget/${next.id}`}
+                href={`/faste-udgifter/${next.id}`}
                 className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
               >
                 Næste konto ({next.name})

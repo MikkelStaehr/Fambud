@@ -1,7 +1,10 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { FambudMark } from './_components/FambudMark';
 import { SidebarNav } from './_components/SidebarNav';
+import { Toast } from './_components/Toast';
 import { signOut } from './actions';
 
 // Belt-and-braces: the proxy already redirects unauthenticated users to /login
@@ -32,9 +35,7 @@ export default async function AppLayout({
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4">
         <div className="px-2 pb-6">
-          <span className="text-base font-semibold tracking-tight text-neutral-900">
-            Fambud
-          </span>
+          <FambudMark size="lg" />
         </div>
 
         <SidebarNav />
@@ -56,6 +57,12 @@ export default async function AppLayout({
       </aside>
 
       <main className="flex-1">{children}</main>
+
+      {/* Toast hænger på URL search-params; Suspense er påkrævet fordi
+          useSearchParams ellers vil bailout client-side for hele route'en. */}
+      <Suspense fallback={null}>
+        <Toast />
+      </Suspense>
     </div>
   );
 }

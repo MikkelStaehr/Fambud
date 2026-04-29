@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
+import { SubmitButton } from '../../_components/SubmitButton';
 import { formatAmount, formatOereForInput, parseAmountToOere } from '@/lib/format';
 import type { Account, IncomeRole, RecurrenceFreq } from '@/lib/database.types';
 import type { FamilyMemberRow } from '@/lib/dal';
@@ -26,6 +27,7 @@ type Props = {
     other_deduction_amount?: number | null;
     other_deduction_label?: string | null;
     income_role?: IncomeRole | null;
+    tax_rate_pct?: number | null;
   };
   submitLabel: string;
   cancelHref: string;
@@ -89,7 +91,9 @@ export function IncomeForm({
   const [deductionStr, setDeductionStr] = useState(
     dv.other_deduction_amount != null ? formatOereForInput(dv.other_deduction_amount) : ''
   );
-  const [deductionLabelStr, setDeductionLabelStr] = useState(dv.other_deduction_label ?? '');
+  const [taxRateStr, setTaxRateStr] = useState(
+    dv.tax_rate_pct != null ? String(dv.tax_rate_pct) : ''
+  );
 
   function handleInput(e: React.FormEvent<HTMLFormElement>) {
     const t = e.target as HTMLInputElement;
@@ -99,20 +103,30 @@ export function IncomeForm({
       case 'pension_own_pct':         setPensionOwnStr(t.value); break;
       case 'pension_employer_pct':    setPensionEmployerStr(t.value); break;
       case 'other_deduction_amount':  setDeductionStr(t.value); break;
-      case 'other_deduction_label':   setDeductionLabelStr(t.value); break;
+      case 'tax_rate_pct':            setTaxRateStr(t.value); break;
     }
   }
 
   const gross = parseLooseAmount(grossStr);
   const net = parseLooseAmount(netStr);
   const pensionOwnPct = parseLoosePct(pensionOwnStr);
-  const deduction = parseLooseAmount(deductionStr);
+  const skattefradrag = parseLooseAmount(deductionStr);
+  const taxRatePct = parseLoosePct(taxRateStr);
 
-  // Lønseddel-math (only meaningful when bruttoløn is set):
-  //   pension egen-bidrag = gross × pension_own_pct%
-  //   skattepligtig efter pension = gross − pension egen − A-kasse − fagforening − andet
-  //   beregnet skat = skattepligtig − netto  (kun vises hvis netto er sat)
-  // Vi viser dem i den rækkefølge en lønseddel typisk er bygget op.
+  // AM-bidrag er fast 8% i Danmark — gælder for alle lønmodtagere.
+  // Vi auto-beregner den så brugeren ikke skal indtaste den.
+  const AM_RATE_PCT = 8;
+
+  // Lønseddel-math:
+  //   AM-grundlag           = brutto − pension egen
+  //   AM-bidrag             = AM-grundlag × 8 %
+  //   Skattegrundlag        = AM-grundlag − AM-bidrag
+  //   Beskatningsgrundlag   = Skattegrundlag − skattefradrag
+  //   A-skat                = Beskatningsgrundlag × trækprocent
+  //   Forudsagt netto       = brutto − pension egen − AM-bidrag − A-skat
+  //
+  // Hvis brugeren har udfyldt netto OG vi har trækprocent, kan vi sammen-
+  // ligne forudsagt vs faktisk og fange diskrepanser.
   const pensionOwnAmount =
     gross != null && pensionOwnPct != null && pensionOwnPct > 0
       ? Math.round((gross * pensionOwnPct) / 100)
@@ -120,13 +134,30 @@ export function IncomeForm({
 
   const showSummary = gross != null && gross > 0;
 
-  let runningTotal: number | null = null;
-  if (showSummary) {
-    runningTotal = gross;
-    if (pensionOwnAmount != null) runningTotal -= pensionOwnAmount;
-    if (deduction != null) runningTotal -= deduction;
+  let amGrundlag: number | null = null;
+  let amBidrag: number | null = null;
+  let skattegrundlag: number | null = null;
+  let beskatningsgrundlag: number | null = null;
+  let predictedTax: number | null = null;
+  let predictedNet: number | null = null;
+  if (showSummary && gross != null) {
+    amGrundlag = gross - (pensionOwnAmount ?? 0);
+    amBidrag = Math.round((amGrundlag * AM_RATE_PCT) / 100);
+    skattegrundlag = amGrundlag - amBidrag;
+    if (skattefradrag != null) {
+      beskatningsgrundlag = Math.max(0, skattegrundlag - skattefradrag);
+    }
+    if (taxRatePct != null && taxRatePct > 0 && beskatningsgrundlag != null) {
+      predictedTax = Math.round((beskatningsgrundlag * taxRatePct) / 100);
+      predictedNet = gross - (pensionOwnAmount ?? 0) - amBidrag - predictedTax;
+    }
   }
-  const computedTax = runningTotal != null && net != null ? runningTotal - net : null;
+
+  // Diff mellem forudsagt og faktisk netto. Tolerance ±150 kr fanger
+  // småposter (ATP, kantinekøb) som vi ikke modellerer.
+  const netDiff =
+    predictedNet != null && net != null ? net - predictedNet : null;
+  const NET_TOLERANCE_OERE = 15000; // 150 kr i øre
 
   return (
     <form action={action} onInput={handleInput} className="space-y-5">
@@ -241,31 +272,16 @@ export function IncomeForm({
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
-            <div>
-              <label htmlFor="other_deduction_label" className={labelClass}>
-                Fradrag <span className="text-neutral-400">(label — valgfrit)</span>
-              </label>
-              <input
-                id="other_deduction_label"
-                name="other_deduction_label"
-                type="text"
-                defaultValue={deductionLabelStr}
-                placeholder="F.eks. A-kasse, fagforening, frokost"
-                className={fieldClass}
-              />
-            </div>
-            <div className="sm:w-40">
-              <label htmlFor="other_deduction_amount" className={labelClass}>
-                Beløb <span className="text-neutral-400">(kr.)</span>
-              </label>
-              <AmountInput
-                id="other_deduction_amount"
-                name="other_deduction_amount"
-                defaultValue={deductionStr}
-                placeholder="980.00"
-              />
-            </div>
+          <div>
+            <label htmlFor="other_deduction_amount" className={labelClass}>
+              Skattefradrag <span className="text-neutral-400">(kr. — fra din lønseddel)</span>
+            </label>
+            <AmountInput
+              id="other_deduction_amount"
+              name="other_deduction_amount"
+              defaultValue={deductionStr}
+              placeholder="4 800.00"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -302,6 +318,27 @@ export function IncomeForm({
               />
             </div>
           </div>
+
+          <div>
+            <label htmlFor="tax_rate_pct" className={labelClass}>
+              Trækprocent <span className="text-neutral-400">(% — fra din lønseddel)</span>
+            </label>
+            <input
+              id="tax_rate_pct"
+              name="tax_rate_pct"
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              defaultValue={taxRateStr}
+              placeholder="39"
+              className={fieldClass}
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Sammen med skattefradrag forudsiger vi din netto. Hvis tallene
+              ikke matcher din lønseddel, kan vi spotte hvad der mangler.
+            </p>
+          </div>
         </div>
 
         {showSummary && (
@@ -318,37 +355,83 @@ export function IncomeForm({
                   sign="-"
                 />
               )}
-              {deduction != null && deduction > 0 && (
+              {amBidrag != null && (
                 <SummaryRow
-                  label={deductionLabelStr.trim() || 'Fradrag'}
-                  amount={deduction}
+                  label={`AM-bidrag (${AM_RATE_PCT}%)`}
+                  amount={amBidrag}
                   sign="-"
+                  hint="fast i DK — beregnes af brutto efter pension"
                 />
               )}
-              {runningTotal != null && (
+              {skattegrundlag != null && (
                 <SummaryRow
-                  label="Skattepligtig efter fradrag"
-                  amount={runningTotal}
+                  label="Skattegrundlag"
+                  amount={skattegrundlag}
                   divider
                   emphasis
                 />
               )}
-              {computedTax != null && computedTax > 0 && (
+              {skattefradrag != null && skattefradrag > 0 && (
                 <SummaryRow
-                  label="Skat (beregnet)"
-                  amount={computedTax}
+                  label="Skattefradrag"
+                  amount={skattefradrag}
                   sign="-"
-                  hint="brutto − fradrag − netto"
+                />
+              )}
+              {beskatningsgrundlag != null && skattefradrag != null && skattefradrag > 0 && (
+                <SummaryRow
+                  label="Beskatningsgrundlag"
+                  amount={beskatningsgrundlag}
+                  divider
+                  emphasis
+                />
+              )}
+              {predictedTax != null && (
+                <SummaryRow
+                  label={`A-skat (${taxRatePct}%)`}
+                  amount={predictedTax}
+                  sign="-"
+                />
+              )}
+              {predictedNet != null && (
+                <SummaryRow
+                  label="Forudsagt netto"
+                  amount={predictedNet}
+                  divider
+                  emphasis
                 />
               )}
               {net != null && net > 0 && (
-                <SummaryRow label="Nettoløn (du har)" amount={net} divider emphasis />
+                <SummaryRow label="Nettoløn (du har)" amount={net} emphasis />
               )}
             </dl>
-            {computedTax != null && computedTax < 0 && (
-              <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-                Den indtastede nettoløn er højere end brutto minus fradrag —
-                tjek tallene en ekstra gang.
+
+            {/* Diff-indikator når både forudsagt og faktisk netto er sat */}
+            {netDiff != null && (
+              Math.abs(netDiff) <= NET_TOLERANCE_OERE ? (
+                <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800">
+                  ✓ Stemmer med din lønseddel
+                  {Math.abs(netDiff) > 0 && (
+                    <> (forskel: {netDiff > 0 ? '+' : '−'}{formatAmount(Math.abs(netDiff))} kr)</>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                  Forskel: {netDiff > 0 ? '+' : '−'}{formatAmount(Math.abs(netDiff))} kr —
+                  sandsynligvis ATP, kantinekøb eller andre småfradrag.
+                  {netDiff > 0
+                    ? ' (Din netto er højere end forudsagt — tjek pension/trækprocent.)'
+                    : ' (Din netto er lavere end forudsagt — der er sandsynligvis ekstra fradrag.)'}
+                </p>
+              )
+            )}
+
+            {/* Sanity-check når trækprocent ikke er sat: viser stadig den
+                bagudregnede skat så formen er bagudkompatibel. */}
+            {predictedTax == null && net != null && net > 0 && skattegrundlag != null && (
+              <p className="mt-3 text-xs text-neutral-500">
+                Tilføj din trækprocent for at få en forudsagt netto og se om
+                tallene matcher din lønseddel.
               </p>
             )}
           </div>
@@ -362,12 +445,7 @@ export function IncomeForm({
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-        >
-          {submitLabel}
-        </button>
+        <SubmitButton>{submitLabel}</SubmitButton>
         <Link
           href={cancelHref}
           className="text-sm font-medium text-neutral-500 hover:text-neutral-900"

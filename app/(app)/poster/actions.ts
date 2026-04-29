@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount } from '@/lib/format';
+import { noticeUrl } from '@/lib/flash';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -83,7 +84,7 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect('/poster');
+  redirect(noticeUrl('/poster', 'Post oprettet'));
 }
 
 export async function updateTransaction(id: string, formData: FormData) {
@@ -104,7 +105,7 @@ export async function updateTransaction(id: string, formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect('/poster');
+  redirect(noticeUrl('/poster', 'Post gemt'));
 }
 
 export async function deleteTransaction(formData: FormData) {
@@ -119,4 +120,5 @@ export async function deleteTransaction(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath('/poster');
   revalidatePath('/dashboard');
+  redirect(noticeUrl('/poster', 'Post slettet'));
 }

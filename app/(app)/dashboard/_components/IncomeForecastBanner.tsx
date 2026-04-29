@@ -36,19 +36,19 @@ export async function IncomeForecastBanner() {
   const newPaycheckHref = `/indkomst/ny?role=primary&recurrence=once&member=${encodeURIComponent(firstNeeded.member.id)}`;
 
   return (
-    <div className="mt-6 flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-start sm:gap-4">
-      <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+    <div className="mt-6 flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-start sm:gap-4">
+      <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
         <Sparkles className="h-5 w-5" />
       </div>
       <div className="flex-1">
-        <div className="text-sm font-medium text-blue-900">
+        <div className="text-sm font-medium text-emerald-900">
           Indkomst-forecast er ikke klar endnu
         </div>
-        <p className="mt-0.5 text-sm text-blue-800">
+        <p className="mt-0.5 text-sm text-emerald-800">
           Vi beregner et månedligt forecast ud fra de seneste 3 lønudbetalinger.
           Når der er logget nok udbetalinger, kan vi forudsige resten af året.
         </p>
-        <ul className="mt-2 space-y-0.5 text-xs text-blue-800">
+        <ul className="mt-2 space-y-0.5 text-xs text-emerald-800">
           {forecasts.map(({ member, forecast }) => (
             <li key={member.id}>
               <span className="font-medium">{member.name}:</span>{' '}
@@ -68,13 +68,13 @@ export async function IncomeForecastBanner() {
               kun når mindst én er insufficient — denne sti rammes ikke,
               men den holder logikken læselig). */}
           {ready.length > 0 && insufficient.length === 0 && (
-            <li className="text-blue-700">Forecast er klar for alle.</li>
+            <li className="text-emerald-700">Forecast er klar for alle.</li>
           )}
         </ul>
       </div>
       <Link
         href={newPaycheckHref}
-        className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md bg-blue-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-800"
+        className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md bg-emerald-800 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-900"
       >
         <Plus className="h-3.5 w-3.5" />
         Registrer lønudbetaling

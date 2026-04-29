@@ -13,6 +13,7 @@ import {
   ShoppingBasket,
   PiggyBank,
   Settings,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -20,86 +21,56 @@ import {
 // be passed as props from a Server Component.
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
-// Top-level items der står ALENE (ingen sub-items). Budget rendres separat
-// fordi den har sin egen treenighed (Faste udgifter / Husholdning /
-// Opsparinger) der vises som nestede sub-items.
-const NAV_BEFORE_BUDGET: NavItem[] = [
+// Hovednavigation — overblikssider og indkomst/udgift-flows. Budget er det
+// hierarkiske overblik over alle faste udgifter; selve værktøjerne til at
+// vedligeholde dem ligger samlet under "Værktøjer" nedenfor.
+const NAV_MAIN: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/konti', label: 'Konti', icon: Wallet },
   { href: '/laan', label: 'Lån', icon: Landmark },
   { href: '/indkomst', label: 'Indkomst', icon: Coins },
-];
-
-const NAV_AFTER_BUDGET: NavItem[] = [
+  { href: '/budget', label: 'Budget', icon: ClipboardList },
   { href: '/poster', label: 'Poster', icon: Receipt },
   { href: '/overforsler', label: 'Overførsler', icon: ArrowLeftRight },
-  { href: '/indstillinger', label: 'Indstillinger', icon: Settings },
 ];
 
-// De tre sub-items under Budget — den månedlige budget-treenighed: hvad der
-// trækkes fast, hvad der bruges variabelt, og hvad der lægges til side.
-const BUDGET_CHILDREN: NavItem[] = [
-  { href: '/budget', label: 'Faste udgifter', icon: ClipboardList },
+// Værktøjer — sider hvor brugeren beriger systemet med data (oprette faste
+// udgifter, registrere husholdningskøb, sætte opsparingsmål). Adskilt fra
+// hovedflow'et så sidebaren ikke blander "se" og "vedligehold".
+const NAV_TOOLS: NavItem[] = [
+  { href: '/faste-udgifter', label: 'Faste udgifter', icon: ClipboardList },
   { href: '/husholdning', label: 'Husholdning', icon: ShoppingBasket },
   { href: '/opsparinger', label: 'Opsparinger & buffer', icon: PiggyBank },
 ];
 
-const BUDGET_PATHS = new Set(BUDGET_CHILDREN.map((c) => c.href));
+const NAV_BOTTOM: NavItem[] = [
+  { href: '/indstillinger', label: 'Indstillinger', icon: Settings },
+];
 
 export function SidebarNav() {
   const pathname = usePathname();
 
-  // Budget er "aktiv" hvis vi er på /budget, /husholdning, /opsparinger
-  // eller noget under dem. Sub-item highlight håndteres separat.
-  const budgetActive =
-    BUDGET_PATHS.has(pathname) ||
-    [...BUDGET_PATHS].some((p) => pathname.startsWith(p + '/'));
-
   return (
     <nav className="flex flex-col gap-0.5">
-      {NAV_BEFORE_BUDGET.map((item) => (
+      {NAV_MAIN.map((item) => (
         <NavLink key={item.href} item={item} pathname={pathname} />
       ))}
 
-      {/* Budget-overskrift (ikke klikbar — er en gruppe-header, ikke en
-          rute. Klik på en af de tre sub-items i stedet). Vi bruger en
-          ikke-link span så der ikke opstår tvivl om hvor den fører hen. */}
-      <div
-        className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm ${
-          budgetActive ? 'font-medium text-neutral-900' : 'text-neutral-600'
-        }`}
-      >
-        <ClipboardList
-          className={`h-4 w-4 ${budgetActive ? 'text-neutral-900' : 'text-neutral-400'}`}
-        />
-        Budget
+      <div className="mt-4 mb-1 flex items-center gap-1.5 px-2.5">
+        <Wrench className="h-3 w-3 text-neutral-400" />
+        <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+          Værktøjer
+        </span>
       </div>
-      <div className="ml-3.5 mt-0.5 flex flex-col gap-0.5 border-l border-neutral-200 pl-3">
-        {BUDGET_CHILDREN.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(item.href + '/');
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-2 truncate rounded-md px-2 py-1 text-xs transition ${
-                active
-                  ? 'bg-neutral-100 font-medium text-neutral-900'
-                  : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
-              }`}
-            >
-              <item.icon
-                className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-neutral-900' : 'text-neutral-400'}`}
-              />
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {NAV_AFTER_BUDGET.map((item) => (
+      {NAV_TOOLS.map((item) => (
         <NavLink key={item.href} item={item} pathname={pathname} />
       ))}
+
+      <div className="mt-4">
+        {NAV_BOTTOM.map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} />
+        ))}
+      </div>
     </nav>
   );
 }

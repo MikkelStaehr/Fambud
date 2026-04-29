@@ -699,3 +699,280 @@ oprettelses-flow nu.
   tidshorisont og vi deler loftet ud
 - **Per-bruger advisor-feature ikke verificeret end-to-end** indtil
   Louise er på
+
+---
+
+# Devlog — 29. april 2026
+
+UX/UI-fokus efter lange dage med datamodel og logik. Brand-polish, indkomst-
+motor med faktiske lønudbetalinger som forecast-grundlag, dashboardet
+omstruktureret til "lynhurtigt overblik", Sankey-graf der fortæller historien
+"først betaler du dig selv, så fordeler du resten", og en større navigations-
+omlægning hvor /budget og /poster begge bliver hierarkiske tabeller med
+Fælles/Private-tabs.
+
+---
+
+## 1. Brand-polish — Fambud-wordmark + stone-tema
+
+**Ny font** [font/zt-nature/ZTNature-Bold.otf](font/zt-nature/) loaded via
+[app/fonts.ts](app/fonts.ts) som CSS-variabel `--font-zt-nature`. Brugt i
+[FambudMark.tsx](app/(app)/_components/FambudMark.tsx) — wordmark på sidebaren
+og auth-siderne. Ren sort, ingen split-farve (efter "logo skal bare være
+sort"-feedback).
+
+**Body-bg:** `bg-neutral-50` → `bg-stone-50` (varm cream) på root layout.
+Etablerer brand-paletten: emerald-800 (skovgrøn) som primær, red-900
+(burgundy) som sekundær, stone-50 som canvas.
+
+---
+
+## 2. Indkomst-motor — faktiske lønudbetalinger som forecast
+
+**Migration: [0027_tax_rate.sql](supabase/migrations/0027_tax_rate.sql)** —
+ny `tax_rate_pct real` kolonne på transactions så lønseddel-beregningen
+kender brugerens trækprocent.
+
+**Ny IncomeForm-flow** ([IncomeForm.tsx](app/(app)/indkomst/_components/IncomeForm.tsx)):
+matcher dansk lønseddel — brutto → −AM-bidrag (8 %) → −egen pension →
+skattegrundlag → −skattefradrag → beskatningsgrundlag × trækprocent
+→ A-skat → forudsagt netto. Diff-indikator ±150 kr tolerance: grønt flueben
+hvis netto matcher beregningen, ambergult banner hvis ikke (brugeren har
+typisk overset noget).
+
+**3-paycheck forecast-model** ([income.ts:142](lib/dal/income.ts)):
+`getPrimaryIncomeForecast(memberId)` returnerer `'insufficient'` indtil 3+
+faktiske lønudbetalinger er logget, så `'ready'` med glidende gennemsnit som
+forecast for resten af året. Fanger automatisk variansen i overtid, bonus og
+ferietillæg uden brugeren skal vedligeholde et manuelt skøn.
+
+**`getMostRecentPaycheck(memberId)`** pre-fylder ny lønudbetaling med brutto,
+pension-procenter, trækprocent og skattefradrag fra sidste registrering —
+den ene ting der typisk varierer (netto pga. overtid/sygdom) lader vi stå tom.
+Reducerer "indtast hele lønsedlen hver måned"-friktionen til "indtast dato
+og netto".
+
+**Default-konto-heuristik** i [/indkomst/ny](app/(app)/indkomst/ny/page.tsx):
+seneste lønudbetalings konto → ellers `created_by`-match → ellers første
+checking-konto. Praktisk når flere familiemedlemmer hver har deres egen
+lønkonto.
+
+**`incomeContributors`-filter** ([indkomst/page.tsx](app/(app)/indkomst/page.tsx)):
+børn (user_id=null OG email=null) ekskluderes fra Hovedindkomst-sektionen —
+de bidrager ikke økonomisk og deres opsparingsindskud skulle ikke optælles
+som husstandens indkomst.
+
+---
+
+## 3. Dashboard — restruktureret til "lynhurtigt overblik"
+
+**Tier 1 (det første brugeren ser):**
+
+- **[HeroStatus.tsx](app/(app)/dashboard/_components/HeroStatus.tsx)** —
+  "Er du på rette spor?" med stor net-cashflow-tal og statustekst
+  ("Du har overskud denne måned" / "Du går omtrent lige op" / "Dine udgifter
+  overstiger dine indtægter"). Bevidst INGEN "trygt at bruge"-tal — det
+  ville kræve saldo-data vi ikke har.
+
+- **[CashflowWarnings.tsx](app/(app)/dashboard/_components/CashflowWarnings.tsx)**
+  — kompakt advarsels-liste (split fra den gamle CashflowAdvisor som havde
+  hele Sankey'en bundet ind). Hver fix-foreslag er en linje med
+  konto/beløb/Opret-knap, ikke et fuldt kort.
+
+- **[UpcomingEvents.tsx](app/(app)/dashboard/_components/UpcomingEvents.tsx)**
+  — "Næste 7 dage" — ny [getUpcomingEvents()](lib/dal/cashflow.ts) DAL-helper
+  ruller recurring-anchors frem til næste forekomst inden for vinduet og
+  inkluderer scheduled once-poster. Klient-component med Fælles/Private-tab,
+  scrollable inden for kortet (`max-h-96`) så listen ikke strækker hele rækken.
+
+**Tier 2 (fordeling og flow):**
+
+- **[CategoryGroupChart.tsx](app/(app)/dashboard/_components/CategoryGroupChart.tsx)**
+  — viser udgifter rullet op til tematiske grupper (Bolig & lån, Forsyning &
+  forsikring, Transport, Børn, Mad, Underholdning, A-kasse, Personligt, Andet)
+  i stedet for alle 17 individuelle kategorier. Tabs: Fælles / Private.
+  Mapping defineret i [lib/categories.ts](lib/categories.ts) som
+  `CATEGORY_GROUPS` + `CATEGORY_GROUP_COLOR`.
+
+- **CashflowGraph (Sankey)** — flyttet ud af advisoren og rendet direkte fra
+  page.tsx med data fetched én gang og delt mellem warnings + graph (ingen
+  dobbelt-fetch).
+
+**Lay-out:** to-kolonne grid `lg:grid-cols-2` for `UpcomingEvents` +
+`CategoryGroupChart`. Begge kort bruger `flex h-full flex-col` + samme card-
+styling så de står i samme højde uafhængigt af indhold.
+
+---
+
+## 4. Sankey rebuilt — to-kolonne destinations-layout
+
+**[CashflowGraph.tsx](app/(app)/dashboard/_components/CashflowGraph.tsx)**
+omskrevet til Apple-cashflow-statement-stil: én kilde i venstre side
+(Lønkonto), bånd flyder ud til højre, hver destination får sin egen
+rektangel. Båndbredde proportional med beløbet.
+
+**Two-column destination-layout** fortæller historien "først betaler du dig
+selv, så fordeler du resten":
+
+- **Kol 1 (`COL_PRIVATE_X = 195`)** — private udgifter TÆT på Lønkonto.
+  Signalerer "betalt først".
+- **Kol 2 (`COL_TRANSFER_X = 380`)** — overførsler LANGT til højre. Visuel
+  distance kommunikerer "kommer i anden runde, efter du har betalt dig selv".
+
+Kun kolonne-headere ("PRIVAT" / "OVERFØRSLER") vises hvis kolonnen har
+destinationer. Bands sorteret: privat øverst, fælles, opsparing nederst —
+så de aldrig krydser hinanden.
+
+**Primary-once paychecks som forecast i grafen**:
+[getCashflowGraph()](lib/dal/cashflow.ts) henter nu også primary-once
+lønudbetalinger og tager gennemsnit af de seneste 3 pr. (account, member)-par
+som månedligt income. Tidligere viste grafen ikke lønindkomst når brugeren
+havde skiftet til "registrer lønudbetaling"-flowet (`recurrence='once'`).
+
+**Surplus-rektangel** vises som separat emerald-blok over kilden hvis income
+> outflow. Net-badge øverst.
+
+---
+
+## 5. /konti redesign + investment-kind
+
+**Migration: [0026_investment_kind.sql](supabase/migrations/0026_investment_kind.sql)**
+— ny enum-værdi `investment` på `account_kind` (efter `savings`).
+
+**[/konti](app/(app)/konti/page.tsx) opdelt i tre sektioner** efter formål:
+
+- **Daglig brug**: checking, budget, household, cash
+- **Opsparing & investering**: savings, investment
+- **Andet**: other
+
+Lån (`kind='credit'`) skjult fra /konti — `/laan` er det dedikerede lånehub.
+Footer-link "Du har N lån — se /laan" hvis ≥1 lån.
+
+**[AccountForm.tsx](app/(app)/konti/_components/AccountForm.tsx)** — ny
+"Investering"-option i dropdown'en, plus eksisterende felter (navn, ejer,
+saldo, mål) dækker det grundlæggende. Bevidst ikke broker- eller skatte-
+type-felter i denne omgang.
+
+---
+
+## 6. /budget → /faste-udgifter (rename) + nyt /budget hierarki
+
+**Plan B**: vi delte den gamle /budget op i to roller — overblik vs. værktøj.
+
+**Filer flyttet** via per-fil `git mv`:
+
+- `app/(app)/budget/page.tsx` → `app/(app)/faste-udgifter/page.tsx`
+- `app/(app)/budget/[accountId]/page.tsx` → `app/(app)/faste-udgifter/[accountId]/page.tsx`
+- `app/(app)/budget/_components/*` → `app/(app)/faste-udgifter/_components/*`
+- `app/(app)/budget/actions.ts` → `app/(app)/faste-udgifter/actions.ts`
+
+**Eksterne refs opdateret** til `/faste-udgifter`:
+
+- Dashboard onboarding-CTA og CategoryGroupChart-tomstilstand
+- /opsparinger "Indtast jeres faste udgifter"-link
+- `revalidatePath` i `laan/actions.ts` og `indstillinger/actions.ts`
+  revalidaterer både `/faste-udgifter` (layout) og `/budget` (overblik)
+
+**Nyt [/budget/page.tsx](app/(app)/budget/page.tsx)** — hierarkisk tabel-
+overblik over ALLE faste udgifter på tværs af konti. Kun læse-side; alle
+CRUD sker via `/faste-udgifter/[accountId]`.
+
+**[BudgetTable.tsx](app/(app)/budget/_components/BudgetTable.tsx)** —
+client-component med:
+
+- Scope-tab "Fælles" / "Private" øverst med totaler vist på selve knappen
+- Filter-bar: søgning (matcher navn + konto + kategori), dropdowns for
+  konto/gruppe/interval, "Nulstil"-knap når der er aktive filtre
+- Hierarkisk tabel: kategori-grupper som parent-rækker (foldbare), udgifts-
+  rækker som children. Default foldet sammen. "Fold alle ud / sammen"-knap.
+- Auto-expand når der er aktive filtre (matchende rækker er altid synlige)
+- Sortering på kolonne-headere: Gruppe/Navn · Interval · Konto · Beløb/md
+- Smart filter-reset ved scope-skift (undgår "tom tabel"-overraskelse)
+
+---
+
+## 7. /poster — samme system, men faktiske beløb
+
+**[PosterTable.tsx](app/(app)/poster/_components/PosterTable.tsx)** —
+identisk struktur til BudgetTable, men:
+- Viser **faktiske bogførte beløb** for den valgte måned (en årlig
+  forsikring står med fuld 12.000 kr i den måned den falder, ikke 1/12 kr/md)
+- Kolonner: Gruppe/Navn · Dato · Konto · Beløb · Handlinger
+- Recurrence vises som lille badge ved navnet hvis ≠ once
+- Edit/Slet inline pr. række
+- Måneds-vælger og Indtægter/Udgifter/Netto-summary-kort bevaret øverst
+- Indkomst kun i summary-kortene — selve tabellen viser kun udgifter
+  (indkomst redigeres via `/indkomst`)
+
+**[getTransactionsForMonth()](lib/dal/transactions.ts)** udvidet til at
+inkludere `account.owner_name` så Fælles/Private-splittet virker.
+
+---
+
+## 8. Sidebar restruktureret med Værktøjer-gruppe
+
+**[SidebarNav.tsx](app/(app)/_components/SidebarNav.tsx)** omskrevet:
+
+```text
+Hovednavigation:
+  📊 Dashboard
+  💼 Konti
+  🏛 Lån
+  🪙 Indkomst
+  📋 Budget         ← NY: hierarkisk overblik
+  🧾 Poster
+  ↔  Overførsler
+
+🔧 VÆRKTØJER (divider med uppercase-overskrift)
+  📋 Faste udgifter   ← FLYTTET fra /budget
+  🛒 Husholdning
+  🐖 Opsparinger & buffer
+
+⚙ Indstillinger (separeret nederst)
+```
+
+Adskiller "se" (overblik, dashboards) fra "vedligehold" (forms hvor brugeren
+beriger systemet med data). Værktøjs-gruppen har discrete divider med
+`Wrench`-ikon + uppercase-tracking-label.
+
+---
+
+## Sådan kommer du videre
+
+1. **Kør migration** [0027_tax_rate.sql](supabase/migrations/0027_tax_rate.sql)
+   i Supabase hvis det ikke allerede er gjort.
+
+2. **Test indkomst-flowet ende-til-ende**: gå til /indkomst → "Registrer
+   lønudbetaling" → indtast brutto, pension, trækprocent, skattefradrag,
+   dato og netto. Bekræft at diff-indikatoren matcher din rigtige lønseddel.
+
+3. **Brug /budget til at få overblikket**: alle faste udgifter på tværs af
+   konti i én hierarkisk tabel. Test Fælles/Private-tab, søg + filter,
+   fold-grupper.
+
+4. **/poster nu også grupperet**: skift måned, fold grupper ud, bekræft
+   recurrence-badges på recurring-poster.
+
+---
+
+## Åbne tråde
+
+- **Top udgifter** er fjernet fra dashboardet (var redundant info). Tanken
+  var at integrere det som hover-info på Sankey-noderne. Ikke implementeret
+  endnu.
+- **`getMonthlyExpensesByCategory()`** og `getTopRecurringExpenses()`-helpers
+  i [lib/dal/cashflow.ts](lib/dal/cashflow.ts) er ikke længere brugt nogen
+  steder — kandidater til oprydning, men holdes for nu hvis Sankey-hover
+  bliver bygget.
+- **/poster's hierarkiske view** viser kun transaktioner hvis `occurs_on`
+  falder i måneden. For recurring expenses betyder det kun anchor-måneden,
+  ikke alle realiserede forekomster. Hvis brugeren vil se "alle ydelser
+  jeg faktisk har trukket i april" må vi rulle recurring-anchors frem og
+  generere virtuelle rækker — ikke gjort endnu.
+- **Indkomst i /poster-tabellen**: bevidst udeladt for at undgå en synthetic
+  "Indkomst"-gruppe i CategoryGroup-unionen. Hvis det viser sig at folk
+  forventer at se og redigere indkomst fra /poster, kan vi løse det.
+- **Theodor (barn) og hans aldersopsparing**: hans indskud tæller ikke som
+  husstands-indkomst, men hvis han havde en investerings-konto (aktiedepot)
+  kunne husstanden stadig se den under /konti. Lige nu håndteres det via
+  `incomeContributors`-filteret — men der er ingen UI for "børn med konti".

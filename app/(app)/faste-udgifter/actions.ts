@@ -21,13 +21,13 @@ const VALID_RECURRENCES: readonly RecurrenceFreq[] = [
 
 function bounceWithError(accountId: string, msg: string): never {
   redirect(
-    `/budget/${encodeURIComponent(accountId)}?error=${encodeURIComponent(msg)}`
+    `/faste-udgifter/${encodeURIComponent(accountId)}?error=${encodeURIComponent(msg)}`
   );
 }
 
 export async function addExpense(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim();
-  if (!accountId) redirect('/budget');
+  if (!accountId) redirect('/faste-udgifter');
 
   const description = String(formData.get('description') ?? '').trim();
   if (!description) bounceWithError(accountId, 'Navn er påkrævet');
@@ -75,7 +75,7 @@ export async function addExpense(formData: FormData) {
   }
 
   // Optional grouping tag (e.g. "Popermo") that clusters expenses under a
-  // common name within a category in the /budget overview. Empty → null.
+  // common name within a category in the /faste-udgifter overview. Empty → null.
   const groupLabelRaw = String(formData.get('group_label') ?? '').trim();
   const group_label = groupLabelRaw || null;
 
@@ -107,7 +107,7 @@ export async function addExpense(formData: FormData) {
   });
   if (error) bounceWithError(accountId, error.message);
 
-  revalidatePath(`/budget/${accountId}`);
+  revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
   revalidatePath('/poster');
 }
@@ -125,7 +125,7 @@ export async function removeExpense(formData: FormData) {
     .eq('household_id', householdId);
   if (error && accountId) bounceWithError(accountId, error.message);
 
-  if (accountId) revalidatePath(`/budget/${accountId}`);
+  if (accountId) revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
   revalidatePath('/poster');
 }
@@ -139,7 +139,7 @@ export async function addComponent(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim();
   const label = String(formData.get('label') ?? '').trim();
 
-  if (!accountId) redirect('/budget');
+  if (!accountId) redirect('/faste-udgifter');
   if (!transactionId) bounceWithError(accountId, 'Manglende transaktion');
   if (!label) bounceWithError(accountId, 'Indtast et navn');
 
@@ -179,7 +179,7 @@ export async function addComponent(formData: FormData) {
   });
   if (error) bounceWithError(accountId, error.message);
 
-  revalidatePath(`/budget/${accountId}`);
+  revalidatePath(`/faste-udgifter/${accountId}`);
 }
 
 export async function removeComponent(formData: FormData) {
@@ -195,11 +195,11 @@ export async function removeComponent(formData: FormData) {
     .eq('household_id', householdId);
   if (error && accountId) bounceWithError(accountId, error.message);
 
-  if (accountId) revalidatePath(`/budget/${accountId}`);
+  if (accountId) revalidatePath(`/faste-udgifter/${accountId}`);
 }
 
 // Inline-edit on a single component (label + amount). Returns state for
-// useActionState so the inline form on /budget can close itself on success
+// useActionState so the inline form on /faste-udgifter can close itself on success
 // without redirecting.
 export type UpdateComponentState =
   | { ok: true }
@@ -236,7 +236,7 @@ export async function updateComponent(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/budget/${accountId}`);
+  revalidatePath(`/faste-udgifter/${accountId}`);
   return { ok: true };
 }
 
@@ -244,7 +244,7 @@ export async function updateComponent(
 // Edit modal — designed to be driven by useActionState on the client
 // ----------------------------------------------------------------------------
 // Returns a discriminated UpdateState rather than redirecting, so the modal
-// can stay on /budget/[accountId] and close itself after a successful save.
+// can stay on /faste-udgifter/[accountId] and close itself after a successful save.
 // The id and accountId are bound on the client via .bind(null, id, accountId)
 // to keep the dispatch signature (prevState, formData) → state.
 export type UpdateState = { ok: true } | { ok: false; error: string } | null;
@@ -306,7 +306,7 @@ export async function updateBudgetExpense(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath(`/budget/${accountId}`);
+  revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
   revalidatePath('/poster');
   return { ok: true };

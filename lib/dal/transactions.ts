@@ -14,8 +14,11 @@ import { getHouseholdContext } from './auth';
 // Joined-row shape used by the list view. We use Supabase's nested-select
 // syntax and stamp the response type with .returns<>() since our hand-written
 // Database type doesn't yet declare Relationships entries.
+//
+// owner_name er med fordi /poster har Fælles/Private-tabs der splitter på
+// kontoens ejerskab (samme regel som dashboard og /budget).
 export type TransactionWithRelations = Transaction & {
-  account: Pick<Account, 'id' | 'name'> | null;
+  account: Pick<Account, 'id' | 'name' | 'owner_name'> | null;
   category: Pick<Category, 'id' | 'name' | 'kind' | 'color'> | null;
 };
 
@@ -28,7 +31,7 @@ export async function getTransactionsForMonth(
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      '*, account:accounts(id, name), category:categories(id, name, kind, color)'
+      '*, account:accounts(id, name, owner_name), category:categories(id, name, kind, color)'
     )
     .eq('household_id', householdId)
     .gte('occurs_on', start)

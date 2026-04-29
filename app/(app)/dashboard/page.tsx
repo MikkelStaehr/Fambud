@@ -26,7 +26,7 @@ export default async function DashboardPage() {
   const netSign = net >= 0 ? '+' : '−';
   const netClass =
     net > 0
-      ? 'text-green-700'
+      ? 'text-emerald-700'
       : net < 0
         ? 'text-red-700'
         : 'text-neutral-900';
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
                 <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">
                   Indtægter
                 </div>
-                <div className="tabnum mt-1 font-mono text-sm text-green-700 sm:text-base">
+                <div className="tabnum mt-1 font-mono text-sm text-emerald-700 sm:text-base">
                   + {formatAmount(income)}
                 </div>
               </div>

@@ -90,22 +90,23 @@ export default async function IndkomstPage() {
                       <div className="mt-0.5 text-xs text-neutral-500">
                         {i.account?.name ?? 'Ukendt konto'} ·{' '}
                         {formatShortDateDA(i.occurs_on)}
-                        {(i.gross_amount != null ||
-                          i.pension_own_pct != null ||
-                          i.pension_employer_pct != null) && (
-                          <>
-                            {' · '}
-                            {i.gross_amount != null && (
-                              <>brutto {formatAmount(i.gross_amount)} kr</>
-                            )}
-                            {i.pension_own_pct != null && (
-                              <> · pension egen {i.pension_own_pct}%</>
-                            )}
-                            {i.pension_employer_pct != null && (
-                              <> · firma {i.pension_employer_pct}%</>
-                            )}
-                          </>
+                        {i.gross_amount != null && (
+                          <> · brutto {formatAmount(i.gross_amount)} kr</>
                         )}
+                        {i.pension_own_pct != null && (
+                          <> · pension egen {i.pension_own_pct}%</>
+                        )}
+                        {i.pension_employer_pct != null && (
+                          <> · firma {i.pension_employer_pct}%</>
+                        )}
+                        {i.other_deduction_amount != null &&
+                          i.other_deduction_amount > 0 && (
+                            <>
+                              {' · '}
+                              {i.other_deduction_label ?? 'fradrag'}{' '}
+                              {formatAmount(i.other_deduction_amount)}
+                            </>
+                          )}
                       </div>
                     </td>
                     <td className="w-px whitespace-nowrap px-4 py-3 text-right">

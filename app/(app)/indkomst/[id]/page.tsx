@@ -54,6 +54,8 @@ export default async function EditIndkomstPage({
             gross_amount: income.gross_amount,
             pension_own_pct: income.pension_own_pct,
             pension_employer_pct: income.pension_employer_pct,
+            other_deduction_amount: income.other_deduction_amount,
+            other_deduction_label: income.other_deduction_label,
           }}
           submitLabel="Gem ændringer"
           cancelHref="/indkomst"

@@ -4,7 +4,11 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere } from '@/lib/format';
-import type { AccountKind, InvestmentType } from '@/lib/database.types';
+import type {
+  AccountKind,
+  InvestmentType,
+  SavingsPurpose,
+} from '@/lib/database.types';
 
 const VALID_KINDS: readonly AccountKind[] = [
   'checking',
@@ -25,6 +29,11 @@ const VALID_INVESTMENT_TYPES: readonly InvestmentType[] = [
   'boerneopsparing',
 ];
 
+const VALID_SAVINGS_PURPOSES: readonly SavingsPurpose[] = [
+  'buffer',
+  'predictable_unexpected',
+];
+
 // Pulls the common fields out of a FormData. Returns either an error message
 // (string) or a normalised payload (the second tuple element). We don't throw
 // because actions redirect with ?error=... rather than crashing the page.
@@ -36,6 +45,7 @@ function readAccountForm(formData: FormData):
         owner_name: string | null;
         kind: AccountKind;
         investment_type: InvestmentType | null;
+        savings_purpose: SavingsPurpose | null;
         opening_balance: number;
         goal_amount: number | null;
         goal_date: string | null;
@@ -64,6 +74,16 @@ function readAccountForm(formData: FormData):
     investment_type = investmentTypeRaw as InvestmentType;
   }
 
+  // Samme pattern for savings_purpose: kun meningsfuld når kind='savings'.
+  const savingsPurposeRaw = String(formData.get('savings_purpose') ?? '').trim();
+  let savings_purpose: SavingsPurpose | null = null;
+  if (kind === 'savings' && savingsPurposeRaw) {
+    if (!VALID_SAVINGS_PURPOSES.includes(savingsPurposeRaw as SavingsPurpose)) {
+      return { error: 'Ugyldig opsparingstype' };
+    }
+    savings_purpose = savingsPurposeRaw as SavingsPurpose;
+  }
+
   const openingRaw = String(formData.get('opening_balance') ?? '0');
   const opening_balance = parseAmountToOere(openingRaw) ?? 0;
 
@@ -87,8 +107,8 @@ function readAccountForm(formData: FormData):
 
   return {
     data: {
-      name, owner_name, kind, investment_type, opening_balance,
-      goal_amount, goal_date, goal_label, editable_by_all,
+      name, owner_name, kind, investment_type, savings_purpose,
+      opening_balance, goal_amount, goal_date, goal_label, editable_by_all,
     },
   };
 }

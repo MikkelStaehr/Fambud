@@ -42,6 +42,7 @@ export default async function EditKontoPage({
             owner_name: account.owner_name,
             kind: account.kind,
             investment_type: account.investment_type,
+            savings_purpose: account.savings_purpose,
             opening_balance: account.opening_balance,
             goal_amount: account.goal_amount,
             goal_date: account.goal_date,

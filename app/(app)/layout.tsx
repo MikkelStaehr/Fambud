@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { getBudgetAccounts } from '@/lib/dal';
 import { SidebarNav } from './_components/SidebarNav';
 import { signOut } from './actions';
 
@@ -29,10 +28,6 @@ export default async function AppLayout({
     .maybeSingle();
   if (!membership?.setup_completed_at) redirect('/wizard');
 
-  // Fetched at the layout level so the sidebar can render the user's budget
-  // accounts as nested links under the Budget item.
-  const budgetAccounts = await getBudgetAccounts();
-
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4">
@@ -42,9 +37,7 @@ export default async function AppLayout({
           </span>
         </div>
 
-        <SidebarNav
-          budgetAccounts={budgetAccounts.map((a) => ({ id: a.id, name: a.name }))}
-        />
+        <SidebarNav />
 
         <div className="mt-auto px-1 pt-4">
           <form action={signOut}>

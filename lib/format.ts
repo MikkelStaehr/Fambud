@@ -1,4 +1,9 @@
-import type { AccountKind, InvestmentType, RecurrenceFreq } from '@/lib/database.types';
+import type {
+  AccountKind,
+  InvestmentType,
+  RecurrenceFreq,
+  SavingsPurpose,
+} from '@/lib/database.types';
 
 // Danish labels for the account_kind enum — single source of truth.
 export const ACCOUNT_KIND_LABEL_DA: Record<AccountKind, string> = {
@@ -31,6 +36,31 @@ export const INVESTMENT_TYPE_CAP_DA: Record<InvestmentType, string | null> = {
   aktiedepot: null,
   pension: null,
   boerneopsparing: 'Loft: 6.000 kr/år, 72.000 kr i alt',
+};
+
+// Programmatisk udgave: ÅRLIGT loft i hele kroner. Bruges af forms til at
+// foreslå "del loft ud på 12 måneder"-knapper når brugeren vælger en konto
+// af denne type. Kun typer med et reelt årligt loft er listet —
+// aktiesparekonto har et samlet livstidsloft (135.900) som ikke giver
+// mening at dele på 12. Pension har personlige forskelle vi ikke modellerer.
+export const INVESTMENT_TYPE_ANNUAL_CAP_KR: Partial<Record<InvestmentType, number>> = {
+  aldersopsparing: 9900,
+  boerneopsparing: 6000,
+};
+
+// Specialformål for opsparingskonti (kind='savings'). Hver har en beregnet
+// anbefaling baseret på brugerens egne tal (faste udgifter / nettoindkomst)
+// — det er det der gør dem "specielle" frem for almindelige savings.
+export const SAVINGS_PURPOSE_LABEL_DA: Record<SavingsPurpose, string> = {
+  buffer: 'Buffer Konto',
+  predictable_unexpected: 'Forudsigelige uforudsete',
+};
+
+export const SAVINGS_PURPOSE_DESC_DA: Record<SavingsPurpose, string> = {
+  buffer:
+    'Nødfond — kunne dække 3 mdr af jeres faste udgifter som minimum, 6 mdr ved godt niveau. Til jobtab, sygdom, akut reparation.',
+  predictable_unexpected:
+    'Pulje til ting du VED kommer — bilvedligehold, tandlæge, gaver, ferie. Når 1.500 kr overrasker dig hver kvartal slår budgettet kludder; med en pulje kan I bare bruge.',
 };
 
 export const RECURRENCE_LABEL_DA: Record<RecurrenceFreq, string> = {

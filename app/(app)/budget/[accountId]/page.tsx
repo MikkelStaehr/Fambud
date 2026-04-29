@@ -14,6 +14,7 @@ import {
   getCategories,
   getDistinctExpenseGroups,
   getFamilyMembers,
+  getHouseholdContext,
   getRecurringExpensesForAccount,
   type RecurringExpenseRow,
 } from '@/lib/dal';
@@ -48,6 +49,18 @@ export default async function BudgetAccountPage({
   const accounts = await getBudgetAccounts();
   const idx = accounts.findIndex((a) => a.id === accountId);
   if (idx === -1) {
+    // Husholdningskonto har sin egen side. Andre kind=savings/investment/credit
+    // havner også her — men /budget overview viser dem som links der peger
+    // andre steder hen, så et direkte deep-link til /budget/[savingsId] er
+    // sjældent og bouncer bare tilbage til oversigten.
+    const { supabase, householdId } = await getHouseholdContext();
+    const { data: a } = await supabase
+      .from('accounts')
+      .select('kind')
+      .eq('id', accountId)
+      .eq('household_id', householdId)
+      .maybeSingle();
+    if (a?.kind === 'household') redirect('/husholdning');
     redirect('/budget');
   }
   const account = accounts[idx];
@@ -65,6 +78,7 @@ export default async function BudgetAccountPage({
     getDistinctExpenseGroups(),
     getFamilyMembers(),
   ]);
+
 
   // Filter the dropdown to the categories that make sense for this context.
   // Private add-ons (Træning, Frisør, …) only appear for personal accounts.

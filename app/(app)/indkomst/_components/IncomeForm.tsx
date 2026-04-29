@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
-import { formatOereForInput } from '@/lib/format';
+import { formatAmount, formatOereForInput, parseAmountToOere } from '@/lib/format';
 import type { Account, RecurrenceFreq } from '@/lib/database.types';
 import type { FamilyMemberRow } from '@/lib/dal';
 
@@ -20,6 +23,8 @@ type Props = {
     gross_amount?: number | null;
     pension_own_pct?: number | null;
     pension_employer_pct?: number | null;
+    other_deduction_amount?: number | null;
+    other_deduction_label?: string | null;
   };
   submitLabel: string;
   cancelHref: string;
@@ -33,6 +38,22 @@ const labelClass = 'block text-xs font-medium text-neutral-600';
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// "1 234.56" / "1234,56" / "" → øre or null. Same parser as parseAmountToOere
+// — reused here so the live-summary can interpret what's currently in the
+// AmountInput fields without going through form serialisation.
+function parseLooseAmount(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  return parseAmountToOere(t);
+}
+
+function parseLoosePct(raw: string): number | null {
+  const t = raw.trim().replace(/,/g, '.');
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function IncomeForm({
@@ -49,9 +70,66 @@ export function IncomeForm({
     (a) => !a.archived || a.id === dv.account_id
   );
 
+  // We mirror every numeric field's current text into state so the live
+  // lønseddel-summary can recompute on every keystroke. AmountInput is
+  // uncontrolled — we use onInput on the form to capture changes.
+  const [grossStr, setGrossStr] = useState(
+    dv.gross_amount != null ? formatOereForInput(dv.gross_amount) : ''
+  );
+  const [netStr, setNetStr] = useState(
+    dv.amount != null ? formatOereForInput(dv.amount) : ''
+  );
+  const [pensionOwnStr, setPensionOwnStr] = useState(
+    dv.pension_own_pct != null ? String(dv.pension_own_pct) : ''
+  );
+  const [pensionEmployerStr, setPensionEmployerStr] = useState(
+    dv.pension_employer_pct != null ? String(dv.pension_employer_pct) : ''
+  );
+  const [deductionStr, setDeductionStr] = useState(
+    dv.other_deduction_amount != null ? formatOereForInput(dv.other_deduction_amount) : ''
+  );
+  const [deductionLabelStr, setDeductionLabelStr] = useState(dv.other_deduction_label ?? '');
+
+  function handleInput(e: React.FormEvent<HTMLFormElement>) {
+    const t = e.target as HTMLInputElement;
+    switch (t.name) {
+      case 'gross_amount':            setGrossStr(t.value); break;
+      case 'amount':                  setNetStr(t.value); break;
+      case 'pension_own_pct':         setPensionOwnStr(t.value); break;
+      case 'pension_employer_pct':    setPensionEmployerStr(t.value); break;
+      case 'other_deduction_amount':  setDeductionStr(t.value); break;
+      case 'other_deduction_label':   setDeductionLabelStr(t.value); break;
+    }
+  }
+
+  const gross = parseLooseAmount(grossStr);
+  const net = parseLooseAmount(netStr);
+  const pensionOwnPct = parseLoosePct(pensionOwnStr);
+  const deduction = parseLooseAmount(deductionStr);
+
+  // Lønseddel-math (only meaningful when bruttoløn is set):
+  //   pension egen-bidrag = gross × pension_own_pct%
+  //   skattepligtig efter pension = gross − pension egen − A-kasse − fagforening − andet
+  //   beregnet skat = skattepligtig − netto  (kun vises hvis netto er sat)
+  // Vi viser dem i den rækkefølge en lønseddel typisk er bygget op.
+  const pensionOwnAmount =
+    gross != null && pensionOwnPct != null && pensionOwnPct > 0
+      ? Math.round((gross * pensionOwnPct) / 100)
+      : null;
+
+  const showSummary = gross != null && gross > 0;
+
+  let runningTotal: number | null = null;
+  if (showSummary) {
+    runningTotal = gross;
+    if (pensionOwnAmount != null) runningTotal -= pensionOwnAmount;
+    if (deduction != null) runningTotal -= deduction;
+  }
+  const computedTax = runningTotal != null && net != null ? runningTotal - net : null;
+
   return (
-    <form action={action} className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+    <form action={action} onInput={handleInput} className="space-y-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="family_member_id" className={labelClass}>
             Tilhører <span className="text-neutral-400">(valgfrit)</span>
@@ -89,7 +167,7 @@ export function IncomeForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="amount" className={labelClass}>
             Nettoløn <span className="text-neutral-400">(kr.)</span>
@@ -98,7 +176,7 @@ export function IncomeForm({
             id="amount"
             name="amount"
             required
-            defaultValue={dv.amount != null ? formatOereForInput(dv.amount) : ''}
+            defaultValue={netStr}
           />
         </div>
         <div>
@@ -135,13 +213,15 @@ export function IncomeForm({
 
       <fieldset className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Bruttoløn og pension <span className="lowercase text-neutral-400">(valgfrit)</span>
+          Lønseddel <span className="lowercase text-neutral-400">(valgfrit — udfyld for fuldt billede)</span>
         </legend>
         <p className="mb-4 text-xs text-neutral-500">
-          Udfyld bruttoløn og pensionsprocenter for at få et fuldt
-          lønbillede — bruges til pensionstjek og rådgivning.
+          Indtast bruttoløn og de fradrag der trækkes via din lønseddel.
+          Vi beregner nedenfor hvad der svarer til skat — så du kan
+          sammenligne mod det faktiske beløb på din lønseddel.
         </p>
-        <div className="grid grid-cols-3 gap-4">
+
+        <div className="space-y-4">
           <div>
             <label htmlFor="gross_amount" className={labelClass}>
               Bruttoløn <span className="text-neutral-400">(kr.)</span>
@@ -149,42 +229,123 @@ export function IncomeForm({
             <AmountInput
               id="gross_amount"
               name="gross_amount"
-              defaultValue={dv.gross_amount != null ? formatOereForInput(dv.gross_amount) : ''}
+              defaultValue={grossStr}
+              placeholder="50 000.00"
             />
           </div>
-          <div>
-            <label htmlFor="pension_own_pct" className={labelClass}>
-              Pension egen <span className="text-neutral-400">(%)</span>
-            </label>
-            <input
-              id="pension_own_pct"
-              name="pension_own_pct"
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
-              defaultValue={dv.pension_own_pct ?? ''}
-              placeholder="5"
-              className={fieldClass}
-            />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
+            <div>
+              <label htmlFor="other_deduction_label" className={labelClass}>
+                Fradrag <span className="text-neutral-400">(label — valgfrit)</span>
+              </label>
+              <input
+                id="other_deduction_label"
+                name="other_deduction_label"
+                type="text"
+                defaultValue={deductionLabelStr}
+                placeholder="F.eks. A-kasse, fagforening, frokost"
+                className={fieldClass}
+              />
+            </div>
+            <div className="sm:w-40">
+              <label htmlFor="other_deduction_amount" className={labelClass}>
+                Beløb <span className="text-neutral-400">(kr.)</span>
+              </label>
+              <AmountInput
+                id="other_deduction_amount"
+                name="other_deduction_amount"
+                defaultValue={deductionStr}
+                placeholder="980.00"
+              />
+            </div>
           </div>
-          <div>
-            <label htmlFor="pension_employer_pct" className={labelClass}>
-              Pension firma <span className="text-neutral-400">(%)</span>
-            </label>
-            <input
-              id="pension_employer_pct"
-              name="pension_employer_pct"
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
-              defaultValue={dv.pension_employer_pct ?? ''}
-              placeholder="10"
-              className={fieldClass}
-            />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="pension_own_pct" className={labelClass}>
+                Pension egen <span className="text-neutral-400">(%)</span>
+              </label>
+              <input
+                id="pension_own_pct"
+                name="pension_own_pct"
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                defaultValue={pensionOwnStr}
+                placeholder="5"
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="pension_employer_pct" className={labelClass}>
+                Pension firma <span className="text-neutral-400">(%)</span>
+              </label>
+              <input
+                id="pension_employer_pct"
+                name="pension_employer_pct"
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                defaultValue={pensionEmployerStr}
+                placeholder="10"
+                className={fieldClass}
+              />
+            </div>
           </div>
         </div>
+
+        {showSummary && (
+          <div className="mt-5 rounded-md border border-neutral-300 bg-white p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+              Beregnet lønseddel
+            </div>
+            <dl className="mt-2 space-y-1 text-sm">
+              <SummaryRow label="Bruttoløn" amount={gross} sign="+" emphasis />
+              {pensionOwnAmount != null && pensionOwnAmount > 0 && (
+                <SummaryRow
+                  label={`Pension egen (${pensionOwnPct}%)`}
+                  amount={pensionOwnAmount}
+                  sign="-"
+                />
+              )}
+              {deduction != null && deduction > 0 && (
+                <SummaryRow
+                  label={deductionLabelStr.trim() || 'Fradrag'}
+                  amount={deduction}
+                  sign="-"
+                />
+              )}
+              {runningTotal != null && (
+                <SummaryRow
+                  label="Skattepligtig efter fradrag"
+                  amount={runningTotal}
+                  divider
+                  emphasis
+                />
+              )}
+              {computedTax != null && computedTax > 0 && (
+                <SummaryRow
+                  label="Skat (beregnet)"
+                  amount={computedTax}
+                  sign="-"
+                  hint="brutto − fradrag − netto"
+                />
+              )}
+              {net != null && net > 0 && (
+                <SummaryRow label="Nettoløn (du har)" amount={net} divider emphasis />
+              )}
+            </dl>
+            {computedTax != null && computedTax < 0 && (
+              <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                Den indtastede nettoløn er højere end brutto minus fradrag —
+                tjek tallene en ekstra gang.
+              </p>
+            )}
+          </div>
+        )}
       </fieldset>
 
       {error && (
@@ -208,5 +369,42 @@ export function IncomeForm({
         </Link>
       </div>
     </form>
+  );
+}
+
+function SummaryRow({
+  label,
+  amount,
+  sign,
+  emphasis = false,
+  divider = false,
+  hint,
+}: {
+  label: string;
+  amount: number;
+  sign?: '+' | '-';
+  emphasis?: boolean;
+  divider?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div
+      className={`flex items-baseline justify-between gap-3 ${
+        divider ? 'border-t border-neutral-200 pt-1.5' : ''
+      }`}
+    >
+      <dt className={`text-neutral-${emphasis ? '900 font-medium' : '600'}`}>
+        {label}
+        {hint && <span className="ml-1.5 text-xs text-neutral-400">({hint})</span>}
+      </dt>
+      <dd
+        className={`font-mono tabnum text-right ${
+          emphasis ? 'font-semibold text-neutral-900' : 'text-neutral-700'
+        }`}
+      >
+        {sign === '-' ? '−' : sign === '+' ? '' : ''}
+        {formatAmount(amount)} kr
+      </dd>
+    </div>
   );
 }

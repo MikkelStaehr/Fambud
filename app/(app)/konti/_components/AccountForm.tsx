@@ -7,8 +7,14 @@ import {
   formatOereForInput,
   INVESTMENT_TYPE_LABEL_DA,
   INVESTMENT_TYPE_CAP_DA,
+  SAVINGS_PURPOSE_DESC_DA,
+  SAVINGS_PURPOSE_LABEL_DA,
 } from '@/lib/format';
-import type { AccountKind, InvestmentType } from '@/lib/database.types';
+import type {
+  AccountKind,
+  InvestmentType,
+  SavingsPurpose,
+} from '@/lib/database.types';
 
 const KIND_OPTIONS: { value: AccountKind; label: string }[] = [
   { value: 'checking', label: 'Lønkonto' },
@@ -29,6 +35,11 @@ const INVESTMENT_TYPE_ORDER: InvestmentType[] = [
   'boerneopsparing',
 ];
 
+const SAVINGS_PURPOSE_ORDER: SavingsPurpose[] = [
+  'buffer',
+  'predictable_unexpected',
+];
+
 type Props = {
   action: (formData: FormData) => Promise<void>;
   defaultValues?: {
@@ -36,6 +47,7 @@ type Props = {
     owner_name?: string | null;
     kind?: AccountKind;
     investment_type?: InvestmentType | null;
+    savings_purpose?: SavingsPurpose | null;
     opening_balance?: number;
     goal_amount?: number | null;
     goal_date?: string | null;
@@ -58,8 +70,15 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
   const [investmentType, setInvestmentType] = useState<InvestmentType | ''>(
     dv.investment_type ?? ''
   );
+  const [savingsPurpose, setSavingsPurpose] = useState<SavingsPurpose | ''>(
+    dv.savings_purpose ?? ''
+  );
   const showInvestmentType = kind === 'investment';
+  const showSavingsPurpose = kind === 'savings';
   const cap = investmentType ? INVESTMENT_TYPE_CAP_DA[investmentType] : null;
+  const purposeDesc = savingsPurpose
+    ? SAVINGS_PURPOSE_DESC_DA[savingsPurpose]
+    : null;
 
   return (
     <form action={action} className="space-y-5">
@@ -128,6 +147,31 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
           </select>
           {cap && (
             <p className="mt-1.5 text-xs text-neutral-500">{cap}</p>
+          )}
+        </div>
+      )}
+
+      {showSavingsPurpose && (
+        <div>
+          <label htmlFor="savings_purpose" className={labelClass}>
+            Specialfunktion <span className="text-neutral-400">(valgfrit)</span>
+          </label>
+          <select
+            id="savings_purpose"
+            name="savings_purpose"
+            value={savingsPurpose}
+            onChange={(e) => setSavingsPurpose(e.target.value as SavingsPurpose | '')}
+            className={fieldClass}
+          >
+            <option value="">— Almindelig opsparing —</option>
+            {SAVINGS_PURPOSE_ORDER.map((p) => (
+              <option key={p} value={p}>
+                {SAVINGS_PURPOSE_LABEL_DA[p]}
+              </option>
+            ))}
+          </select>
+          {purposeDesc && (
+            <p className="mt-1.5 text-xs text-neutral-500">{purposeDesc}</p>
           )}
         </div>
       )}

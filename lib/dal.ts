@@ -366,6 +366,195 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
   return { perAccount, edges };
 }
 
+// ----------------------------------------------------------------------------
+// Advisor-context — udvider getCashflowGraph med data CashflowAdvisor skal
+// bruge for at lave per-bruger-forslag på fælles-konti
+// ----------------------------------------------------------------------------
+// Når en fælles-konto er underdækket, skal forslaget kun adressere DEN
+// indloggede brugers manglende andel — ikke det fulde underskud. Det
+// kræver at vi ved:
+//   1. Hvem har bidraget til kontoen (transfers grupperet efter
+//      from_account.created_by)
+//   2. Hvor mange skal forventes at bidrage (logged-in + pre-godkendte
+//      family_members)
+//   3. Hvilke pre-godkendte er der så vi kan vise "Louise mangler signup"-
+//      banneret
+//
+// Vi samler alt i én helper så CashflowAdvisor kun har én DAL-call.
+export type PendingMember = { id: string; name: string; email: string };
+
+export type AdvisorContext = {
+  // Allerede i CashflowGraphData, gentaget her for et samlet svar.
+  perAccount: Map<string, AccountCashflowDetail>;
+  // Pr. (from_account, to_account) summen pr. bruger der har skabt
+  // from_account. Bruges til at finde "hvor meget har Mikkel bidraget til
+  // fælles-Budgetkontoen?" via accounts-creator-mapping.
+  transfersByCreator: {
+    fromAccountId: string;
+    toAccountId: string;
+    creatorUserId: string | null;
+    monthly: number;
+  }[];
+  // Antal personer der forventes at bidrage til fælles-udgifter. Tæller
+  // både logged-in (user_id != null) og pre-godkendte (email != null,
+  // user_id == null) family_members. Min. 1.
+  numContributors: number;
+  pendingMembers: PendingMember[];
+  currentUserId: string;
+};
+
+export async function getAdvisorContext(): Promise<AdvisorContext> {
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  const [transfersRes, accountsRes, familyRes, graphData] = await Promise.all([
+    supabase
+      .from('transfers')
+      .select('from_account_id, to_account_id, amount, recurrence')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once'),
+    // Vi har brug for created_by pr. konto for at vide hvem der "ejer"
+    // en transfer's kilde. Henter slim version (ikke alle felter).
+    supabase
+      .from('accounts')
+      .select('id, created_by')
+      .eq('household_id', householdId),
+    supabase
+      .from('family_members')
+      .select('id, name, email, user_id')
+      .eq('household_id', householdId),
+    getCashflowGraph(),
+  ]);
+
+  if (transfersRes.error) throw transfersRes.error;
+  if (accountsRes.error) throw accountsRes.error;
+  if (familyRes.error) throw familyRes.error;
+
+  // Map account_id → created_by user id
+  const creatorByAccount = new Map<string, string | null>();
+  for (const a of accountsRes.data ?? []) {
+    creatorByAccount.set(a.id, a.created_by);
+  }
+
+  // Aggregér transfers pr. (from, to, creator)-tripel så samme person der
+  // har lavet flere transfers fra forskellige af deres konti tæller samlet.
+  type Key = string;
+  const aggregate = new Map<Key, AdvisorContext['transfersByCreator'][0]>();
+  for (const tr of transfersRes.data ?? []) {
+    const creator = creatorByAccount.get(tr.from_account_id) ?? null;
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    const key = `${tr.from_account_id}→${tr.to_account_id}@${creator ?? 'null'}`;
+    const prev = aggregate.get(key);
+    if (prev) prev.monthly += monthly;
+    else aggregate.set(key, {
+      fromAccountId: tr.from_account_id,
+      toAccountId: tr.to_account_id,
+      creatorUserId: creator,
+      monthly,
+    });
+  }
+
+  // Antal forventede bidragsydere: alle family_members der enten ER
+  // logget-ind eller er pre-godkendt via email. Børn (begge null) tælles
+  // ikke med — de bidrager ikke økonomisk.
+  const contributors = (familyRes.data ?? []).filter(
+    (fm) => fm.user_id != null || fm.email != null
+  );
+  const pendingMembers: PendingMember[] = (familyRes.data ?? [])
+    .filter((fm) => fm.user_id == null && fm.email != null)
+    .map((fm) => ({ id: fm.id, name: fm.name, email: fm.email as string }));
+
+  return {
+    perAccount: graphData.perAccount,
+    transfersByCreator: Array.from(aggregate.values()),
+    numContributors: Math.max(1, contributors.length),
+    pendingMembers,
+    currentUserId: user.id,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Transfer graph — datamodel for /overforsler graf-visning
+// ----------------------------------------------------------------------------
+// Hvor getCashflowGraph() viser HELE flowet (income → konti → expense), er
+// denne fokuseret KUN på de kant-til-kant overførsler mellem konti. Til
+// /overforsler hvor brugeren skal kunne trække fra konto til konto for at
+// oprette en ny overførsel, og klikke på en eksisterende kant for at
+// redigere den.
+//
+// Vi inkluderer engangs-overførsler ('once') i modsætning til dashboard-
+// grafen — på /overforsler er hver enkelt overførsel relevant, også
+// engangs-poster.
+export type TransferEdge = {
+  from: string;            // from_account_id
+  to: string;              // to_account_id
+  totalMonthly: number;    // sum af monthlyEquivalent over alle overførsler i parret
+  transfers: {
+    id: string;
+    amount: number;        // pr. forekomst (øre)
+    recurrence: RecurrenceFreq;
+    description: string | null;
+    occurs_on: string;
+  }[];
+};
+
+export type TransferGraphData = {
+  accounts: Account[];
+  edges: TransferEdge[];
+};
+
+export async function getTransferGraph(): Promise<TransferGraphData> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const [accountsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('archived', false)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('transfers')
+      .select('id, from_account_id, to_account_id, amount, recurrence, description, occurs_on')
+      .eq('household_id', householdId)
+      .order('occurs_on', { ascending: false }),
+  ]);
+
+  if (accountsRes.error) throw accountsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
+
+  // Samle alle transfers under deres (from, to)-par. monthlyEquivalent giver
+  // 0 for 'once', så engangs-overførsler bidrager ikke til kant-tykkelsen
+  // men er stadig listet under transfers[].
+  const byPair = new Map<string, TransferEdge>();
+  for (const tr of transfersRes.data ?? []) {
+    const key = `${tr.from_account_id}→${tr.to_account_id}`;
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    let edge = byPair.get(key);
+    if (!edge) {
+      edge = {
+        from: tr.from_account_id,
+        to: tr.to_account_id,
+        totalMonthly: 0,
+        transfers: [],
+      };
+      byPair.set(key, edge);
+    }
+    edge.totalMonthly += monthly;
+    edge.transfers.push({
+      id: tr.id,
+      amount: tr.amount,
+      recurrence: tr.recurrence,
+      description: tr.description,
+      occurs_on: tr.occurs_on,
+    });
+  }
+
+  return {
+    accounts: accountsRes.data ?? [],
+    edges: Array.from(byPair.values()),
+  };
+}
+
 // "Hvor går pengene hen?" — pr.-kategori-fordeling af alle faste udgifter
 // (recurring), normaliseret til månedligt beløb. Bruges af dashboardets
 // kategori-graf og er bevidst steady-state (monthlyEquivalent) i stedet for
@@ -582,15 +771,26 @@ export async function getTransferById(id: string): Promise<Transfer> {
 // ----------------------------------------------------------------------------
 // Budget wizard
 // ----------------------------------------------------------------------------
-// Account kinds we surface in /budget. Excludes 'savings' / 'investment' (no
-// expenses typically — depoter modtager indskud, ikke udgifter), 'credit'
-// (payments go TO, not FROM), and 'cash' (rare). Users who do want to add
-// expenses on those accounts can still use /poster.
+// Account kinds we surface i /budget. Excludes:
+//   - 'household': har sin egen side (/husholdning) til daily-spend tracking
+//   - 'savings'/'investment': vises som "Opsparinger & buffer"-sektion på
+//     /budget — de modtager indskud, ikke udgifter
+//   - 'credit': payments go TO, not FROM — håndteres på /laan
+//   - 'cash': sjælden
+// Brugere der alligevel vil registrere udgifter på en af de udelukkede
+// kinds kan bruge /poster direkte.
 export const BUDGET_ACCOUNT_KINDS: AccountKind[] = [
   'checking',
   'budget',
-  'household',
   'other',
+];
+
+// Kinds vi viser i "Opsparinger & buffer"-sektionen — det er konti man
+// IKKE bruger fra, men overfører TIL. Sektionen hjælper brugeren se hvilke
+// konti der mangler en månedlig overførsel.
+export const SAVINGS_ACCOUNT_KINDS: AccountKind[] = [
+  'savings',
+  'investment',
 ];
 
 export type BudgetAccount = Pick<Account, 'id' | 'name' | 'owner_name' | 'kind'>;
@@ -606,6 +806,101 @@ export async function getBudgetAccounts(): Promise<BudgetAccount[]> {
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+// ----------------------------------------------------------------------------
+// Husstandens samlede økonomiske billede — bruges til at beregne anbefalede
+// målbeløb (fx "buffer = 3 mdr af faste udgifter", "forudsigelige uforudsete
+// = 15% af nettoindkomst")
+// ----------------------------------------------------------------------------
+export type HouseholdFinancialSummary = {
+  // Sum af monthlyEquivalent for alle recurring income-transactions i husstanden.
+  // Det er hvad faktisk lander på konti — nettoløn, ikke bruttoløn.
+  monthlyNetIncome: number;
+  // Sum af monthlyEquivalent for alle recurring expense-transactions, inkl.
+  // effective amount (additive components stack på top af parent).
+  monthlyFixedExpenses: number;
+};
+
+export async function getHouseholdFinancialSummary(): Promise<HouseholdFinancialSummary> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(
+      'amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', householdId)
+    .neq('recurrence', 'once')
+    .returns<{
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      category: { kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>();
+
+  if (error) throw error;
+
+  let monthlyNetIncome = 0;
+  let monthlyFixedExpenses = 0;
+  for (const t of data ?? []) {
+    const componentsSum = (t.components ?? []).reduce((s, c) => s + c.amount, 0);
+    const effective =
+      t.components_mode === 'breakdown' ? t.amount : t.amount + componentsSum;
+    const monthly = monthlyEquivalent(effective, t.recurrence);
+    if (t.category?.kind === 'income') monthlyNetIncome += monthly;
+    else if (t.category?.kind === 'expense') monthlyFixedExpenses += monthly;
+  }
+
+  return { monthlyNetIncome, monthlyFixedExpenses };
+}
+
+// Opsparings/investerings-konti med deres månedlige indkomne overførsel
+// (sum af recurring transfers ind, normaliseret til kr/md). Bruges af
+// "Opsparinger & buffer"-sektionen på /budget overview til at vise hvilke
+// konti der mangler en månedlig overførsel.
+export type SavingsAccountWithFlow = Account & {
+  monthlyInflow: number;
+  investment_type: Account['investment_type'];
+};
+
+export async function getSavingsAccountsWithFlow(): Promise<
+  SavingsAccountWithFlow[]
+> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const [accountsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('archived', false)
+      .in('kind', SAVINGS_ACCOUNT_KINDS)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('transfers')
+      .select('to_account_id, amount, recurrence')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once'),
+  ]);
+
+  if (accountsRes.error) throw accountsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
+
+  const inflowByAccount = new Map<string, number>();
+  for (const tr of transfersRes.data ?? []) {
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    inflowByAccount.set(
+      tr.to_account_id,
+      (inflowByAccount.get(tr.to_account_id) ?? 0) + monthly
+    );
+  }
+
+  return (accountsRes.data ?? []).map((a) => ({
+    ...a,
+    monthlyInflow: inflowByAccount.get(a.id) ?? 0,
+  }));
 }
 
 // Race-safe seeding of the standard categories. Uses UPSERT with
@@ -739,10 +1034,19 @@ export type IncomeRow = Pick<
   | 'gross_amount'
   | 'pension_own_pct'
   | 'pension_employer_pct'
+  | 'other_deduction_amount'
+  | 'other_deduction_label'
 > & {
   account: Pick<Account, 'id' | 'name'> | null;
   family_member: { id: string; name: string } | null;
 };
+
+const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_on,
+   recurrence, recurrence_until, family_member_id,
+   gross_amount, pension_own_pct, pension_employer_pct,
+   other_deduction_amount, other_deduction_label,
+   account:accounts(id, name),
+   family_member:family_members(id, name)`;
 
 export async function getIncomeTransactions(): Promise<IncomeRow[]> {
   const { supabase, householdId } = await getHouseholdContext();
@@ -750,14 +1054,7 @@ export async function getIncomeTransactions(): Promise<IncomeRow[]> {
   // through joined columns when the join is inner.
   const { data, error } = await supabase
     .from('transactions')
-    .select(
-      `id, account_id, category_id, amount, description, occurs_on,
-       recurrence, recurrence_until, family_member_id,
-       gross_amount, pension_own_pct, pension_employer_pct,
-       account:accounts(id, name),
-       family_member:family_members(id, name),
-       category:categories!inner(kind)`
-    )
+    .select(`${INCOME_SELECT}, category:categories!inner(kind)`)
     .eq('household_id', householdId)
     .eq('category.kind', 'income')
     .order('occurs_on', { ascending: false })
@@ -773,13 +1070,7 @@ export async function getIncomeById(id: string): Promise<IncomeRow> {
   const { supabase, householdId } = await getHouseholdContext();
   const { data, error } = await supabase
     .from('transactions')
-    .select(
-      `id, account_id, category_id, amount, description, occurs_on,
-       recurrence, recurrence_until, family_member_id,
-       gross_amount, pension_own_pct, pension_employer_pct,
-       account:accounts(id, name),
-       family_member:family_members(id, name)`
-    )
+    .select(INCOME_SELECT)
     .eq('id', id)
     .eq('household_id', householdId)
     .single<IncomeRow>();

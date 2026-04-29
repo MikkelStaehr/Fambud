@@ -420,3 +420,282 @@ samlet pass når de bliver besøgt.
   Hvis renten på et lån justeres, skal man slette+re-push manuelt. En
   "opdater fra lån"-knap kunne sidde på budget-transaktionen.
   (setState i useEffect) — ikke rørt.
+
+---
+---
+
+# Devlog — 29. april 2026
+
+Tredje session. Stor refactor af hvordan vi mentalt strukturerer økonomien:
+budget-treenighed (Faste udgifter / Husholdning / Opsparinger), forbrugsspor
+til husholdningskonto, og specialiserede opsparinger med beregnede mål.
+Plus en stak UX-polering på rådgiveren, lønseddel-builder, og overførsels-
+oprettelse.
+
+---
+
+## 1. Lønseddel-builder med live netto-beregning
+
+**Migrations:**
+- [0022_salary_deductions.sql](supabase/migrations/0022_salary_deductions.sql) —
+  tilføjede A-kasse, fagforening, andet fradrag (label + beløb)
+- [0023_drop_specific_deductions.sql](supabase/migrations/0023_drop_specific_deductions.sql) —
+  droppede A-kasse + fagforening igen efter brugerfeedback. Ét generisk
+  "Fradrag"-felt med valgfri label er bedre — A-kasse, fagforening, frokost
+  kan klumpes som "Fradrag fra løn" eller skrives som label.
+
+**App:** [IncomeForm.tsx](app/(app)/indkomst/_components/IncomeForm.tsx) er
+nu client-component med live "Beregnet lønseddel"-summary:
+- Bruttoløn → Pension egen (5%) → Fradrag → Skattepligtig efter fradrag
+- Skat (beregnet) — udledes som `brutto − fradrag − netto`
+- Sanity-check: rød advarsel hvis netto > brutto − fradrag
+
+Pension blev IKKE flyttet til wizard — den var aldrig der. Fields ligger
+kun på `/indkomst`-formen som fortsat.
+
+---
+
+## 2. /husholdning som forbrugsspor (ikke planlægning)
+
+**Migration:** [0024_account_monthly_budget.sql](supabase/migrations/0024_account_monthly_budget.sql)
+— `accounts.monthly_budget bigint nullable`. Bruges som intent-budget for
+husholdningskonti, uafhængigt af de faktiske transfers ind.
+
+Først lavede jeg en breakdown-baseret "planlægnings"-view (én transaction
+med components for kategorier som Dagligvarer, Frokost, Andet). Brugeren
+afviste — den korrekte model er forbrugsspor:
+
+- **Et manuelt sat månedligt rådighedsbeløb** (fx 9.000 kr) øverst på siden
+- **En tabel med køb** der genstarter hver måned
+- Hvert køb = en transaction med `recurrence='once'`, kategori 'Husholdning',
+  dato = købsdatoen
+- Progressbar med farve-tone: emerald 0–80%, amber 80–100%, rød > 100%
+
+Datamodel adskiller sig bevidst fra Lønkonto/Budgetkonto fordi
+husholdningskontoen har VARIABELT forbrug, ikke faste recurring expenses.
+
+**Også flyttet ud af /budget**: husholdning har sit eget menupunkt nu —
+den hører ikke til på budget-listen sammen med faste udgifter.
+
+---
+
+## 3. Budget-treenigheden i sidebar
+
+**[SidebarNav.tsx](app/(app)/_components/SidebarNav.tsx)** restruktureret:
+```
+Budget                       (gruppe-header, ikke link)
+  📋 Faste udgifter         → /budget
+  🛒 Husholdning            → /husholdning
+  🐷 Opsparinger & buffer  → /opsparinger
+```
+
+Tre konceptuelle dele af "hvad sker der med min løn":
+1. **Faste udgifter** — det forpligtede (rent, abonnementer, forsikringer)
+2. **Husholdning** — det variable (dagligvarer, frokost)
+3. **Opsparinger & buffer** — det der lægges til side
+
+Per-account sub-items (Lønkonto, Budgetkonto) blev fjernet — de var støj.
+`/budget` overview viser dem som kort i stedet.
+
+`BUDGET_ACCOUNT_KINDS` reduceret til `['checking', 'budget', 'other']` —
+husholdning er ude.
+
+---
+
+## 4. /opsparinger som dedikeret side
+
+Var først en sektion på `/budget` overview. Brugeren ville have det som
+selvstændig destination i treenigheden — så det er flyttet til
+[app/(app)/opsparinger/page.tsx](app/(app)/opsparinger/page.tsx) med
+stats-kort, anbefalinger, og liste over alle opsparingskonti.
+
+Ny DAL-helper [getSavingsAccountsWithFlow()](lib/dal.ts) returnerer
+savings/investment-konti med deres månedlige inflow (sum af recurring
+transfers ind). Bruges også af /budget overview tidligere — nu kun her.
+
+---
+
+## 5. Anbefalede opsparinger med beregnede mål
+
+**Migration:** [0025_savings_purpose.sql](supabase/migrations/0025_savings_purpose.sql)
+— `accounts.savings_purpose text` med check-constraint
+(`buffer` | `predictable_unexpected`).
+
+**Buffer Konto** (3-6 mdr af faste udgifter):
+- Min: `monthlyFixedExpenses × 3`
+- Godt: `monthlyFixedExpenses × 6`
+- Til jobtab, sygdom, akut reparation
+
+**Forudsigelige uforudsete** (15% af nettoindkomst):
+- Pr. md: `monthlyNetIncome × 0.15`
+- Pr. år: `monthlyNetIncome × 12 × 0.15`
+- Til bilvedligehold, tandlæge, gaver, ferie
+
+**[AccountForm.tsx](app/(app)/konti/_components/AccountForm.tsx)** udvidet
+med "Specialfunktion"-dropdown der dukker op når `kind=Opsparing` (samme
+pattern som investment_type for Investering).
+
+**Detektion sker via `savings_purpose`-feltet** — ikke kontonavn — så
+brugeren kan kalde sin bufferkonto hvad de vil.
+
+**Ny DAL-helper:** [getHouseholdFinancialSummary()](lib/dal.ts) beregner
+`monthlyNetIncome` og `monthlyFixedExpenses` ved at summe alle
+recurring transactions på husstanden.
+
+**UX:** hvert anbefalet kort viser:
+- Beregnede mål
+- Status: konto sat op (med navn + ejer-badge + månedlig overførsel) eller
+  manglende (med "Opret konto"-knap der pre-udfylder kind+savings_purpose)
+- Faldback-tekst når data mangler ("indtast jeres faste udgifter først")
+
+---
+
+## 6. CashflowAdvisor — per-bruger andele af fælles-konti
+
+**Migration: ingen** — bruger eksisterende felter.
+
+Tidligere foreslog rådgiveren at MIKKEL skulle dække HELE underskuddet på
+fælles-konti, hvilket er forkert når det er deres fælles ansvar.
+
+**Nyt:** rådgiveren bruger nu `accounts.owner_name === 'Fælles'` til at
+splitte underskud på antal "contributors" (logged-in family_members +
+pre-godkendte med email). Mikkel ser sin halvdel; Louise ser sin halvdel
+når hun signer up.
+
+**Per-bruger tracking:** ny [getAdvisorContext()](lib/dal.ts) returnerer
+`transfersByCreator` (transfers grupperet pr. creator-user) så vi kan
+spørge "har Mikkel allerede lagt sin andel ind?". Hvis ja, advarslen
+forsvinder fra hans dashboard — Louise ser stadig sin egen.
+
+**Partial-household banner:** vises på dashboard når der findes
+pre-godkendte family_members uden user_id (fx Louise er pre-godkendt men
+har ikke signed up endnu) — gør det tydeligt at billedet er ufuldstændigt.
+
+`buildFixFor()` håndterer både fælles- og personlige konti, returnerer
+null hvis brugerens andel allerede er dækket.
+
+---
+
+## 7. UX-polering
+
+### Værdineutral palet → tilbage til klassisk
+
+Først udskiftede jeg rød/grøn med blå/slate (værdineutral, "udgifter er
+normale ting"). Brugerfeedback: udgifter sprang ikke i øjnene længere.
+Rullet tilbage til emerald/red/slate. ± fortegn beholdt på alle labels.
+
+### Pengestrømme-grafen (CashflowGraph)
+
+- **Split "Udgifter" i Private + Fælles**: source-kontoens `owner_name`
+  bestemmer hvilken endpoint en expense-edge går til. Privat-loop
+  (Lønkonto → Private udgifter) holder sig væk fra fælles-økonomien.
+- **Private udgifter flyttet til venstre side** (col 0, under Indtægter)
+  så linjen ikke krydser bag fælles-konti i col 2. Path-tegningen
+  håndterer nu både forward og backward flow.
+- **Pastel-toner** prøvet og rullet tilbage. Klassisk emerald/red/slate
+  vandt for visuel adskillelse.
+
+### Sidste bankdag-knap på TransferForm
+
+Genbruger `nextLastBankingDay()` fra [lib/banking-days.ts](lib/banking-days.ts).
+Klik → datoen udfyldes med næste sidste hverdag i måneden, vist live i
+parentes ved knappen.
+
+### "Brug årligt loft"-knap ved investeringskonti
+
+Når til-konto i en transfer er aldersopsparing eller børneopsparing
+(typer med årligt loft), vises en wand-knap "Brug årligt loft for
+[type]" der udfylder beløb-feltet med `loft / 12`:
+- Aldersopsparing: 9.900 / 12 = 825 kr/md
+- Børneopsparing: 6.000 / 12 = 500 kr/md
+
+Aktiesparekonto har et livstidsloft (135.900) — ikke kandidat til
+del-på-12. Ny konstant
+[INVESTMENT_TYPE_ANNUAL_CAP_KR](lib/format.ts).
+
+### CashflowAdvisor pre-udfyldt overførsel
+
+"Opret denne overførsel"-knappen sender nu et pre-udfyldt link til
+`/overforsler/ny?from=...&to=...&amount=...&recurrence=monthly&description=...`
+med en venlig grøn banner: "Vi har pre-udfyldt formularen baseret på
+vores forslag — tjek det igennem og tryk Opret når det ser rigtigt ud."
+
+`findSuggestedSource()` finder husstandens primære indkomst-konto
+(højest income-flow) som default kilde.
+
+---
+
+## 8. /overforsler total overhaling
+
+**Sletter** den interaktive SVG-graf (drag-to-create) — for fancy, sjældent
+brugt. Tabel-grupperingen viser samme info mere kompakt og er nemmere
+at scanne på mobil.
+
+**Ny struktur:**
+- Stats-kort: I alt · Til fælles · Til opsparing · Konti uden flow
+- Smart insights — fx "Aktiedepot mangler månedlig overførsel"
+- **Faste overførsler grupperet efter formål**:
+  - 🏠 Til fælles-økonomien (budget/household)
+  - 🐷 Til opsparing & investering (savings/investment)
+  - 🏦 Til afdrag på lån (credit)
+  - ↔ Andre overførsler
+- Engangs-overførsler i denne måned (mindre, sekundær)
+
+`TransferGraph.tsx` slettet — ikke mere drag-to-create. "Ny overførsel"-
+knappen + de pre-udfyldte links fra CashflowAdvisor er det primære
+oprettelses-flow nu.
+
+---
+
+## 9. Diverse småting
+
+- `/budget/[householdId]` redirecter automatisk til `/husholdning` for
+  brugere med gamle URLs eller bookmarks
+- DAL-helper `getHouseholdFinancialSummary()` deler logik på tværs af
+  /opsparinger og fremtidige forecast-features
+- `setHouseholdBudget` action og HouseholdBudgetView blev rullet tilbage
+  fra første forsøg — datamodellen passede ikke til forbrugssporet
+- `redirect('/husholdning')` brugt sammen med kontotype-detektion via
+  inline supabase-query når `getBudgetAccounts()` ikke kender kontoen
+
+---
+
+## Sådan kommer du videre
+
+1. **Kør de fire nye migrationer** i Supabase (i rækkefølge):
+   - `0022_salary_deductions.sql`
+   - `0023_drop_specific_deductions.sql`
+   - `0024_account_monthly_budget.sql`
+   - `0025_savings_purpose.sql`
+
+2. **Marker eksisterende savings-konti**: gå til `/konti/[id]` for jeres
+   bufferkonto / forudsigelige-konto, sæt Specialfunktion-feltet, gem.
+   Så detekterer `/opsparinger` dem korrekt.
+
+3. **Sæt månedligt rådighedsbeløb**: gå til `/husholdning`, indtast 9.000
+   kr (eller hvad jeres faktiske budget er), tryk Gem.
+
+4. **Indtast lønseddel-detaljer**: rediger din indkomst på `/indkomst`,
+   udfyld bruttoløn + fradrag + pension. Live-summary viser om tallene
+   stemmer med din rigtige lønseddel.
+
+---
+
+## Åbne tråde
+
+- **Kun Mikkel logget ind** — hele advisor-feature'en med 50/50 splits
+  og pending-banneret er bygget men kan ikke testes ende-til-ende før
+  Louise har oprettet sig
+- **Ferieopsparing / specifikke spar-mål** — hvis brugeren vil tracke
+  konkrete spar-mål (sommerferie 2027, ny bil) er der allerede
+  `goal_amount` + `goal_date` på accounts, men der er ingen UI for det
+- **15%-defaulten for forudsigelige uforudsete** er hardcoded — kunne
+  gøres justerbar pr. husstand hvis brugeren ønsker det
+- **Standardiseret "savings_purpose"-værdier**: kun 'buffer' og
+  'predictable_unexpected' lige nu. Man kunne tilføje 'vacation',
+  'big_purchase' osv. som dedikerede typer hvis behovet opstår
+- **Aktiesparekonto-loft** (135.900 livstidsloft) håndteres ikke i UI —
+  kunne lave en "fyld op over N år"-helper hvor brugeren angiver
+  tidshorisont og vi deler loftet ud
+- **Per-bruger advisor-feature ikke verificeret end-to-end** indtil
+  Louise er på

@@ -31,6 +31,8 @@ type ParsedIncome = {
   gross_amount: number | null;
   pension_own_pct: number | null;
   pension_employer_pct: number | null;
+  other_deduction_amount: number | null;
+  other_deduction_label: string | null;
 };
 
 function parsePct(raw: string): number | null {
@@ -39,6 +41,18 @@ function parsePct(raw: string): number | null {
   const n = Number(trimmed.replace(',', '.'));
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   return n;
+}
+
+// Empty → null. Otherwise must be a valid non-negative øre amount.
+function parseOptionalDeduction(
+  raw: string,
+  errorLabel: string
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  const t = raw.trim();
+  if (!t) return { ok: true, value: null };
+  const v = parseAmountToOere(t);
+  if (v === null || v < 0) return { ok: false, error: errorLabel };
+  return { ok: true, value: v };
 }
 
 function readIncomeForm(formData: FormData):
@@ -97,6 +111,17 @@ function readIncomeForm(formData: FormData):
     return { error: 'Pension firma skal være mellem 0 og 100' };
   }
 
+  const deductionRes = parseOptionalDeduction(
+    String(formData.get('other_deduction_amount') ?? ''),
+    'Fradrag skal være et tal'
+  );
+  if (!deductionRes.ok) return { error: deductionRes.error };
+
+  // Label is only meaningful when there's an amount. Strip a label that sits
+  // alone so we don't accumulate orphan strings.
+  const labelRaw = String(formData.get('other_deduction_label') ?? '').trim();
+  const other_deduction_label = deductionRes.value != null && labelRaw ? labelRaw : null;
+
   return {
     data: {
       account_id,
@@ -109,6 +134,8 @@ function readIncomeForm(formData: FormData):
       gross_amount,
       pension_own_pct,
       pension_employer_pct,
+      other_deduction_amount: deductionRes.value,
+      other_deduction_label,
     },
   };
 }

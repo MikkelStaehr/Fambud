@@ -24,6 +24,9 @@ export type InvestmentType =
   | 'aktiedepot'
   | 'pension'
   | 'boerneopsparing';
+// Specialfunktion for kind='savings'. Bruges til at identificere konti
+// med beregnede målbeløb baseret på brugerens egne tal.
+export type SavingsPurpose = 'buffer' | 'predictable_unexpected';
 export type CategoryKind = 'income' | 'expense';
 export type RecurrenceFreq =
   | 'once'
@@ -74,6 +77,8 @@ export type Database = {
           payment_bidrag: number | null;
           payment_rabat: number | null;
           investment_type: InvestmentType | null;
+          monthly_budget: number | null;
+          savings_purpose: SavingsPurpose | null;
         };
         Insert: {
           id?: string;
@@ -104,6 +109,8 @@ export type Database = {
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
           investment_type?: InvestmentType | null;
+          monthly_budget?: number | null;
+          savings_purpose?: SavingsPurpose | null;
         };
         Update: {
           id?: string;
@@ -134,6 +141,8 @@ export type Database = {
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
           investment_type?: InvestmentType | null;
+          monthly_budget?: number | null;
+          savings_purpose?: SavingsPurpose | null;
         };
         Relationships: [];
       };
@@ -218,6 +227,8 @@ export type Database = {
           gross_amount: number | null;
           pension_own_pct: number | null;
           pension_employer_pct: number | null;
+          other_deduction_amount: number | null;
+          other_deduction_label: string | null;
         };
         Insert: {
           id?: string;
@@ -236,6 +247,8 @@ export type Database = {
           gross_amount?: number | null;
           pension_own_pct?: number | null;
           pension_employer_pct?: number | null;
+          other_deduction_amount?: number | null;
+          other_deduction_label?: string | null;
         };
         Update: {
           id?: string;
@@ -254,6 +267,8 @@ export type Database = {
           gross_amount?: number | null;
           pension_own_pct?: number | null;
           pension_employer_pct?: number | null;
+          other_deduction_amount?: number | null;
+          other_deduction_label?: string | null;
         };
         Relationships: [];
       };

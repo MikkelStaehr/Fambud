@@ -201,18 +201,26 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
     detailFor(accountId).income += avg;
   }
 
-  // Aggregér transfers pr. (from, to) par så samme rute ikke giver flere
-  // kanter på grafen.
-  const transferKey = (from: string, to: string) => `${from}→${to}`;
-  const transferAggregate = new Map<string, { from: string; to: string; monthly: number }>();
+  // Transfers tæller mod hver kontos in/out aggregat (perAccount), MEN vi
+  // beholder dem som separate kanter i `edges` så grafen viser flere
+  // strømme der peger på samme destination som adskilte bånd.
+  //
+  // Dette er bevidst forskelligt fra den tidligere adfærd hvor (from, to)
+  // blev summeret. Når brugeren har én Bufferkonto der modtager BÅDE en
+  // buffer-overførsel og en forudsigelige-uforudsete-overførsel, skal de
+  // to pengestrømme stå som to separate bånd i Sankey'en — ikke som én
+  // klumpet linje.
+  const transferEdges: CashflowEdge[] = [];
   for (const tr of transfersRes.data ?? []) {
     const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
     detailFor(tr.from_account_id).transfersOut += monthly;
     detailFor(tr.to_account_id).transfersIn += monthly;
-    const k = transferKey(tr.from_account_id, tr.to_account_id);
-    const prev = transferAggregate.get(k);
-    if (prev) prev.monthly += monthly;
-    else transferAggregate.set(k, { from: tr.from_account_id, to: tr.to_account_id, monthly });
+    transferEdges.push({
+      from: tr.from_account_id,
+      to: tr.to_account_id,
+      monthly,
+      kind: 'transfer',
+    });
   }
 
   // Byg kant-listen. Synthetic node-ids: 'income' (kilden) og 'expense'
@@ -222,9 +230,7 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
     if (d.income > 0) edges.push({ from: 'income', to: accountId, monthly: d.income, kind: 'income' });
     if (d.expense > 0) edges.push({ from: accountId, to: 'expense', monthly: d.expense, kind: 'expense' });
   }
-  for (const tr of transferAggregate.values()) {
-    edges.push({ from: tr.from, to: tr.to, monthly: tr.monthly, kind: 'transfer' });
-  }
+  edges.push(...transferEdges);
 
   return { perAccount, edges };
 }

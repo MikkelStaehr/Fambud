@@ -34,9 +34,9 @@ function greetingFor(date: Date): string {
 }
 
 export default async function DashboardPage() {
-  // Alt dashboard-data hentes parallelt. Vi henter cashflow-data i page.tsx
-  // (ikke i hver komponent) så CashflowWarnings og CashflowGraph kan dele
-  // resultatet — de afhænger begge af accounts + graph.
+  // Alt dashboard-data hentes parallelt. getCashflowGraph() bruges stadig
+  // til at finde underskud (CashflowWarnings) — Sankey'en der visualiserede
+  // det samme data er fjernet fordi den var kompleks og marginalt nyttig.
   const [
     { monthlyTotals, yearMonth },
     hasRecurringExpenses,
@@ -68,6 +68,15 @@ export default async function DashboardPage() {
     (a) => !a.archived && a.kind !== 'credit'
   );
   const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
+
+  // Buffer-konto er fundamentet — hvis brugeren har faste udgifter men
+  // ingen bufferkonto sat op, advarer vi proaktivt så det er top-of-mind.
+  // Vi viser ikke advarslen før brugeren har faste udgifter, da den ellers
+  // collide med onboarding-CTAen ("Lad os fylde budgettet op").
+  const hasBufferAccount = accounts.some((a) =>
+    a.savings_purposes?.includes('buffer')
+  );
+  const showBufferWarning = hasRecurringExpenses && !hasBufferAccount;
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
@@ -128,7 +137,11 @@ export default async function DashboardPage() {
       />
 
       <div className="mt-8">
-        <CashflowWarnings fixes={fixes} pendingMembers={ctx.pendingMembers} />
+        <CashflowWarnings
+          fixes={fixes}
+          pendingMembers={ctx.pendingMembers}
+          showBufferWarning={showBufferWarning}
+        />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -139,7 +152,6 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Tier 2 — pengestrømmen visualiseret */}
       <section className="mt-8">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Pengestrøm

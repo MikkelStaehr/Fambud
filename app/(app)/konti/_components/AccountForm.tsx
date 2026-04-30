@@ -48,7 +48,7 @@ type Props = {
     owner_name?: string | null;
     kind?: AccountKind;
     investment_type?: InvestmentType | null;
-    savings_purpose?: SavingsPurpose | null;
+    savings_purposes?: SavingsPurpose[] | null;
     opening_balance?: number;
     goal_amount?: number | null;
     goal_date?: string | null;
@@ -71,15 +71,21 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
   const [investmentType, setInvestmentType] = useState<InvestmentType | ''>(
     dv.investment_type ?? ''
   );
-  const [savingsPurpose, setSavingsPurpose] = useState<SavingsPurpose | ''>(
-    dv.savings_purpose ?? ''
+  // Multi-select: én konto kan dække begge formål samtidig (typisk for
+  // familier der har én "Bufferkonto" til både nødfond og forudsigelige
+  // uforudsete).
+  const [savingsPurposes, setSavingsPurposes] = useState<SavingsPurpose[]>(
+    dv.savings_purposes ?? []
   );
   const showInvestmentType = kind === 'investment';
   const showSavingsPurpose = kind === 'savings';
   const cap = investmentType ? INVESTMENT_TYPE_CAP_DA[investmentType] : null;
-  const purposeDesc = savingsPurpose
-    ? SAVINGS_PURPOSE_DESC_DA[savingsPurpose]
-    : null;
+
+  function togglePurpose(p: SavingsPurpose) {
+    setSavingsPurposes((curr) =>
+      curr.includes(p) ? curr.filter((x) => x !== p) : [...curr, p]
+    );
+  }
 
   return (
     <form action={action} className="space-y-5">
@@ -154,25 +160,41 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
 
       {showSavingsPurpose && (
         <div>
-          <label htmlFor="savings_purpose" className={labelClass}>
-            Specialfunktion <span className="text-neutral-400">(valgfrit)</span>
-          </label>
-          <select
-            id="savings_purpose"
-            name="savings_purpose"
-            value={savingsPurpose}
-            onChange={(e) => setSavingsPurpose(e.target.value as SavingsPurpose | '')}
-            className={fieldClass}
-          >
-            <option value="">— Almindelig opsparing —</option>
-            {SAVINGS_PURPOSE_ORDER.map((p) => (
-              <option key={p} value={p}>
-                {SAVINGS_PURPOSE_LABEL_DA[p]}
-              </option>
-            ))}
-          </select>
-          {purposeDesc && (
-            <p className="mt-1.5 text-xs text-neutral-500">{purposeDesc}</p>
+          <span className={labelClass}>
+            Specialfunktion <span className="text-neutral-400">(valgfrit — vælg én eller begge)</span>
+          </span>
+          <div className="mt-2 space-y-2">
+            {SAVINGS_PURPOSE_ORDER.map((p) => {
+              const checked = savingsPurposes.includes(p);
+              return (
+                <label
+                  key={p}
+                  className="flex cursor-pointer items-start gap-2.5 rounded-md border border-neutral-200 bg-white p-3 text-sm transition hover:border-neutral-300"
+                >
+                  <input
+                    type="checkbox"
+                    name="savings_purposes"
+                    value={p}
+                    checked={checked}
+                    onChange={() => togglePurpose(p)}
+                    className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <span className="flex-1">
+                    <span className="font-medium text-neutral-900">
+                      {SAVINGS_PURPOSE_LABEL_DA[p]}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-neutral-500">
+                      {SAVINGS_PURPOSE_DESC_DA[p]}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {savingsPurposes.length === 2 && (
+            <p className="mt-2 text-xs text-emerald-700">
+              Begge formål dækkes af denne konto.
+            </p>
           )}
         </div>
       )}

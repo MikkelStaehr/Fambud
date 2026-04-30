@@ -27,6 +27,15 @@ export type InvestmentType =
 // Specialfunktion for kind='savings'. Bruges til at identificere konti
 // med beregnede målbeløb baseret på brugerens egne tal.
 export type SavingsPurpose = 'buffer' | 'predictable_unexpected';
+
+export type PredictableEstimate = {
+  id: string;
+  household_id: string;
+  label: string;
+  yearly_amount: number;
+  position: number;
+  created_at: string;
+};
 // Indkomst-rolle på en transaktion. 'primary' = hovedindkomst (løn /
 // understøttelse), 'secondary' = biindkomst (freelance, B-skat, udbytte).
 // null = ikke kategoriseret (eksisterende rækker før migration 0026).
@@ -85,7 +94,7 @@ export type Database = {
           payment_rabat: number | null;
           investment_type: InvestmentType | null;
           monthly_budget: number | null;
-          savings_purpose: SavingsPurpose | null;
+          savings_purposes: SavingsPurpose[] | null;
         };
         Insert: {
           id?: string;
@@ -117,7 +126,7 @@ export type Database = {
           payment_rabat?: number | null;
           investment_type?: InvestmentType | null;
           monthly_budget?: number | null;
-          savings_purpose?: SavingsPurpose | null;
+          savings_purposes?: SavingsPurpose[] | null;
         };
         Update: {
           id?: string;
@@ -149,7 +158,34 @@ export type Database = {
           payment_rabat?: number | null;
           investment_type?: InvestmentType | null;
           monthly_budget?: number | null;
-          savings_purpose?: SavingsPurpose | null;
+          savings_purposes?: SavingsPurpose[] | null;
+        };
+        Relationships: [];
+      };
+      predictable_estimates: {
+        Row: {
+          id: string;
+          household_id: string;
+          label: string;
+          yearly_amount: number;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          label: string;
+          yearly_amount: number;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          label?: string;
+          yearly_amount?: number;
+          position?: number;
+          created_at?: string;
         };
         Relationships: [];
       };

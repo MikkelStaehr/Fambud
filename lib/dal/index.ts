@@ -20,3 +20,4 @@ export * from './transfers';
 export * from './cashflow';
 export * from './income';
 export * from './loans';
+export * from './predictable';

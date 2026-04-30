@@ -57,22 +57,31 @@ const TYPE_LABEL: Record<OutflowType, string> = {
 // outflow; transfer-bands fra BUNDEN. Da private destinationer er
 // vertikalt øverst og transfer-destinationer nederst, krydser bandene
 // aldrig hinanden.
-const W = 580;
+const W = 720;
 const PADDING_X = 12;
 const PADDING_Y = 22;
 const SOURCE_W = 70;
 const SOURCE_X = PADDING_X;
 const DEST_W = 5;            // tynd lodret bar pr. destination
 
-// Kolonne 1: private udgifter — TÆT på Lønkonto for at signalere
-// "betalt først".
+// Tre kolonner fortæller historien:
+//   1) Private udgifter — TÆT på Lønkonto: "betalt først"
+//   2) Fælles overførsler — i midten: "her sender du til husstandens fælles
+//      forpligtelser efter du har dækket dit eget"
+//   3) Opsparing — LÆNGST til højre: "det der bliver lagt til side til sidst"
+//
+// Den vandrette afstand er bevidst ujævn: privat tæt på kilden, fælles i
+// midten, opsparing helt yderst. Det giver en intuitiv "tidslinje" hvor
+// brugerens øje læser fra "betal dig selv først" → "fælles forpligtelser"
+// → "opsparing".
 const COL_PRIVATE_X = 195;
 const LABEL_PRIVATE_X = COL_PRIVATE_X + DEST_W + 8;
 
-// Kolonne 2: overførsler — LÆNGERE til højre. Visuelt distance kommunikerer
-// "kommer i anden runde, efter du har betalt dig selv".
-const COL_TRANSFER_X = 380;
-const LABEL_TRANSFER_X = COL_TRANSFER_X + DEST_W + 8;
+const COL_SHARED_X = 360;
+const LABEL_SHARED_X = COL_SHARED_X + DEST_W + 8;
+
+const COL_SAVINGS_X = 540;
+const LABEL_SAVINGS_X = COL_SAVINGS_X + DEST_W + 8;
 
 const DEST_GAP = 3;          // luft mellem destinationer
 const BAR_BASELINE = 140;    // flow-højde-skala
@@ -220,13 +229,11 @@ function LonkontoSankey({
     sourceFlowHeight + surplusHeight,
     destTotalHeight
   );
-  const H = contentHeight + PADDING_Y * 2;
 
   const sourceTopY =
     PADDING_Y + (contentHeight - sourceFlowHeight - surplusHeight) / 2;
   const surplusY = sourceTopY;
   const sourceFlowTopY = sourceTopY + surplusHeight;
-  const sourceFlowBottomY = sourceFlowTopY + sourceFlowHeight;
 
   const destTopY = PADDING_Y + (contentHeight - destTotalHeight) / 2;
 
@@ -254,19 +261,56 @@ function LonkontoSankey({
     };
   });
 
+  // Per-kolonne label-spacing pass: når flere bånd er meget tynde (små
+  // beløb), ligger deres midte næsten oven i hinanden og labels overlapper.
+  // Vi tvinger min. lodret afstand mellem label-midter pr. kolonne — selve
+  // bånd-rektanglerne flyttes ikke, kun teksten. Hvert label optager
+  // navn (11px) + undertekst (9px) ≈ 22px lodret plads.
+  const MIN_LABEL_SPACING = 22;
+  const adjustLabelsForType = (t: OutflowType) => {
+    const inCol = bands.filter((b) => b.type === t);
+    for (let i = 1; i < inCol.length; i++) {
+      const minMid = inCol[i - 1].destLabelMid + MIN_LABEL_SPACING;
+      if (inCol[i].destLabelMid < minMid) inCol[i].destLabelMid = minMid;
+    }
+  };
+  adjustLabelsForType('private');
+  adjustLabelsForType('shared');
+  adjustLabelsForType('savings');
+
+  // Canvas-højde skal rumme det laveste label (undertekst sidder ~12px
+  // under midten) — ikke kun selve bånd-geometrien.
+  const labelBottomMax = bands.reduce(
+    (m, b) => Math.max(m, b.destLabelMid + 12),
+    0
+  );
+  const H = Math.max(
+    contentHeight + PADDING_Y * 2,
+    labelBottomMax + PADDING_Y / 2
+  );
+
   // Bezier-control-punkter beregnes pr. band fordi destinationerne nu
   // kan være i to forskellige kolonner (private tæt på, overførsler langt
   // væk). Helper der regner X-position + control-punkter for et givet band.
   const SOURCE_RIGHT = SOURCE_X + SOURCE_W;
   const destXFor = (type: OutflowType): number =>
-    type === 'private' ? COL_PRIVATE_X : COL_TRANSFER_X;
+    type === 'private'
+      ? COL_PRIVATE_X
+      : type === 'shared'
+        ? COL_SHARED_X
+        : COL_SAVINGS_X;
   const labelXFor = (type: OutflowType): number =>
-    type === 'private' ? LABEL_PRIVATE_X : LABEL_TRANSFER_X;
+    type === 'private'
+      ? LABEL_PRIVATE_X
+      : type === 'shared'
+        ? LABEL_SHARED_X
+        : LABEL_SAVINGS_X;
 
   // Tjek om vi har bands i hver af de to kolonner — bruges til at
   // beslutte om kolonne-headerne skal vises.
   const hasPrivateBands = bands.some((b) => b.type === 'private');
-  const hasTransferBands = bands.some((b) => b.type !== 'private');
+  const hasSharedBands = bands.some((b) => b.type === 'shared');
+  const hasSavingsBands = bands.some((b) => b.type === 'savings');
 
   return (
     <div>
@@ -331,8 +375,8 @@ function LonkontoSankey({
 
           {/* Kolonne-headers — placeret over destinations-bjælkerne. Vi
               viser kun en header hvis dens kolonne har destinationer.
-              "PRIVATE" og "OVERFØRSLER" fortæller historien: betal dig
-              selv først, så fordel resten til andre konti. */}
+              "PRIVATE / FÆLLES / OPSPARING" fortæller historien: betal dig
+              selv først, så fælles forpligtelser, så opsparing. */}
           {hasPrivateBands && (
             <text
               x={COL_PRIVATE_X}
@@ -345,16 +389,28 @@ function LonkontoSankey({
               PRIVATE
             </text>
           )}
-          {hasTransferBands && (
+          {hasSharedBands && (
             <text
-              x={COL_TRANSFER_X}
+              x={COL_SHARED_X}
               y={PADDING_Y - 8}
               fontSize={9}
               fontWeight={600}
               fill="#737373"
               letterSpacing={0.6}
             >
-              OVERFØRSLER
+              FÆLLES
+            </text>
+          )}
+          {hasSavingsBands && (
+            <text
+              x={COL_SAVINGS_X}
+              y={PADDING_Y - 8}
+              fontSize={9}
+              fontWeight={600}
+              fill="#737373"
+              letterSpacing={0.6}
+            >
+              OPSPARING
             </text>
           )}
 
@@ -404,16 +460,21 @@ function LonkontoSankey({
             {formatAmount(totalIn)} kr/md
           </text>
 
-          {/* Surplus-label, hvis der er overskud */}
-          {surplusHeight > 8 && (
+          {/* Surplus-label INDE i den grønne boks. Vi viser den kun hvis
+              boksen er høj nok til at kunne rumme teksten uden at den
+              klipper kanten. SOURCE_W=70 er smal, så vi runder til hele
+              kroner og kalder det "+saldo" på én linje for at få plads. */}
+          {surplusHeight >= 16 && (
             <text
-              x={SOURCE_X + SOURCE_W + 6}
+              x={SOURCE_X + SOURCE_W / 2}
               y={surplusY + surplusHeight / 2}
               fontSize={9}
+              fontWeight={600}
               fill="#065f46"
+              textAnchor="middle"
               dominantBaseline="middle"
             >
-              + {formatAmount(totalIn - totalOut)} ↗ saldo
+              + {Math.round((totalIn - totalOut) / 100).toLocaleString('da-DK')} kr saldo
             </text>
           )}
 
@@ -423,6 +484,8 @@ function LonkontoSankey({
           {bands.map((b, i) => {
             const destX = destXFor(b.type);
             const labelX = labelXFor(b.type);
+            const actualMid = (b.destTop + b.destBottom) / 2;
+            const labelOffset = Math.abs(b.destLabelMid - actualMid);
             return (
               <g key={i}>
                 <rect
@@ -433,6 +496,19 @@ function LonkontoSankey({
                   fill={TYPE_STROKE[b.type]}
                   rx={1}
                 />
+                {/* Forbindelseslinje fra rektangel til label når label er
+                    skubbet pga. spacing — så det er tydeligt hvilket bånd
+                    label tilhører. Skjult når label sidder naturligt. */}
+                {labelOffset > 3 && (
+                  <line
+                    x1={destX + DEST_W}
+                    y1={actualMid}
+                    x2={labelX - 2}
+                    y2={b.destLabelMid}
+                    stroke="#d4d4d4"
+                    strokeWidth={1}
+                  />
+                )}
                 <text
                   x={labelX}
                   y={b.destLabelMid - 4}

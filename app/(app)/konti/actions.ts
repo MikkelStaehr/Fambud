@@ -46,7 +46,7 @@ function readAccountForm(formData: FormData):
         owner_name: string | null;
         kind: AccountKind;
         investment_type: InvestmentType | null;
-        savings_purpose: SavingsPurpose | null;
+        savings_purposes: SavingsPurpose[] | null;
         opening_balance: number;
         goal_amount: number | null;
         goal_date: string | null;
@@ -75,14 +75,22 @@ function readAccountForm(formData: FormData):
     investment_type = investmentTypeRaw as InvestmentType;
   }
 
-  // Samme pattern for savings_purpose: kun meningsfuld når kind='savings'.
-  const savingsPurposeRaw = String(formData.get('savings_purpose') ?? '').trim();
-  let savings_purpose: SavingsPurpose | null = null;
-  if (kind === 'savings' && savingsPurposeRaw) {
-    if (!VALID_SAVINGS_PURPOSES.includes(savingsPurposeRaw as SavingsPurpose)) {
-      return { error: 'Ugyldig opsparingstype' };
+  // savings_purposes: nu et multi-checkbox felt. FormData.getAll henter ALLE
+  // checked værdier under samme name. Tom liste = ingen specialfunktion
+  // (almindelig opsparing). Begge værdier = én konto der dækker både
+  // buffer og forudsigelige uforudsete.
+  let savings_purposes: SavingsPurpose[] | null = null;
+  if (kind === 'savings') {
+    const raw = formData.getAll('savings_purposes').map((v) => String(v).trim());
+    const valid: SavingsPurpose[] = [];
+    for (const r of raw) {
+      if (!r) continue;
+      if (!VALID_SAVINGS_PURPOSES.includes(r as SavingsPurpose)) {
+        return { error: 'Ugyldig opsparingstype' };
+      }
+      valid.push(r as SavingsPurpose);
     }
-    savings_purpose = savingsPurposeRaw as SavingsPurpose;
+    savings_purposes = valid.length > 0 ? valid : null;
   }
 
   const openingRaw = String(formData.get('opening_balance') ?? '0');
@@ -110,7 +118,7 @@ function readAccountForm(formData: FormData):
 
   return {
     data: {
-      name, owner_name, kind, investment_type, savings_purpose,
+      name, owner_name, kind, investment_type, savings_purposes,
       opening_balance, goal_amount, goal_date, goal_label, editable_by_all,
     },
   };

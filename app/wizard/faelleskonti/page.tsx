@@ -42,10 +42,28 @@ export default async function WizardFaelleskontiPage({
         Fælleskonti
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Opret de konti I deler — typisk en budgetkonto til faste regninger
-        (husleje, el, forsikringer) og en husholdningskonto til daglig handel.
-        Tilføj så mange du vil, eller hop over.
+        Opret de konti I deler. To typer er fundament i langt de fleste
+        familiebudgetter — vi anbefaler I starter med dem:
       </p>
+      <ul className="mt-3 space-y-1.5 text-xs text-neutral-600">
+        <li className="flex items-start gap-2">
+          <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
+          <span>
+            <span className="font-medium text-neutral-900">Budgetkonto</span> —
+            til faste regninger (husleje, forsikringer, abonnementer). Lønnen
+            overføres typisk hertil hver måned.
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
+          <span>
+            <span className="font-medium text-neutral-900">Husholdningskonto</span>{' '}
+            — til variable hverdagsudgifter (dagligvarer, takeaway). Et fast
+            månedligt rådighedsbeløb gør det nemt at spore om I bliver inden
+            for budgettet.
+          </span>
+        </li>
+      </ul>
 
       {count > 0 && (
         <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">

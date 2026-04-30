@@ -141,3 +141,52 @@ export async function hasAnyRecurringExpenses(): Promise<boolean> {
   if (error) throw error;
   return (data ?? []).some((t) => t.category?.kind === 'expense');
 }
+
+// Onboarding-progress: hvilke fundamentale trin har brugeren udført siden
+// wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
+// er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.
+export type OnboardingProgress = {
+  hasRecurringExpenses: boolean;
+  hasRecurringTransfers: boolean;
+  hasBufferAccount: boolean;
+};
+
+export async function getOnboardingProgress(): Promise<OnboardingProgress> {
+  const { supabase, householdId } = await getHouseholdContext();
+
+  const [txnRes, transferRes, accountRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('id, recurrence, category:categories(kind)')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once')
+      .returns<
+        { id: string; recurrence: string; category: { kind: string } | null }[]
+      >(),
+    supabase
+      .from('transfers')
+      .select('id', { count: 'exact', head: true })
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once'),
+    supabase
+      .from('accounts')
+      .select('id, savings_purposes')
+      .eq('household_id', householdId)
+      .eq('archived', false)
+      .returns<{ id: string; savings_purposes: string[] | null }[]>(),
+  ]);
+
+  if (txnRes.error) throw txnRes.error;
+  if (transferRes.error) throw transferRes.error;
+  if (accountRes.error) throw accountRes.error;
+
+  return {
+    hasRecurringExpenses: (txnRes.data ?? []).some(
+      (t) => t.category?.kind === 'expense'
+    ),
+    hasRecurringTransfers: (transferRes.count ?? 0) > 0,
+    hasBufferAccount: (accountRes.data ?? []).some((a) =>
+      a.savings_purposes?.includes('buffer')
+    ),
+  };
+}

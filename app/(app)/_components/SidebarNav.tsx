@@ -13,6 +13,7 @@ import {
   ShoppingBasket,
   PiggyBank,
   Settings,
+  Table2,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,7 +30,9 @@ const NAV_MAIN: NavItem[] = [
   { href: '/konti', label: 'Konti', icon: Wallet },
   { href: '/laan', label: 'Lån', icon: Landmark },
   { href: '/indkomst', label: 'Indkomst', icon: Coins },
-  { href: '/budget', label: 'Budget', icon: ClipboardList },
+  // Budget er det flade overblik (read-only tabel) — Table2-ikonet adskiller
+  // den visuelt fra "Faste udgifter" (CRUD-værktøjet) der bruger ClipboardList.
+  { href: '/budget', label: 'Budget', icon: Table2 },
   { href: '/poster', label: 'Poster', icon: Receipt },
   { href: '/overforsler', label: 'Overførsler', icon: ArrowLeftRight },
 ];

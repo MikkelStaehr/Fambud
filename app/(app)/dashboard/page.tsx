@@ -1,5 +1,3 @@
-import Link from 'next/link';
-import { ClipboardList } from 'lucide-react';
 import {
   getAccounts,
   getAdvisorContext,
@@ -7,8 +5,8 @@ import {
   getCurrentMemberFirstName,
   getDashboardData,
   getMonthlyExpensesByGroup,
+  getOnboardingProgress,
   getUpcomingEvents,
-  hasAnyRecurringExpenses,
 } from '@/lib/dal';
 import {
   formatLongDateDA,
@@ -20,6 +18,7 @@ import { CashflowWarnings } from './_components/CashflowWarnings';
 import { CategoryGroupChart } from './_components/CategoryGroupChart';
 import { HeroStatus } from './_components/HeroStatus';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
+import { OnboardingChecklist } from './_components/OnboardingChecklist';
 import { UpcomingEvents } from './_components/UpcomingEvents';
 
 // Tidsbestemt hilsen — dansk, fire buckets der dækker normale vågne timer.
@@ -39,7 +38,7 @@ export default async function DashboardPage() {
   // det samme data er fjernet fordi den var kompleks og marginalt nyttig.
   const [
     { monthlyTotals, yearMonth },
-    hasRecurringExpenses,
+    onboardingProgress,
     firstName,
     accounts,
     graph,
@@ -48,7 +47,7 @@ export default async function DashboardPage() {
     upcomingEvents,
   ] = await Promise.all([
     getDashboardData(),
-    hasAnyRecurringExpenses(),
+    getOnboardingProgress(),
     getCurrentMemberFirstName(),
     getAccounts(),
     getCashflowGraph(),
@@ -69,14 +68,11 @@ export default async function DashboardPage() {
   );
   const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
 
-  // Buffer-konto er fundamentet — hvis brugeren har faste udgifter men
-  // ingen bufferkonto sat op, advarer vi proaktivt så det er top-of-mind.
-  // Vi viser ikke advarslen før brugeren har faste udgifter, da den ellers
-  // collide med onboarding-CTAen ("Lad os fylde budgettet op").
-  const hasBufferAccount = accounts.some((a) =>
-    a.savings_purposes?.includes('buffer')
-  );
-  const showBufferWarning = hasRecurringExpenses && !hasBufferAccount;
+  // Buffer-tjekket bor nu i OnboardingChecklist (et af tre fundamentale trin).
+  // CashflowWarnings beholder dog feltet i tilfælde af at vi senere vil
+  // genindføre advarslen (fx hvis brugeren sletter sin bufferkonto efter
+  // onboarding) — for nu sættes den altid til false.
+  const showBufferWarning = false;
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
@@ -98,30 +94,11 @@ export default async function DashboardPage() {
         <p className="mt-1.5 text-sm text-neutral-500">{longDateCapitalised}</p>
       </header>
 
-      {/* CTA: only shown until the user has any recurring transactions. After
-          that, the Budget link in the sidebar is the discovery surface. */}
-      {!hasRecurringExpenses && (
-        <div className="mt-6 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-start sm:gap-4">
-          <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-            <ClipboardList className="h-5 w-5" />
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-medium text-amber-900">
-              Lad os fylde budgettet op
-            </div>
-            <p className="mt-0.5 text-sm text-amber-800">
-              Når du har lagt dine faste udgifter ind, kan vi vise dig hvor pengene
-              løber hen — og hvor du sparer mest.
-            </p>
-          </div>
-          <Link
-            href="/faste-udgifter"
-            className="shrink-0 self-start rounded-md bg-emerald-800 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-900"
-          >
-            Kom i gang
-          </Link>
-        </div>
-      )}
+      {/* Onboarding-checklisten viser de fundamentale trin der mangler efter
+          wizard. Skjuler sig selv når alle tre er færdige. Erstattede den
+          tidligere enkelt-CTA "Lad os fylde budgettet op" så brugeren ser
+          hele post-wizard rejsen, ikke bare det første trin. */}
+      <OnboardingChecklist progress={onboardingProgress} />
 
       <IncomeForecastBanner />
 

@@ -85,7 +85,14 @@ const LABEL_SAVINGS_X = COL_SAVINGS_X + DEST_W + 8;
 
 const DEST_GAP = 3;          // luft mellem destinationer
 const BAR_BASELINE = 140;    // flow-højde-skala
-const MIN_BAND_HEIGHT = 4;   // små bånd stadig synlige
+// Minimumshøjde pr. destinationsbånd. Sættes så hvert bånd har plads til
+// sit eget label (label ~22px lodret), og fanges UDELUKKENDE på destination-
+// siden — kildebåndene beholder den korrekte proportionalitet (ægte
+// flow-størrelser). Det giver den klassiske "fan-out" hvor små destinationer
+// ser ud til at vokse fra et tyndt kildebånd til et læsbart destinations-
+// rektangel. Tidligere var værdien 4px, hvilket gjorde flere små opsparinger
+// stable så tæt at labels overlappede selv med spacing-pass'et.
+const MIN_BAND_HEIGHT = 20;
 
 export function CashflowGraph({
   accounts,

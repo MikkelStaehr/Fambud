@@ -75,6 +75,8 @@ export default async function HusholdningPage({
   );
 
   if (householdAccounts.length === 0) {
+    const createHref =
+      '/konti/ny?kind=household&name=' + encodeURIComponent('Husholdning');
     return (
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         <header className="border-b border-neutral-200 pb-6">
@@ -82,12 +84,35 @@ export default async function HusholdningPage({
             Husholdning
           </h1>
         </header>
-        <div className="mt-8 max-w-xl rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Du har ingen husholdningskonto endnu. Opret en{' '}
-          <Link href="/konti/ny" className="underline">
-            konto af typen &quot;Husholdningskonto&quot;
-          </Link>{' '}
-          først — det er der dine dagligvare-køb skal logges.
+        <div className="mt-8 max-w-xl rounded-md border border-neutral-200 bg-white p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">
+              <ShoppingBasket className="h-5 w-5" />
+            </span>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-neutral-900">
+                Opret jeres husholdningskonto
+              </h2>
+              <p className="mt-1 text-sm text-neutral-600">
+                En <span className="font-medium text-neutral-900">husholdningskonto</span>{' '}
+                er en separat konto til de variable hverdagsudgifter — typisk
+                dagligvarer, takeaway, mindre indkøb. Modsat budgetkontoen er
+                forbruget her ikke fast hver måned.
+              </p>
+              <p className="mt-2 text-xs text-neutral-500">
+                I sætter selv et månedligt rådighedsbeløb og logger købene
+                løbende. Tabellen genstarter hver måned.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Link
+              href={createHref}
+              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              Opret husholdningskonto
+            </Link>
+          </div>
         </div>
       </div>
     );

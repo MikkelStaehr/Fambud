@@ -16,6 +16,11 @@ import {
   monthlyEquivalent,
 } from '@/lib/format';
 
+// Konsistent pre-fyld til "Ny konto"-CTA fra denne side: /konti/ny ved at
+// brugeren vil oprette en budget-relevant konto, så typen sættes på forhånd.
+const NY_BUDGETKONTO_HREF =
+  '/konti/ny?kind=budget&name=' + encodeURIComponent('Budgetkonto');
+
 // Per-account stats shown on the overview cards.
 type AccountStat = {
   id: string;
@@ -73,13 +78,43 @@ export default async function BudgetOverviewPage() {
             Faste udgifter
           </h1>
         </header>
-        <div className="mt-8 max-w-xl rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Du har ingen budget-relevante konti endnu. Opret en{' '}
-          <span className="font-medium">Budgetkonto</span> via{' '}
-          <Link href="/konti/ny" className="underline">
-            Konti
-          </Link>{' '}
-          først.
+        <div className="mt-8 max-w-xl rounded-md border border-neutral-200 bg-white p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-neutral-900">
+                Opret jeres første budgetkonto
+              </h2>
+              <p className="mt-1 text-sm text-neutral-600">
+                En <span className="font-medium text-neutral-900">budgetkonto</span>{' '}
+                er den fælles konto hvor faste regninger trækkes — husleje,
+                forsikringer, abonnementer osv. Typisk har en familie én fælles
+                budgetkonto som lønnen overføres til hver måned.
+              </p>
+              <p className="mt-2 text-xs text-neutral-500">
+                Har I ikke en separat budgetkonto endnu? I kan også bruge jeres
+                lønkonto direkte — opret den blot som type{' '}
+                <span className="font-medium">Lønkonto</span> i stedet.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link
+              href={NY_BUDGETKONTO_HREF}
+              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              <Plus className="h-4 w-4" />
+              Opret budgetkonto
+            </Link>
+            <Link
+              href="/konti/ny"
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
+            >
+              Eller vælg anden type
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -102,11 +137,11 @@ export default async function BudgetOverviewPage() {
             </p>
           </div>
           <Link
-            href="/konti/ny"
+            href={NY_BUDGETKONTO_HREF}
             className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
           >
             <Plus className="h-4 w-4" />
-            Ny konto
+            Ny budgetkonto
           </Link>
         </div>
       </header>

@@ -33,6 +33,26 @@ export async function createPrivateSavings(formData: FormData) {
   revalidatePath('/wizard/privat-opsparing');
 }
 
+// One-klik buffer-oprettelse fra anbefalings-kortet på samme side. Tagger
+// kontoen med savings_purposes=['buffer'] så dashboardet og /opsparinger
+// genkender den som "fundamentet" og ikke spørger igen.
+export async function createBufferSavings() {
+  const { supabase, householdId, user } = await getHouseholdContext();
+  const { error } = await supabase.from('accounts').insert({
+    household_id: householdId,
+    name: 'Buffer',
+    owner_name: null,
+    kind: 'savings',
+    savings_purposes: ['buffer'],
+    editable_by_all: true,
+    created_by: user.id,
+  });
+  if (error) {
+    redirect('/wizard/privat-opsparing?error=' + encodeURIComponent(error.message));
+  }
+  revalidatePath('/wizard/privat-opsparing');
+}
+
 // Same hard-delete pattern as on faelleskonti — safe pre-transactions.
 export async function removePrivateSavings(formData: FormData) {
   const id = String(formData.get('id') ?? '').trim();

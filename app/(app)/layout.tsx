@@ -32,13 +32,22 @@ export default async function AppLayout({
   if (!membership?.setup_completed_at) redirect('/wizard');
 
   return (
-    <div className="flex min-h-screen">
+    // App-shell med fast viewport-højde. Sidebar holder samme størrelse
+    // uanset hvor langt indholdet er — det er kun <main> der scroller. Det
+    // giver et stabilt navigations-anker og undgår at sidebaren strækker
+    // sig på lange sider som /budget eller /opsparinger.
+    <div className="flex h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4">
         <div className="px-2 pb-6">
           <FambudMark size="lg" />
         </div>
 
-        <SidebarNav />
+        {/* Nav-området kan scrolle internt hvis det nogensinde bliver længere
+            end viewporten (mange værktøjer eller smal højde) — sign-out
+            forbliver klistret til bunden via mt-auto på det næste blok. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <SidebarNav />
+        </div>
 
         <div className="mt-auto px-1 pt-4">
           <form action={signOut}>
@@ -56,7 +65,7 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 overflow-y-auto">{children}</main>
 
       {/* Toast hænger på URL search-params; Suspense er påkrævet fordi
           useSearchParams ellers vil bailout client-side for hele route'en. */}

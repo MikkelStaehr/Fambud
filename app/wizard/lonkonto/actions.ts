@@ -60,6 +60,26 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
 
   const { supabase, householdId, user } = await getHouseholdContext();
 
+  // Idempotens-guard: hvis brugeren allerede har en aktiv checking-konto,
+  // afvis duplikat-oprettelse og send dem videre. Page'n har samme guard
+  // men vi dobbeltsikrer her i tilfælde af direkte form-submission.
+  const { count: existingChecking } = await supabase
+    .from('accounts')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', user.id)
+    .eq('kind', 'checking')
+    .eq('archived', false);
+  if ((existingChecking ?? 0) > 0) {
+    const { data: m } = await supabase
+      .from('family_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    redirect(
+      m?.role === 'owner' ? '/wizard/faelleskonti' : '/wizard/oversigt'
+    );
+  }
+
   // Hent brugerens family_member.id så income kan tagges med income_role
   // 'primary' og family_member_id. Det er kritisk for forecast-motoren der
   // grupperer paychecks pr. medlem.

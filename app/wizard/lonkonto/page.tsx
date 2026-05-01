@@ -9,6 +9,7 @@
 // kontekst på 5 sekunder — partneren ved straks de joiner en eksisterende
 // husstand, ikke starter fra nul.
 
+import { redirect } from 'next/navigation';
 import { Check, Shield, Users, Wallet } from 'lucide-react';
 import { getHouseholdContext, getMyMembership } from '@/lib/dal';
 import { LonkontoIncomeForm } from './_components/LonkontoIncomeForm';
@@ -22,6 +23,22 @@ export default async function WizardLonkontoPage({
   const { error } = await searchParams;
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
+
+  // Guard mod duplikater: hvis brugeren ALLEREDE har oprettet en checking-
+  // konto (typisk fordi setup_completed_at blev nulstillet og de gennemfører
+  // wizarden igen) skal de IKKE kunne oprette endnu en lønkonto. Send dem
+  // til næste rolle-specifikke trin i stedet. /wizard/page.tsx har samme
+  // logik, men vi gentager den her så direkte URL-adgang er sikker.
+  const { supabase, user } = await getHouseholdContext();
+  const { count: ownChecking } = await supabase
+    .from('accounts')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', user.id)
+    .eq('kind', 'checking')
+    .eq('archived', false);
+  if ((ownChecking ?? 0) > 0) {
+    redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/oversigt');
+  }
   // Owner: 7 trin (lonkonto, faelleskonti, familie, opsparing, investering,
   // ejere, done). Partner: 4 trin (lonkonto, oversigt, opsparing, done).
   const totalSteps = isOwner ? 7 : 4;

@@ -13,6 +13,11 @@ type Props = {
   expense: number;
   net: number;
   monthLabel: string;  // fx "April 2026" — allerede capitalized
+  // Familiemedlemmer der har primary_income_source sat men ingen paychecks
+  // registreret. Bruges til at forklare et tilsyneladende underskud — fx
+  // når Mikkel's løn er registreret men Louise's mangler, ser husstands-
+  // tallet rødt ud uden at det reelt er et problem.
+  missingIncomeContributors?: string[];
 };
 
 // Beløbsgrænser for fortolkning. Tærsklerne er bevidst forsigtige — vi vil
@@ -25,8 +30,19 @@ function statusFor(net: number): { label: string; tone: 'positive' | 'neutral' |
   return { label: 'Dine udgifter overstiger dine indtægter', tone: 'negative' };
 }
 
-export function HeroStatus({ income, expense, net, monthLabel }: Props) {
+export function HeroStatus({
+  income,
+  expense,
+  net,
+  monthLabel,
+  missingIncomeContributors = [],
+}: Props) {
   const status = statusFor(net);
+  // Hvis vi har et reelt underskud OG der er bidragydere uden registreret
+  // indkomst, så er underskuddet sandsynligvis bare "venter på data" frem
+  // for et reelt problem. Vi gør det tydeligt så brugeren ikke får
+  // hjertebanken over et tal der løses af sig selv når partneren logger ind.
+  const showMissingIncomeNotice = net < -SMALL_OERE && missingIncomeContributors.length > 0;
   const netSign = net >= 0 ? '+' : '−';
   const netClass =
     net > 0
@@ -57,6 +73,19 @@ export function HeroStatus({ income, expense, net, monthLabel }: Props) {
         <p className={`mt-1 text-sm font-medium ${statusToneClass}`}>
           {status.label}
         </p>
+
+        {showMissingIncomeNotice && (
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <span className="font-medium">
+              {missingIncomeContributors.length === 1
+                ? `${missingIncomeContributors[0]} har endnu ingen indkomst registreret`
+                : `${missingIncomeContributors.join(' og ')} har endnu ingen indkomst registreret`}
+            </span>
+            {' '}— underskuddet er sandsynligvis bare midlertidigt og forsvinder
+            når{' '}
+            {missingIncomeContributors.length === 1 ? 'lønnen er logget' : 'deres lønninger er logget'}.
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 border-t border-neutral-100 pt-4 sm:grid-cols-2">
           <div>

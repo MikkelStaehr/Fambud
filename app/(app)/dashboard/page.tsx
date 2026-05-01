@@ -4,8 +4,10 @@ import {
   getCashflowGraph,
   getCurrentMemberFirstName,
   getDashboardData,
+  getFamilyMembers,
   getMonthlyExpensesByGroup,
   getOnboardingProgress,
+  getPrimaryIncomeForecast,
   getUpcomingEvents,
 } from '@/lib/dal';
 import {
@@ -45,6 +47,7 @@ export default async function DashboardPage() {
     ctx,
     expenseGroups,
     upcomingEvents,
+    familyMembers,
   ] = await Promise.all([
     getDashboardData(),
     getOnboardingProgress(),
@@ -54,7 +57,25 @@ export default async function DashboardPage() {
     getAdvisorContext(),
     getMonthlyExpensesByGroup(),
     getUpcomingEvents(),
+    getFamilyMembers(),
   ]);
+
+  // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
+  // primary_income_source men endnu ikke har én eneste paycheck registreret.
+  // Når der er sådanne, er et tilsyneladende underskud sandsynligvis bare
+  // "venter på data" og bør ikke alarmere.
+  const incomeContributors = familyMembers.filter(
+    (m) => m.primary_income_source != null
+  );
+  const forecastChecks = await Promise.all(
+    incomeContributors.map(async (m) => ({
+      member: m,
+      forecast: await getPrimaryIncomeForecast(m.id),
+    }))
+  );
+  const missingIncomeContributors = forecastChecks
+    .filter((f) => f.forecast.paychecksUsed === 0)
+    .map((f) => f.member.name);
 
   const issues = detectCashflowIssues(accounts, graph.perAccount);
   const fixes = issues
@@ -111,6 +132,7 @@ export default async function DashboardPage() {
         expense={expense}
         net={net}
         monthLabel={monthCap}
+        missingIncomeContributors={missingIncomeContributors}
       />
 
       <div className="mt-8">

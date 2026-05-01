@@ -6,11 +6,11 @@
 // recurring rows) i stedet for "denne måneds bogførte poster" — appens
 // filosofi er forecast/cashflow, ikke bogholderi.
 
+import { cache } from 'react';
 import type { Account, RecurrenceFreq } from '@/lib/database.types';
 import {
   currentYearMonth,
   effectiveAmount,
-  monthBounds,
   monthlyEquivalent,
   nextOccurrenceAfter,
 } from '@/lib/format';
@@ -35,52 +35,37 @@ export type DashboardData = {
 export async function getDashboardData(): Promise<DashboardData> {
   const { supabase, householdId } = await getHouseholdContext();
   const yearMonth = currentYearMonth();
-  const { start, end } = monthBounds(yearMonth);
 
-  // Two parallel reads. We don't fetch opening_balance — the dashboard is
-  // about flow now, not beholdning. Recurring transactions are visible only
-  // on their stored occurs_on; future projections are the forecast engine's
-  // job (later milestone).
-  const [accountsRes, txnsRes] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('id, name, owner_name, kind')
-      .eq('household_id', householdId)
-      .eq('archived', false)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('transactions')
-      .select(
-        'amount, components_mode, category:categories(kind), components:transaction_components(amount)'
-      )
-      .eq('household_id', householdId)
-      .gte('occurs_on', start)
-      .lte('occurs_on', end)
-      .returns<{
-        amount: number;
-        components_mode: 'additive' | 'breakdown';
-        category: { kind: 'income' | 'expense' } | null;
-        components: { amount: number }[];
-      }[]>(),
-  ]);
+  // Slim konto-liste til dashboardet. Vi læser kun navne/typer — ikke
+  // opening_balance, fordi dashboardet handler om flow, ikke beholdning.
+  const { data: accounts, error: accErr } = await supabase
+    .from('accounts')
+    .select('id, name, owner_name, kind')
+    .eq('household_id', householdId)
+    .eq('archived', false)
+    .order('created_at', { ascending: true });
+  if (accErr) throw accErr;
 
-  if (accountsRes.error) throw accountsRes.error;
-  if (txnsRes.error) throw txnsRes.error;
+  // monthlyTotals udregnes fra cashflow-grafens forecast-aware aggregering
+  // i stedet for at filtrere transaktioner på "denne kalendermåned". Det
+  // betyder at:
+  //   - 'monthly'-recurring expenses bidrager altid med deres beløb,
+  //     uanset hvilken dato occurs_on peger på
+  //   - 'once'-paychecks (income_role='primary') bidrager via avg-af-de-3-
+  //     seneste, så HeroStatus matcher hvad cashflow-grafen viser
+  // Tidligere logik filtrerede på occurs_on i nuværende måned, hvilket
+  // gjorde at dashboardet sagde "0 indkomst" hvis brugeren havde paychecks
+  // i tidligere måneder men endnu ingen i nuværende.
+  const graph = await getCashflowGraph();
+  let income = 0;
+  let expense = 0;
+  for (const detail of graph.perAccount.values()) {
+    income += detail.income;
+    expense += detail.expense;
+  }
+  const monthlyTotals = { income, expense, net: income - expense };
 
-  // Effective amount honours components_mode — additive stacks tilkøb on top,
-  // breakdown treats parent as the total and components as informational.
-  const monthlyTotals = (txnsRes.data ?? []).reduce(
-    (acc, t) => {
-      const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
-      if (t.category?.kind === 'income') acc.income += eff;
-      else if (t.category?.kind === 'expense') acc.expense += eff;
-      return acc;
-    },
-    { income: 0, expense: 0, net: 0 }
-  );
-  monthlyTotals.net = monthlyTotals.income - monthlyTotals.expense;
-
-  return { accounts: accountsRes.data ?? [], monthlyTotals, yearMonth };
+  return { accounts: accounts ?? [], monthlyTotals, yearMonth };
 }
 
 // ----------------------------------------------------------------------------
@@ -111,7 +96,9 @@ export type CashflowGraphData = {
   edges: CashflowEdge[];
 };
 
-export async function getCashflowGraph(): Promise<CashflowGraphData> {
+// cache() memoizer pr. React-request, så getDashboardData og dashboard-page
+// der begge læser cashflow-data ikke laver dobbelt round-trip mod DB'en.
+export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   const { supabase, householdId } = await getHouseholdContext();
 
   // Vi henter tre datasæt parallelt:
@@ -233,7 +220,7 @@ export async function getCashflowGraph(): Promise<CashflowGraphData> {
   edges.push(...transferEdges);
 
   return { perAccount, edges };
-}
+});
 
 // ----------------------------------------------------------------------------
 // Advisor-context — udvider getCashflowGraph med data CashflowAdvisor skal

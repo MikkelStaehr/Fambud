@@ -39,3 +39,6 @@ next-env.d.ts
 # editor
 .vscode/
 .idea/
+
+# Supabase CLI cache
+supabase/.temp/

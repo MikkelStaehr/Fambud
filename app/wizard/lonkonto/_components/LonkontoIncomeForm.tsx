@@ -41,28 +41,30 @@ export function LonkontoIncomeForm({ action, isOwner, error }: Props) {
           />
         </div>
 
+        {/* Lønkontoen defaulter til PRIVAT for begge roller — den indeholder
+            personlige udgifter som ingen anden i husstanden bør kunne se.
+            Partneren kan vælge at åbne den hvis de vil dele med ejeren. */}
         {!isOwner ? (
           <label className="flex items-start gap-3 text-sm text-neutral-700 select-none">
             <input
               type="checkbox"
               name="editable_by_all"
-              defaultChecked
               className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
             />
             <span>
               <span className="font-medium text-neutral-900">
-                Alle i husstanden kan redigere
+                Del kontoen med resten af husstanden
               </span>
               <span className="mt-0.5 block text-xs text-neutral-500">
-                Også oprette og slette poster på kontoen. Slå fra for at låse
-                til kun dig.
+                Som standard er lønkontoen privat — kun du kan se dens
+                transaktioner. Tjek af hvis du vil dele indsigten.
               </span>
             </span>
           </label>
         ) : (
-          // Owner ser ikke checkboxet i UI'en (lønkontoer er pr. default
-          // private), men vi sender feltet med så server-action har stabil
-          // form-shape og kan læse formData.get('editable_by_all').
+          // Owner ser ikke checkboxet (lønkontoen er pr. default privat),
+          // men vi sender feltet med så server-action har stabil form-shape
+          // og kan læse formData.get('editable_by_all').
           <input type="hidden" name="editable_by_all" value="" />
         )}
       </fieldset>

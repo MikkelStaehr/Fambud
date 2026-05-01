@@ -49,9 +49,29 @@ export default async function WizardOpsparingPage({
     .order('created_at', { ascending: true });
 
   const hasAny = (existing?.length ?? 0) > 0;
-  const hasBuffer = (existing ?? []).some((a) =>
+  const hasOwnBuffer = (existing ?? []).some((a) =>
     a.savings_purposes?.includes('buffer')
   );
+
+  // For partner: tjek om husstanden ALLEREDE har en buffer (oprettet af
+  // ejeren). Hvis ja, skjuler vi anbefalings-kortet — partneren behøver
+  // ikke en privat buffer hvis husstanden har én. Vi viser i stedet en
+  // notis om at den eksisterende buffer dækker hele familien.
+  let householdHasBuffer = hasOwnBuffer;
+  if (!isOwner && !hasOwnBuffer) {
+    const { data: householdBuffer } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('household_id', householdId)
+      .eq('archived', false)
+      .contains('savings_purposes', ['buffer'])
+      .limit(1);
+    householdHasBuffer = (householdBuffer?.length ?? 0) > 0;
+  }
+  // hasBuffer-variablen styrer om vi skjuler anbefalings-kortet — det
+  // skal ske både hvis brugeren selv har en buffer og hvis husstanden har
+  // en (kun relevant for partner).
+  const hasBuffer = householdHasBuffer;
 
   // Børn i husstanden: family_member-rækker med ingen email og ingen
   // user_id. Bruges til "Tilføj børneforbrugskonto"-knapper. Kun relevant
@@ -89,8 +109,21 @@ export default async function WizardOpsparingPage({
         alt der lægges til side hver måned.
       </p>
 
+      {/* For partner: hvis husstanden ALLEREDE har en buffer (oprettet af
+          ejeren), viser vi en lille notis i stedet for anbefalings-kortet.
+          Partneren behøver ikke en privat buffer — den fælles dækker hele
+          familien. */}
+      {!isOwner && !hasOwnBuffer && householdHasBuffer && (
+        <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+          <span className="font-medium">Husstanden har allerede en buffer</span>{' '}
+          — den dækker hele familien. Du behøver ikke oprette en privat
+          buffer, men kan gøre det hvis du vil holde noget for dig selv.
+        </div>
+      )}
+
       {/* Buffer-anbefaling — den ENE opsparing vi aktivt foreslår. Skjules
-          når der allerede er en konto med 'buffer'-tag. */}
+          når der allerede er en konto med 'buffer'-tag (egen eller
+          husstandens). */}
       {!hasBuffer && (
         <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-start gap-3">

@@ -39,5 +39,5 @@ export default async function WizardEntryPage() {
   // Lønkonto er på plads — gå til næste rolle-specifikke trin. Owner
   // fortsætter med fælleskonti, partner skipper fælleskonti og familie
   // (begge er ejer-only) og går direkte til private opsparinger.
-  redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/privat-opsparing');
+  redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/opsparing');
 }

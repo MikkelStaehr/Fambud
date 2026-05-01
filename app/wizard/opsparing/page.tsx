@@ -1,8 +1,18 @@
+// /wizard/opsparing — Trin 4 i ejer-flowet (trin 2 i partner-flowet).
+// Fundamentet (buffer) + private opsparinger + børneforbrugskonti pr.
+// barn der allerede er oprettet i familie-trinet.
+//
+// Børneforbrugskonti modelleres som kind=savings med owner_name=barnets
+// navn — så /opsparinger viser dem ved siden af de øvrige opsparinger
+// med en tydelig ejer-tag, og cashflow-tjekket fanger underskud pr. barn
+// hvis brugeren glemmer den månedlige overførsel.
+
 import Link from 'next/link';
-import { Shield, X } from 'lucide-react';
+import { Baby, Plus, Shield, X } from 'lucide-react';
 import { getHouseholdContext, getMyMembership } from '@/lib/dal';
 import {
   createBufferSavings,
+  createChildSpendingAccount,
   createPrivateSavings,
   removePrivateSavings,
 } from './actions';
@@ -11,7 +21,7 @@ const fieldClass =
   'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
 const labelClass = 'block text-xs font-medium text-neutral-600';
 
-export default async function WizardPrivatOpsparingPage({
+export default async function WizardOpsparingPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
@@ -21,28 +31,50 @@ export default async function WizardPrivatOpsparingPage({
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
   const totalSteps = isOwner ? 7 : 4;
-  // Owner: privat-opsparing er trin 4 af 7 (efter familie-trinet, før
-  // kredit-laan). Partner: trin 2 af 4 (lonkonto -> opsparing -> kredit -> done).
-  const stepNumber = isOwner ? 4 : 2;
-  const nextHref = '/wizard/kredit-laan';
+  // Owner: trin 4 af 7. Partner: trin 3 af 4 (efter oversigt-trinet).
+  const stepNumber = isOwner ? 4 : 3;
+  // Owner: næste trin er investering. Partner: går direkte til done
+  // (de skipper investerings-trinet og ejere-trinet helt).
+  const nextHref = isOwner ? '/wizard/investering' : '/wizard/done';
 
-  // Show the user's existing private savings so they know they've added one.
-  // Filter by created_by + kind so other members' accounts don't bleed in.
-  const { supabase, user } = await getHouseholdContext();
+  const { supabase, user, householdId } = await getHouseholdContext();
+
+  // Brugerens egne savings-konti oprettet i denne wizard-session.
+  // Filtreret på created_by + kind så kun denne brugers ses.
   const { data: existing } = await supabase
     .from('accounts')
-    .select('id, name, savings_purposes')
+    .select('id, name, owner_name, savings_purposes')
     .eq('created_by', user.id)
     .eq('kind', 'savings')
     .order('created_at', { ascending: true });
 
   const hasAny = (existing?.length ?? 0) > 0;
-  // Buffer-anbefalingskortet skjules når brugeren allerede har en konto med
-  // 'buffer'-tag — så genkender vi at de har sat det op (ad denne sti eller
-  // tidligere) og holder op med at foreslå.
   const hasBuffer = (existing ?? []).some((a) =>
     a.savings_purposes?.includes('buffer')
   );
+
+  // Børn i husstanden: family_member-rækker med ingen email og ingen
+  // user_id. Bruges til "Tilføj børneforbrugskonto"-knapper. Kun relevant
+  // for ejer (partner skal ikke gen-oprette børnekonti).
+  const { data: allFamilyMembers } = isOwner
+    ? await supabase
+        .from('family_members')
+        .select('id, name, email, user_id')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: true })
+    : { data: null };
+  const children = (allFamilyMembers ?? []).filter(
+    (m) => m.email == null && m.user_id == null
+  );
+  // En forbrugskonto til et barn detekteres via owner_name match. Det
+  // forhindrer at samme barn får oprettet to konti hvis brugeren går
+  // tilbage og frem.
+  const childAccountByOwner = new Map<string, { id: string; name: string }>();
+  for (const a of existing ?? []) {
+    if (a.owner_name) {
+      childAccountByOwner.set(a.owner_name, { id: a.id, name: a.name });
+    }
+  }
 
   return (
     <div>
@@ -50,16 +82,15 @@ export default async function WizardPrivatOpsparingPage({
         Trin {stepNumber} af {totalSteps}
       </div>
       <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
-        Privat opsparing
+        Opsparinger
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Konti der er dine alene — aldersopsparing, fri opsparing osv. Tilføj
-        så mange du vil, eller hop over.
+        Buffer (fundamentet), private opsparinger og forbrugskonti pr. barn —
+        alt der lægges til side hver måned.
       </p>
 
-      {/* Buffer-anbefaling: den ENE opsparing vi aktivt foreslår, fordi den er
-          fundamentet (jobtab, sygdom, akut reparation). En klik opretter
-          kontoen med 'buffer'-tag, så dashboardet senere ikke genadvarer. */}
+      {/* Buffer-anbefaling — den ENE opsparing vi aktivt foreslår. Skjules
+          når der allerede er en konto med 'buffer'-tag. */}
       {!hasBuffer && (
         <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-start gap-3">
@@ -88,6 +119,8 @@ export default async function WizardPrivatOpsparingPage({
         </div>
       )}
 
+      {/* Liste over alle savings oprettet af brugeren — buffer, private,
+          børneforbrug. owner_name-taggen viser hvem kontoen tilhører. */}
       {hasAny && (
         <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
           {existing!.map((a) => (
@@ -100,6 +133,10 @@ export default async function WizardPrivatOpsparingPage({
                 {a.savings_purposes?.includes('buffer') ? (
                   <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
                     Buffer
+                  </span>
+                ) : a.owner_name ? (
+                  <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                    {a.owner_name}
                   </span>
                 ) : (
                   <span className="text-xs text-neutral-500">Opsparing</span>
@@ -121,9 +158,8 @@ export default async function WizardPrivatOpsparingPage({
         </div>
       )}
 
-      {/* Reset the form on each successful add by keying off the count. The
-          server action re-renders in place; without a changing key the
-          uncontrolled inputs would keep the just-submitted text. */}
+      {/* Add private savings form. Form-key resetter inputs efter hver
+          submit så uncontrolled tekst ikke bliver hængende. */}
       <form
         key={existing?.length ?? 0}
         action={createPrivateSavings}
@@ -131,14 +167,14 @@ export default async function WizardPrivatOpsparingPage({
       >
         <div>
           <label htmlFor="savings_name" className={labelClass}>
-            Navn
+            Navn på privat opsparing
           </label>
           <input
             id="savings_name"
             name="name"
             type="text"
             required
-            placeholder="F.eks. Aldersopsparing eller Buffer"
+            placeholder="F.eks. Aldersopsparing eller Ferie"
             className={fieldClass}
           />
         </div>
@@ -174,8 +210,67 @@ export default async function WizardPrivatOpsparingPage({
         </button>
       </form>
 
-      <p className="mt-3 text-xs text-neutral-500">
-        Du kan tilføje så mange du vil. Klik <span className="text-neutral-700">Næste</span> når du er færdig.
+      {/* Børneforbrugskonti — én ét-kliks knap pr. barn. Vises kun hvis
+          ejer har børn registreret i familie-trinet. Hvis kontoen
+          allerede findes (matchet på owner_name), vises status i stedet
+          for en knap. */}
+      {isOwner && children.length > 0 && (
+        <section className="mt-6">
+          <h2 className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
+            <Baby className="h-3 w-3" />
+            Forbrugskonti til børn
+          </h2>
+          <p className="mb-3 text-xs text-neutral-500">
+            Lommepenge, fritidsaktiviteter, mindre indkøb — én konto pr.
+            barn så I kan planlægge månedlige overførsler.
+          </p>
+          <div className="space-y-2">
+            {children.map((c) => {
+              const existing = childAccountByOwner.get(c.name);
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-md border border-neutral-200 bg-white px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-800">
+                      <Baby className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="font-medium text-neutral-900">
+                      {c.name}
+                    </span>
+                    {existing && (
+                      <span className="text-xs text-emerald-700">
+                        ✓ {existing.name}
+                      </span>
+                    )}
+                  </div>
+                  {existing ? (
+                    <span className="text-xs text-neutral-400">
+                      Konto oprettet
+                    </span>
+                  ) : (
+                    <form action={createChildSpendingAccount}>
+                      <input type="hidden" name="child_id" value={c.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Opret forbrugskonto
+                      </button>
+                    </form>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <p className="mt-4 text-xs text-neutral-500">
+        Du kan tilføje så mange du vil. Klik{' '}
+        <span className="text-neutral-700">Næste</span> når du er færdig.
       </p>
 
       <div className="mt-6 flex items-center gap-3">

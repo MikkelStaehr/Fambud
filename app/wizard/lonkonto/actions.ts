@@ -155,5 +155,7 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
   const isOwner = membership?.role === 'owner';
 
   revalidatePath('/wizard');
-  redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/privat-opsparing');
+  // Partner skipper faelleskonti og familie (begge er ejer-only) — i
+  // batch 3 vil de gå til /wizard/oversigt; foreløbigt direkte til opsparing.
+  redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/opsparing');
 }

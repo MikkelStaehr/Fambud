@@ -14,8 +14,8 @@ export default async function WizardKreditLaanPage({
 
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
-  const totalSteps = isOwner ? 7 : 5;
-  const stepNumber = isOwner ? 5 : 4;
+  const totalSteps = isOwner ? 7 : 4;
+  const stepNumber = isOwner ? 5 : 3;
   // Owner continues to invite; partner skips to done.
   const nextHref = isOwner ? '/wizard/invite' : '/wizard/done';
 

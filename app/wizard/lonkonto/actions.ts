@@ -3,32 +3,157 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
+import { parseAmountToOere } from '@/lib/format';
+import {
+  nextFixedDayOccurrence,
+  nextLastBankingDay,
+  toISODate,
+} from '@/lib/banking-days';
 
-export async function createPersonalAccount(formData: FormData) {
+// Trin 1 i den nye wizard kombinerer to ting der hører sammen — uden løn
+// er kontoen tom og resten af appen har intet at vise. Vi opretter:
+//
+//   1. Brugerens lønkonto (kind=checking, ejet af dem)
+//   2. En recurring månedslønstransaktion på den konto, knyttet til
+//      brugerens family_member som primary indkomst
+//
+// Begge i samme server action så vi enten lykkes helt eller fejler tydeligt
+// og brugeren kan rette én ting og prøve igen. Vi lader DB'en være sandhed
+// — hvis income-insert fejler efter konto-insert, lader vi kontoen stå
+// (brugeren kan altid sætte indkomst op senere).
+export async function createPersonalAccountWithIncome(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   if (!name) {
-    redirect('/wizard/lonkonto?error=' + encodeURIComponent('Navn er påkrævet'));
+    redirect('/wizard/lonkonto?error=' + encodeURIComponent('Kontonavn er påkrævet'));
   }
 
-  // Owner doesn't see this checkbox in the UI; partner does. Default true.
+  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
+  if (amount === null || amount <= 0) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent('Indtast et lønbeløb større end 0')
+    );
+  }
+
+  const dayRule = String(formData.get('day_rule') ?? 'fixed');
+  const today = new Date();
+  let occurs_on: string;
+  if (dayRule === 'last-banking-day') {
+    occurs_on = toISODate(nextLastBankingDay(today));
+  } else {
+    const dayOfMonth = Number(formData.get('day_of_month') ?? '1');
+    if (!Number.isFinite(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
+      redirect(
+        '/wizard/lonkonto?error=' + encodeURIComponent('Ugyldig dag i måneden')
+      );
+    }
+    occurs_on = toISODate(nextFixedDayOccurrence(today, dayOfMonth));
+  }
+
+  const description =
+    String(formData.get('description') ?? '').trim() || 'Månedsløn';
+
+  // Owner ser ikke editable_by_all-checkboxet (deres lønkonto er pr. default
+  // lukket). Partner ser den tændt — de fleste ønsker at deres modkonto
+  // kan rette mindre fejl. Hidden field på owner sikrer stabil form-shape.
   const editable_by_all = formData.get('editable_by_all') === 'on';
 
-  // opening_balance intentionally not passed — schema default (0) applies.
-  // Cashflow-only model: only ind/ud matters. User can edit it later via
-  // /konti/[id] if they ever want to seed a starting balance.
   const { supabase, householdId, user } = await getHouseholdContext();
-  const { error } = await supabase.from('accounts').insert({
-    household_id: householdId,
-    name,
-    owner_name: null,
-    kind: 'checking',
-    editable_by_all,
-    created_by: user.id,
-  });
-  if (error) {
-    redirect('/wizard/lonkonto?error=' + encodeURIComponent(error.message));
+
+  // Hent brugerens family_member.id så income kan tagges med income_role
+  // 'primary' og family_member_id. Det er kritisk for forecast-motoren der
+  // grupperer paychecks pr. medlem.
+  const { data: fm } = await supabase
+    .from('family_members')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!fm) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent(
+          'Kunne ikke finde din profil — log ud og log ind igen'
+        )
+    );
   }
 
+  // 1) Opret lønkontoen
+  const { data: account, error: accErr } = await supabase
+    .from('accounts')
+    .insert({
+      household_id: householdId,
+      name,
+      owner_name: null,
+      kind: 'checking',
+      editable_by_all,
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+  if (accErr || !account) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent(accErr?.message ?? 'Kunne ikke oprette lønkontoen')
+    );
+  }
+
+  // 2) Find/opret 'Løn'-kategori. Tiny race-vindue hvis to medlemmer kører
+  //    wizarden samtidig — worst case to 'Løn'-rækker, harmless at rydde op.
+  const { data: existingCat } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('household_id', householdId)
+    .eq('name', 'Løn')
+    .eq('kind', 'income')
+    .maybeSingle();
+  let categoryId = existingCat?.id;
+  if (!categoryId) {
+    const { data: newCat, error: catErr } = await supabase
+      .from('categories')
+      .insert({
+        household_id: householdId,
+        name: 'Løn',
+        kind: 'income',
+        color: '#22c55e',
+      })
+      .select('id')
+      .single();
+    if (catErr) {
+      redirect('/wizard/lonkonto?error=' + encodeURIComponent(catErr.message));
+    }
+    categoryId = newCat!.id;
+  }
+
+  // 3) Opret månedsløns-transaktionen. recurrence='monthly' så cashflow-
+  //    grafen får noget at vise dag-1. Forecast-motoren kræver derudover
+  //    konkrete paycheck-samples (recurrence='once', income_role='primary'),
+  //    som brugeren registrerer post-wizard via dashboardets onboarding-
+  //    checkliste + Duplikér-funktionen.
+  const { error: txErr } = await supabase.from('transactions').insert({
+    household_id: householdId,
+    account_id: account.id,
+    category_id: categoryId,
+    family_member_id: fm.id,
+    amount,
+    description,
+    occurs_on,
+    recurrence: 'monthly',
+    income_role: 'primary',
+  });
+  if (txErr) {
+    redirect('/wizard/lonkonto?error=' + encodeURIComponent(txErr.message));
+  }
+
+  // 4) Routing afhænger af rolle. Owner skal sætte fælleskonti op først,
+  //    derefter familie. Partner skipper begge dele og går direkte til
+  //    private opsparinger.
+  const { data: membership } = await supabase
+    .from('family_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const isOwner = membership?.role === 'owner';
+
   revalidatePath('/wizard');
-  redirect('/wizard/indkomst');
+  redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/privat-opsparing');
 }

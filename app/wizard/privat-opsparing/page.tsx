@@ -20,10 +20,11 @@ export default async function WizardPrivatOpsparingPage({
 
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
-  const totalSteps = isOwner ? 7 : 5;
-  // Owner continues to fælleskonti next; partner skips straight to kredit-laan
-  // (they don't add shared accounts).
-  const nextHref = isOwner ? '/wizard/faelleskonti' : '/wizard/kredit-laan';
+  const totalSteps = isOwner ? 7 : 4;
+  // Owner: privat-opsparing er trin 4 af 7 (efter familie-trinet, før
+  // kredit-laan). Partner: trin 2 af 4 (lonkonto -> opsparing -> kredit -> done).
+  const stepNumber = isOwner ? 4 : 2;
+  const nextHref = '/wizard/kredit-laan';
 
   // Show the user's existing private savings so they know they've added one.
   // Filter by created_by + kind so other members' accounts don't bleed in.
@@ -46,7 +47,7 @@ export default async function WizardPrivatOpsparingPage({
   return (
     <div>
       <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-        Trin 3 af {totalSteps}
+        Trin {stepNumber} af {totalSteps}
       </div>
       <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
         Privat opsparing

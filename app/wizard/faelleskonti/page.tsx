@@ -36,7 +36,7 @@ export default async function WizardFaelleskontiPage({
   return (
     <div>
       <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-        Trin 4 af 7
+        Trin 2 af 7
       </div>
       <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
         Fælleskonti
@@ -108,14 +108,14 @@ export default async function WizardFaelleskontiPage({
 
       <div className="mt-6 flex items-center gap-3">
         <Link
-          href="/wizard/kredit-laan"
+          href="/wizard/familie"
           className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-neutral-800"
         >
           Næste
         </Link>
         {count === 0 && (
           <Link
-            href="/wizard/kredit-laan"
+            href="/wizard/familie"
             className="rounded-md border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
           >
             Hop over

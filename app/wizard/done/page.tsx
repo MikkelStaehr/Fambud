@@ -5,7 +5,7 @@ import { completeSetup } from './actions';
 export default async function WizardDonePage() {
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
-  const totalSteps = isOwner ? 7 : 5;
+  const totalSteps = isOwner ? 7 : 4;
   const stepNumber = totalSteps;
 
   return (

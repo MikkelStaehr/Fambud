@@ -1,9 +1,12 @@
-import { getMyMembership } from '@/lib/dal';
-import { createPersonalAccount } from './actions';
+// Trin 1 i wizarden — kombinerer lønkonto-oprettelse og første lønudbetaling
+// fordi de hører naturligt sammen. Uden et lønbeløb har resten af appen
+// intet at vise (cashflow, forecast, dashboardet osv.), så vi gør begge
+// ting i samme transaktion frem for to skærme i træk hvor anden trin
+// føles som et "ekstra"-step.
 
-const fieldClass =
-  'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
-const labelClass = 'block text-xs font-medium text-neutral-600';
+import { getMyMembership } from '@/lib/dal';
+import { LonkontoIncomeForm } from './_components/LonkontoIncomeForm';
+import { createPersonalAccountWithIncome } from './actions';
 
 export default async function WizardLonkontoPage({
   searchParams,
@@ -13,77 +16,50 @@ export default async function WizardLonkontoPage({
   const { error } = await searchParams;
   const { membership } = await getMyMembership();
   const isOwner = membership?.role === 'owner';
-  const totalSteps = isOwner ? 7 : 5;
+  // Owner: 7 trin (lonkonto, faelleskonti, familie, opsparing, kredit,
+  // invite, done). Partner: 4 trin (lonkonto, opsparing, kredit, done).
+  // Tallene afspejler det forenklede flow uden separat indkomst-trin.
+  const totalSteps = isOwner ? 7 : 4;
 
   return (
     <div>
+      {/* Velkomst-intro som sektion (ikke separat skærm) — sætter mental
+          model uden at koste en klik. Kort og handlingsorienteret. */}
+      <div className="mb-6 rounded-md border border-emerald-200 bg-emerald-50/60 p-4">
+        <h2 className="text-sm font-semibold text-emerald-900">
+          {isOwner ? 'Velkommen til Fambud' : 'Velkommen til husstanden'}
+        </h2>
+        <p className="mt-1 text-xs text-emerald-900/80">
+          {isOwner
+            ? 'Vi guider dig igennem opsætningen af jeres familiebudget. Det tager 5–10 minutter — vi springer udgifter, lån og overførsler over og tager dem efter wizarden i stedet.'
+            : 'Husstanden er allerede sat op af din partner. Vi mangler bare din side: lønkonto, indkomst og eventuelle private opsparinger.'}
+        </p>
+      </div>
+
       <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
         Trin 1 af {totalSteps}
       </div>
       <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
-        Din lønkonto
+        Din lønkonto og indkomst
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Opret den konto hvor du modtager løn. Du kan altid ændre den senere.
+        Opret den konto hvor du modtager løn, og fortæl os hvor meget der
+        kommer ind hver måned.
       </p>
 
-      <form action={createPersonalAccount} className="mt-6 space-y-5">
-        <div>
-          <label htmlFor="name" className={labelClass}>
-            Navn
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            required
-            defaultValue="Lønkonto"
-            placeholder="Lønkonto"
-            className={fieldClass}
-          />
-        </div>
+      <div className="mt-6">
+        <LonkontoIncomeForm
+          action={createPersonalAccountWithIncome}
+          isOwner={isOwner}
+          error={error}
+        />
+      </div>
 
-        {!isOwner && (
-          <div className="rounded-md border border-neutral-200 bg-white p-4">
-            <label className="flex items-start gap-3 text-sm text-neutral-700 select-none">
-              <input
-                type="checkbox"
-                name="editable_by_all"
-                defaultChecked
-                className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
-              />
-              <span>
-                <span className="font-medium text-neutral-900">
-                  Alle i husstanden kan redigere
-                </span>
-                <span className="mt-0.5 block text-xs text-neutral-500">
-                  Også oprette og slette poster på kontoen. Praktisk hvis én i
-                  familien står for indtastning. Slå fra for at låse til kun dig.
-                </span>
-              </span>
-            </label>
-          </div>
-        )}
-
-        {isOwner && (
-          // Owner doesn't see the checkbox per the brief; we still send the
-          // value so the form submits a stable shape.
-          <input type="hidden" name="editable_by_all" value="on" />
-        )}
-
-        {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-        >
-          Næste
-        </button>
-      </form>
+      <p className="mt-4 text-xs text-neutral-500">
+        Du kan registrere flere konkrete lønudbetalinger på{' '}
+        <span className="text-neutral-700">/indkomst</span> efter wizarden —
+        med 3 udbetalinger laver vi et nøjagtigt forecast af din månedsløn.
+      </p>
     </div>
   );
 }

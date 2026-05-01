@@ -7,6 +7,7 @@ import {
   Sparkles,
   AlertTriangle,
   Coins,
+  Copy,
 } from 'lucide-react';
 import {
   getFamilyMembers,
@@ -428,6 +429,19 @@ function IncomeRowDisplay({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {/* Duplikér: én klik kopierer hele rækken og foreslår én måned
+              bagud som ny dato. Bruges typisk når 2-3 lønninger i træk er
+              identiske og brugeren ellers skulle indtaste dem manuelt for
+              at få nok forecast-samples. */}
+          <Link
+            href={`/indkomst/ny?duplicate=${encodeURIComponent(i.id)}`}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
+            title="Duplikér"
+            aria-label={`Duplikér ${i.description ?? 'indkomst'}`}
+          >
+            <Copy className="h-3 w-3" />
+            <span className="hidden sm:inline">Duplikér</span>
+          </Link>
           <Link
             href={`/indkomst/${i.id}`}
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"

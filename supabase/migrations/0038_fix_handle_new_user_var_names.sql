@@ -1,6 +1,14 @@
--- Migration 0037: udvid handle_new_user til at læse home_zip_code +
--- home_city fra signup-metadata. Følger fra migration 0036 hvor adressen
--- blev splittet i 3 strukturerede felter.
+-- Migration 0038: hotfix til handle_new_user.
+--
+-- Migration 0037 omdøbte de lokale variable til v_home_addr/v_home_zip/
+-- v_home_city for at undgå navne-kollision med kolonnerne på UPDATE i
+-- Path 2. Men replace_all fangede ikke INSERT-listen i Path 3 — den
+-- refererer stadig til de gamle navne, som ikke længere er erklæret.
+-- PL/pgSQL parser funktionen lazy, så fejlen først opdages når en
+-- brand new household-signup rammer Path 3 (= ny bruger uden invite-kode).
+-- Symptom: "Database error saving new user".
+--
+-- Vi genskriver hele funktionen med konsistente v_-prefix-variabler.
 
 create or replace function public.handle_new_user()
 returns trigger

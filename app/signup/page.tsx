@@ -59,6 +59,23 @@ export default async function SignupPage({
           </div>
 
           <div>
+            <label htmlFor="full_name" className="block text-xs font-medium text-neutral-600">
+              Dit fulde navn <span className="text-neutral-400">(valgfrit)</span>
+            </label>
+            <input
+              id="full_name"
+              name="full_name"
+              type="text"
+              autoComplete="name"
+              placeholder="Anders Hansen"
+              className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Vises i dashboardet og på familielisten
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="email" className="block text-xs font-medium text-neutral-600">
               Email
             </label>
@@ -70,6 +87,24 @@ export default async function SignupPage({
               autoComplete="email"
               className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
             />
+          </div>
+
+          <div>
+            <label htmlFor="home_address" className="block text-xs font-medium text-neutral-600">
+              Bopælsadresse <span className="text-neutral-400">(valgfrit)</span>
+            </label>
+            <input
+              id="home_address"
+              name="home_address"
+              type="text"
+              autoComplete="street-address"
+              placeholder="Vesterbrogade 12, 1620 København V"
+              className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Bruges til kommune-baserede ydelser senere — du kan altid
+              redigere det under Indstillinger
+            </p>
           </div>
 
           <div>

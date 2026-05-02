@@ -354,6 +354,8 @@ export type Database = {
           setup_completed_at: string | null;
           joined_at: string | null;
           primary_income_source: PrimaryIncomeSource | null;
+          home_address: string | null;
+          workplace_address: string | null;
         };
         Insert: {
           id?: string;
@@ -368,6 +370,8 @@ export type Database = {
           setup_completed_at?: string | null;
           joined_at?: string | null;
           primary_income_source?: PrimaryIncomeSource | null;
+          home_address?: string | null;
+          workplace_address?: string | null;
         };
         Update: {
           id?: string;
@@ -382,6 +386,8 @@ export type Database = {
           setup_completed_at?: string | null;
           joined_at?: string | null;
           primary_income_source?: PrimaryIncomeSource | null;
+          home_address?: string | null;
+          workplace_address?: string | null;
         };
         Relationships: [];
       };

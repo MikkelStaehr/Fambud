@@ -7,6 +7,7 @@ import {
   getFamilyMembers,
   getMonthlyExpensesByGroup,
   getOnboardingProgress,
+  getOtherMembersOnboardingStatus,
   getPrimaryIncomeForecast,
   getUpcomingEvents,
 } from '@/lib/dal';
@@ -18,6 +19,7 @@ import { buildFixFor, detectCashflowIssues } from '@/lib/cashflow-analysis';
 import { CashflowGraph } from './_components/CashflowGraph';
 import { CashflowWarnings } from './_components/CashflowWarnings';
 import { CategoryGroupChart } from './_components/CategoryGroupChart';
+import { FamilyStatus } from './_components/FamilyStatus';
 import { HeroStatus } from './_components/HeroStatus';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
@@ -48,6 +50,7 @@ export default async function DashboardPage() {
     expenseGroups,
     upcomingEvents,
     familyMembers,
+    otherMembersStatus,
   ] = await Promise.all([
     getDashboardData(),
     getOnboardingProgress(),
@@ -58,6 +61,7 @@ export default async function DashboardPage() {
     getMonthlyExpensesByGroup(),
     getUpcomingEvents(),
     getFamilyMembers(),
+    getOtherMembersOnboardingStatus(),
   ]);
 
   // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
@@ -114,6 +118,8 @@ export default async function DashboardPage() {
           tidligere enkelt-CTA "Lad os fylde budgettet op" så brugeren ser
           hele post-wizard rejsen, ikke bare det første trin. */}
       <OnboardingChecklist progress={onboardingProgress} />
+
+      <FamilyStatus members={otherMembersStatus} />
 
       <IncomeForecastBanner />
 

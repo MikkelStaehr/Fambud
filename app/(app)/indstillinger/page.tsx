@@ -10,6 +10,7 @@ import {
   restoreCategory,
   createFamilyMember,
   deleteFamilyMember,
+  updateMyProfile,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
 
@@ -56,6 +57,9 @@ export default async function IndstillingerPage({
     getCategories({ includeArchived: showArchivedCategories }),
   ]);
 
+  // Find brugerens egen family_member-række til "Min profil"-sektionen.
+  const me = familyMembers.find((fm) => fm.user_id === currentUserId);
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-neutral-200 pb-6">
@@ -63,6 +67,72 @@ export default async function IndstillingerPage({
           Indstillinger
         </h1>
       </header>
+
+      {/* Min profil — den indloggede brugers egne felter (navn, adresser).
+          Workplace-adressen vil senere drive befordringsfradrag-beregning;
+          home-adressen indtastes typisk ved signup men kan rettes her. */}
+      {me && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
+            Min profil
+          </h2>
+          <form
+            action={updateMyProfile}
+            className="space-y-4 rounded-md border border-neutral-200 bg-white p-4"
+          >
+            <div>
+              <label htmlFor="me_name" className="block text-xs font-medium text-neutral-600">
+                Navn
+              </label>
+              <input
+                id="me_name"
+                name="name"
+                type="text"
+                required
+                defaultValue={me.name}
+                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="me_home" className="block text-xs font-medium text-neutral-600">
+                Bopælsadresse <span className="text-neutral-400">(valgfrit)</span>
+              </label>
+              <input
+                id="me_home"
+                name="home_address"
+                type="text"
+                autoComplete="street-address"
+                defaultValue={me.home_address ?? ''}
+                placeholder="Vesterbrogade 12, 1620 København V"
+                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="me_work" className="block text-xs font-medium text-neutral-600">
+                Arbejdsplads-adresse <span className="text-neutral-400">(valgfrit)</span>
+              </label>
+              <input
+                id="me_work"
+                name="workplace_address"
+                type="text"
+                defaultValue={me.workplace_address ?? ''}
+                placeholder="Rådhuspladsen 1, 1550 København V"
+                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+              <p className="mt-1 text-xs text-neutral-500">
+                Bruges på sigt til at beregne dit befordringsfradrag og
+                pendel-statistik.
+              </p>
+            </div>
+            <button
+              type="submit"
+              className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              Gem
+            </button>
+          </form>
+        </section>
+      )}
 
       {/* Husstand */}
       <section className="mt-8">

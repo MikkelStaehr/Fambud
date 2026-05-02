@@ -21,6 +21,8 @@ export type FamilyMemberRow = {
   role: string | null;
   joined_at: string | null;
   primary_income_source: 'salary' | 'benefits' | null;
+  home_address: string | null;
+  workplace_address: string | null;
 };
 
 export type SettingsData = {
@@ -49,7 +51,7 @@ export async function getSettingsData(): Promise<SettingsData> {
     supabase
       .from('family_members')
       .select(
-        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source'
+        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, workplace_address'
       )
       .eq('household_id', householdId)
       .order('position', { ascending: true })
@@ -73,13 +75,103 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   const { data, error } = await supabase
     .from('family_members')
     .select(
-      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source'
+      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, workplace_address'
     )
     .eq('household_id', householdId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+// Onboarding-status pr. voksent familiemedlem. Bruges af dashboardets
+// "Familie-status"-sektion til at vise om de andre i husstanden også
+// har sat deres del op — lønkonto, indkomst, overførsler. Den indloggede
+// bruger har sin egen OnboardingChecklist længere oppe så vi ekskluderer
+// dem fra listen.
+export type MemberOnboardingStatus = {
+  id: string;
+  name: string;
+  hasLogin: boolean;            // user_id sat = har signet up
+  hasOwnCheckingAccount: boolean; // har oprettet kind='checking' selv
+  paycheckCount: number;        // antal primary 'once' paychecks
+  hasRecurringTransfersOut: boolean; // mindst én recurring transfer fra deres konti
+};
+
+export async function getOtherMembersOnboardingStatus(): Promise<
+  MemberOnboardingStatus[]
+> {
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  const { data: members } = await supabase
+    .from('family_members')
+    .select('id, name, user_id, email')
+    .eq('household_id', householdId)
+    .neq('user_id', user.id);
+  // Kun voksne (har email eller er logget ind) — børn ekskluderes.
+  const adults = (members ?? []).filter(
+    (m) => m.user_id != null || m.email != null
+  );
+  if (adults.length === 0) return [];
+
+  // Hent alle relevante data i parallel og match efter user_id i memory.
+  const userIds = adults.map((m) => m.user_id).filter((u): u is string => !!u);
+
+  const [accountsRes, paychecksRes, transfersRes] = await Promise.all([
+    userIds.length > 0
+      ? supabase
+          .from('accounts')
+          .select('id, kind, created_by, archived')
+          .eq('household_id', householdId)
+          .in('created_by', userIds)
+          .eq('archived', false)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from('transactions')
+      .select('family_member_id')
+      .eq('household_id', householdId)
+      .eq('income_role', 'primary')
+      .eq('recurrence', 'once'),
+    userIds.length > 0
+      ? supabase
+          .from('transfers')
+          .select('from_account_id, accounts!from_account_id(created_by)')
+          .eq('household_id', householdId)
+          .neq('recurrence', 'once')
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  type AccountRow = { id: string; kind: string; created_by: string | null };
+  const accounts = (accountsRes.data as AccountRow[] | null) ?? [];
+  const checkingByUser = new Set(
+    accounts.filter((a) => a.kind === 'checking').map((a) => a.created_by!)
+  );
+
+  const paychecksByMember = new Map<string, number>();
+  for (const p of paychecksRes.data ?? []) {
+    if (!p.family_member_id) continue;
+    paychecksByMember.set(
+      p.family_member_id,
+      (paychecksByMember.get(p.family_member_id) ?? 0) + 1
+    );
+  }
+
+  type TransferJoin = { accounts: { created_by: string | null } | null };
+  const transfers = (transfersRes.data as TransferJoin[] | null) ?? [];
+  const transfersByCreator = new Set(
+    transfers
+      .map((t) => t.accounts?.created_by)
+      .filter((u): u is string => !!u)
+  );
+
+  return adults.map((m) => ({
+    id: m.id,
+    name: m.name,
+    hasLogin: m.user_id != null,
+    hasOwnCheckingAccount: m.user_id ? checkingByUser.has(m.user_id) : false,
+    paycheckCount: paychecksByMember.get(m.id) ?? 0,
+    hasRecurringTransfersOut: m.user_id ? transfersByCreator.has(m.user_id) : false,
+  }));
 }
 
 // Fornavn på den indloggede bruger — bruges til at personliggøre headings

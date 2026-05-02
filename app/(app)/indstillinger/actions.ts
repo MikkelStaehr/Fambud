@@ -5,6 +5,32 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 
+// Opdaterer den indloggede brugers egen family_member-række. Felter der
+// ikke er udfyldt sættes til null så brugeren kan rydde dem aktivt.
+export async function updateMyProfile(formData: FormData) {
+  const { supabase, user } = await getHouseholdContext();
+
+  const name = String(formData.get('name') ?? '').trim();
+  const homeAddress = String(formData.get('home_address') ?? '').trim();
+  const workplaceAddress = String(formData.get('workplace_address') ?? '').trim();
+
+  const { error } = await supabase
+    .from('family_members')
+    .update({
+      name: name || 'Bruger', // navn er NOT NULL — fald tilbage til placeholder
+      home_address: homeAddress || null,
+      workplace_address: workplaceAddress || null,
+    })
+    .eq('user_id', user.id);
+
+  if (error) {
+    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+  }
+
+  revalidatePath('/indstillinger');
+  revalidatePath('/dashboard');
+}
+
 // Empty / 0 / non-numeric → no expiry. Any positive integer → that many days.
 function parseExpiresInDays(raw: FormDataEntryValue | null): number | null {
   const s = String(raw ?? '').trim();

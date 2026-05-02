@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { formatAmount } from '@/lib/format';
 import type { CategoryGroupSummary } from '@/lib/dal';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 type Tab = 'private' | 'shared';
 
@@ -30,8 +31,14 @@ export function CategoryGroupChart({ privateGroups, sharedGroups }: Props) {
   return (
     <section className="flex h-full flex-col rounded-md border border-neutral-200 bg-white p-4">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+        <h3 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Udgifter pr. gruppe
+          <InfoTooltip>
+            Faste udgifter rullet op til tematiske grupper (Bolig & lån,
+            Transport, Børn osv.) i stedet for individuelle kategorier.
+            Toggle mellem Fælles og Private — splittet sker på konto-
+            ejerskab. Gruppe-tilknytningen styres af kategori-navnet.
+          </InfoTooltip>
         </h3>
         <span className="tabnum font-mono text-xs text-neutral-500">
           {formatAmount(total)} kr/md

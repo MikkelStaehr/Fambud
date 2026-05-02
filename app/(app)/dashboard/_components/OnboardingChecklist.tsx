@@ -11,6 +11,7 @@
 import Link from 'next/link';
 import { ArrowRight, Check, Circle, Sparkles } from 'lucide-react';
 import type { OnboardingProgress } from '@/lib/dal';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 type Step = {
   done: boolean;
@@ -65,6 +66,11 @@ export function OnboardingChecklist({ progress }: Props) {
         <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-emerald-900">
           <Sparkles className="h-3 w-3" />
           Kom godt i gang
+          <InfoTooltip>
+            Post-wizard checkliste over de fundamentale trin. Skjuler sig
+            selv når alle tre er færdige — og kommer ikke tilbage. Det er
+            en engangs-rejse, ikke permanent dashboard-støj.
+          </InfoTooltip>
         </h2>
         <span className="tabnum font-mono text-xs text-emerald-800">
           {doneCount} af {totalCount} trin

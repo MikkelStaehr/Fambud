@@ -16,6 +16,7 @@ import {
   formatMonthYearDA,
 } from '@/lib/format';
 import { buildFixFor, detectCashflowIssues } from '@/lib/cashflow-analysis';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import { CashflowGraph } from './_components/CashflowGraph';
 import { CashflowWarnings } from './_components/CashflowWarnings';
 import { CategoryGroupChart } from './_components/CategoryGroupChart';
@@ -151,8 +152,14 @@ export default async function DashboardPage() {
       </div>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
+        <h2 className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Pengestrøm
+          <InfoTooltip>
+            Sankey-graf der viser hvordan pengene flyder fra jeres
+            lønkonto(er) til private udgifter, fælleskonti og opsparing.
+            Bredden af hvert bånd er proportional med beløbet pr. måned.
+            Bygget på recurring transaktioner + forecast af lønudbetalinger.
+          </InfoTooltip>
         </h2>
         <CashflowGraph
           accounts={visibleAccounts}

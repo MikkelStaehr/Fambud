@@ -7,6 +7,7 @@
 // saldo-data vi ikke har. Hero'en er ren cashflow.
 
 import { formatAmount } from '@/lib/format';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 type Props = {
   income: number;
@@ -60,8 +61,15 @@ export function HeroStatus({
   return (
     <section className="mt-6 overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <div className="flex items-baseline justify-between border-b border-neutral-100 px-5 py-3">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+        <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Er du på rette spor?
+          <InfoTooltip>
+            Husstandens samlede netto for den aktuelle måned: indtægter
+            (forecast fra 3 seneste lønudbetalinger + recurring income)
+            minus alle faste udgifter på tværs af jeres konti. Et negativt
+            tal betyder ikke nødvendigvis krise — tjek om en bidragyder
+            mangler at registrere sin løn.
+          </InfoTooltip>
         </h2>
         <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">
           {monthLabel}

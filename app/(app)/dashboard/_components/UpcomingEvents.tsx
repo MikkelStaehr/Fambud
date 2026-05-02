@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { CalendarClock, ArrowRightLeft } from 'lucide-react';
 import { formatAmount } from '@/lib/format';
 import type { UpcomingEvent } from '@/lib/dal';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 type Tab = 'private' | 'shared';
 
@@ -51,6 +52,12 @@ export function UpcomingEvents({ events }: Props) {
         <h3 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           <CalendarClock className="h-3 w-3" />
           Næste 7 dage
+          <InfoTooltip>
+            Konkrete regninger og overførsler der rammer jeres konti
+            inden for de næste 7 dage. Recurring transaktioner rulles
+            forlæns til næste forekomst. Toggle mellem Fælles og Private
+            for at se hver side separat.
+          </InfoTooltip>
         </h3>
         {filtered.length > 0 && (
           <span className="tabnum font-mono text-xs text-neutral-500">

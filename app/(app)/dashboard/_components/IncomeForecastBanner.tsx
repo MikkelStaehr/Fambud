@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Sparkles, Plus } from 'lucide-react';
 import { getFamilyMembers, getPrimaryIncomeForecast } from '@/lib/dal';
 import { formatAmount } from '@/lib/format';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 export async function IncomeForecastBanner() {
   const members = await getFamilyMembers();
@@ -41,8 +42,15 @@ export async function IncomeForecastBanner() {
         <Sparkles className="h-5 w-5" />
       </div>
       <div className="flex-1">
-        <div className="text-sm font-medium text-emerald-900">
+        <div className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-900">
           Indkomst-forecast er ikke klar endnu
+          <InfoTooltip>
+            Forecast = gennemsnit af de 3 seneste lønudbetalinger pr.
+            person. Fanger udsving fra overtid, ferietillæg og bonus så
+            HeroStatus + cashflow viser hvad I faktisk får — ikke en
+            idealiseret basisløn. Med 1-2 paychecks bruger vi gennemsnittet
+            af det vi har; med 3+ er det præcist.
+          </InfoTooltip>
         </div>
         <p className="mt-0.5 text-sm text-emerald-800">
           Vi beregner et månedligt forecast ud fra de seneste 3 lønudbetalinger.

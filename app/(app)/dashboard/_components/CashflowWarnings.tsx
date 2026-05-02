@@ -11,6 +11,7 @@
 import Link from 'next/link';
 import { AlertTriangle, Sparkles, UserPlus } from 'lucide-react';
 import { formatAmount } from '@/lib/format';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import type { CashflowFix, CashflowIssue } from '@/lib/cashflow-analysis';
 import type { PendingMember } from '@/lib/dal';
 
@@ -34,6 +35,12 @@ export function CashflowWarnings({
         <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           <Sparkles className="h-3 w-3" />
           Cashflow-tjek
+          <InfoTooltip>
+            Tjekker om hver konto har nok månedlig indtægt til at dække
+            sine faste udgifter. For fælleskonti deles underskuddet ud på
+            alle bidragydere og du ser kun din andel. Hver advarsel har en
+            "Opret"-knap der pre-fylder en overførsel der lukker hullet.
+          </InfoTooltip>
         </h2>
         <span className="text-xs text-neutral-400">
           {!hasAnyAlert

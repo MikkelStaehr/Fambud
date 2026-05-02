@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import { Check, Circle, Mail, Users } from 'lucide-react';
 import type { MemberOnboardingStatus } from '@/lib/dal';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 
 type Props = {
   members: MemberOnboardingStatus[];
@@ -71,6 +72,12 @@ export function FamilyStatus({ members }: Props) {
       <h2 className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
         <Users className="h-3 w-3" />
         Familie-status
+        <InfoTooltip>
+          Viser om de andre voksne i husstanden har sat deres del op.
+          Forsvinder når alle er klar (signed up + lønkonto + paychecks +
+          overførsler). Pre-godkendte partnere der ikke er signet op får
+          link til invitations-koden.
+        </InfoTooltip>
       </h2>
       <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
         {members.map((m) => {

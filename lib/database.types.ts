@@ -374,7 +374,11 @@ export type Database = {
           joined_at: string | null;
           primary_income_source: PrimaryIncomeSource | null;
           home_address: string | null;
+          home_zip_code: string | null;
+          home_city: string | null;
           workplace_address: string | null;
+          workplace_zip_code: string | null;
+          workplace_city: string | null;
         };
         Insert: {
           id?: string;
@@ -390,7 +394,11 @@ export type Database = {
           joined_at?: string | null;
           primary_income_source?: PrimaryIncomeSource | null;
           home_address?: string | null;
+          home_zip_code?: string | null;
+          home_city?: string | null;
           workplace_address?: string | null;
+          workplace_zip_code?: string | null;
+          workplace_city?: string | null;
         };
         Update: {
           id?: string;
@@ -406,7 +414,11 @@ export type Database = {
           joined_at?: string | null;
           primary_income_source?: PrimaryIncomeSource | null;
           home_address?: string | null;
+          home_zip_code?: string | null;
+          home_city?: string | null;
           workplace_address?: string | null;
+          workplace_zip_code?: string | null;
+          workplace_city?: string | null;
         };
         Relationships: [];
       };

@@ -22,7 +22,11 @@ export type FamilyMemberRow = {
   joined_at: string | null;
   primary_income_source: 'salary' | 'benefits' | null;
   home_address: string | null;
+  home_zip_code: string | null;
+  home_city: string | null;
   workplace_address: string | null;
+  workplace_zip_code: string | null;
+  workplace_city: string | null;
 };
 
 export type SettingsData = {
@@ -51,7 +55,7 @@ export async function getSettingsData(): Promise<SettingsData> {
     supabase
       .from('family_members')
       .select(
-        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, workplace_address'
+        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city'
       )
       .eq('household_id', householdId)
       .order('position', { ascending: true })
@@ -75,7 +79,7 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   const { data, error } = await supabase
     .from('family_members')
     .select(
-      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, workplace_address'
+      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city'
     )
     .eq('household_id', householdId)
     .order('position', { ascending: true })

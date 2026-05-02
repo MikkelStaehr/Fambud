@@ -22,6 +22,8 @@ export async function signup(formData: FormData) {
   const householdName = String(formData.get('household_name') ?? '').trim();
   const fullName = String(formData.get('full_name') ?? '').trim();
   const homeAddress = String(formData.get('home_address') ?? '').trim();
+  const homeZipCode = String(formData.get('home_zip_code') ?? '').trim();
+  const homeCity = String(formData.get('home_city') ?? '').trim();
   const inviteCode = String(formData.get('invite_code') ?? '').trim().toUpperCase();
 
   // When an invite code is in play, errors should land back on /join/[code]
@@ -46,6 +48,8 @@ export async function signup(formData: FormData) {
   if (householdName) metaData.household_name = householdName;
   if (fullName) metaData.full_name = fullName;
   if (homeAddress) metaData.home_address = homeAddress;
+  if (homeZipCode) metaData.home_zip_code = homeZipCode;
+  if (homeCity) metaData.home_city = homeCity;
 
   const { data, error } = await supabase.auth.signUp({
     email,

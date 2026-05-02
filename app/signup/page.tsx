@@ -89,23 +89,67 @@ export default async function SignupPage({
             />
           </div>
 
-          <div>
-            <label htmlFor="home_address" className="block text-xs font-medium text-neutral-600">
+          <fieldset className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50/50 p-3">
+            <legend className="px-1 text-xs font-medium text-neutral-600">
               Bopælsadresse <span className="text-neutral-400">(valgfrit)</span>
-            </label>
-            <input
-              id="home_address"
-              name="home_address"
-              type="text"
-              autoComplete="street-address"
-              placeholder="Vesterbrogade 12, 1620 København V"
-              className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-            />
-            <p className="mt-1 text-xs text-neutral-500">
+            </legend>
+            <div>
+              <label
+                htmlFor="home_address"
+                className="block text-xs font-medium text-neutral-600"
+              >
+                Adresse <span className="text-neutral-400">(evt. etage)</span>
+              </label>
+              <input
+                id="home_address"
+                name="home_address"
+                type="text"
+                autoComplete="street-address"
+                placeholder="Vesterbrogade 12, 3.tv"
+                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label
+                  htmlFor="home_zip_code"
+                  className="block text-xs font-medium text-neutral-600"
+                >
+                  Postnr.
+                </label>
+                <input
+                  id="home_zip_code"
+                  name="home_zip_code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  pattern="[0-9]{4}"
+                  placeholder="1620"
+                  className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="col-span-2">
+                <label
+                  htmlFor="home_city"
+                  className="block text-xs font-medium text-neutral-600"
+                >
+                  By
+                </label>
+                <input
+                  id="home_city"
+                  name="home_city"
+                  type="text"
+                  autoComplete="address-level2"
+                  placeholder="København V"
+                  className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-neutral-500">
               Bruges til kommune-baserede ydelser senere — du kan altid
-              redigere det under Indstillinger
+              redigere det under Indstillinger.
             </p>
-          </div>
+          </fieldset>
 
           <div>
             <label htmlFor="password" className="block text-xs font-medium text-neutral-600">

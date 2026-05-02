@@ -93,37 +93,128 @@ export default async function IndstillingerPage({
                 className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
               />
             </div>
-            <div>
-              <label htmlFor="me_home" className="block text-xs font-medium text-neutral-600">
+            <fieldset className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50/50 p-3">
+              <legend className="px-1 text-xs font-medium text-neutral-600">
                 Bopælsadresse <span className="text-neutral-400">(valgfrit)</span>
-              </label>
-              <input
-                id="me_home"
-                name="home_address"
-                type="text"
-                autoComplete="street-address"
-                defaultValue={me.home_address ?? ''}
-                placeholder="Vesterbrogade 12, 1620 København V"
-                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-              />
-            </div>
-            <div>
-              <label htmlFor="me_work" className="block text-xs font-medium text-neutral-600">
+              </legend>
+              <div>
+                <label
+                  htmlFor="me_home_address"
+                  className="block text-xs font-medium text-neutral-600"
+                >
+                  Adresse <span className="text-neutral-400">(evt. etage)</span>
+                </label>
+                <input
+                  id="me_home_address"
+                  name="home_address"
+                  type="text"
+                  autoComplete="street-address"
+                  defaultValue={me.home_address ?? ''}
+                  placeholder="Vesterbrogade 12, 3.tv"
+                  className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label
+                    htmlFor="me_home_zip"
+                    className="block text-xs font-medium text-neutral-600"
+                  >
+                    Postnr.
+                  </label>
+                  <input
+                    id="me_home_zip"
+                    name="home_zip_code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    pattern="[0-9]{4}"
+                    defaultValue={me.home_zip_code ?? ''}
+                    placeholder="1620"
+                    className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label
+                    htmlFor="me_home_city"
+                    className="block text-xs font-medium text-neutral-600"
+                  >
+                    By
+                  </label>
+                  <input
+                    id="me_home_city"
+                    name="home_city"
+                    type="text"
+                    autoComplete="address-level2"
+                    defaultValue={me.home_city ?? ''}
+                    placeholder="København V"
+                    className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50/50 p-3">
+              <legend className="px-1 text-xs font-medium text-neutral-600">
                 Arbejdsplads-adresse <span className="text-neutral-400">(valgfrit)</span>
-              </label>
-              <input
-                id="me_work"
-                name="workplace_address"
-                type="text"
-                defaultValue={me.workplace_address ?? ''}
-                placeholder="Rådhuspladsen 1, 1550 København V"
-                className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-              />
-              <p className="mt-1 text-xs text-neutral-500">
+              </legend>
+              <div>
+                <label
+                  htmlFor="me_work_address"
+                  className="block text-xs font-medium text-neutral-600"
+                >
+                  Adresse <span className="text-neutral-400">(evt. etage)</span>
+                </label>
+                <input
+                  id="me_work_address"
+                  name="workplace_address"
+                  type="text"
+                  defaultValue={me.workplace_address ?? ''}
+                  placeholder="Rådhuspladsen 1"
+                  className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label
+                    htmlFor="me_work_zip"
+                    className="block text-xs font-medium text-neutral-600"
+                  >
+                    Postnr.
+                  </label>
+                  <input
+                    id="me_work_zip"
+                    name="workplace_zip_code"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{4}"
+                    defaultValue={me.workplace_zip_code ?? ''}
+                    placeholder="1550"
+                    className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label
+                    htmlFor="me_work_city"
+                    className="block text-xs font-medium text-neutral-600"
+                  >
+                    By
+                  </label>
+                  <input
+                    id="me_work_city"
+                    name="workplace_city"
+                    type="text"
+                    defaultValue={me.workplace_city ?? ''}
+                    placeholder="København V"
+                    className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500">
                 Bruges på sigt til at beregne dit befordringsfradrag og
                 pendel-statistik.
               </p>
-            </div>
+            </fieldset>
             <button
               type="submit"
               className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"

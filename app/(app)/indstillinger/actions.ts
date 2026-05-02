@@ -12,14 +12,22 @@ export async function updateMyProfile(formData: FormData) {
 
   const name = String(formData.get('name') ?? '').trim();
   const homeAddress = String(formData.get('home_address') ?? '').trim();
+  const homeZipCode = String(formData.get('home_zip_code') ?? '').trim();
+  const homeCity = String(formData.get('home_city') ?? '').trim();
   const workplaceAddress = String(formData.get('workplace_address') ?? '').trim();
+  const workplaceZipCode = String(formData.get('workplace_zip_code') ?? '').trim();
+  const workplaceCity = String(formData.get('workplace_city') ?? '').trim();
 
   const { error } = await supabase
     .from('family_members')
     .update({
       name: name || 'Bruger', // navn er NOT NULL — fald tilbage til placeholder
       home_address: homeAddress || null,
+      home_zip_code: homeZipCode || null,
+      home_city: homeCity || null,
       workplace_address: workplaceAddress || null,
+      workplace_zip_code: workplaceZipCode || null,
+      workplace_city: workplaceCity || null,
     })
     .eq('user_id', user.id);
 

@@ -44,7 +44,7 @@ export default async function WizardEntryPage() {
         .select('id', { count: 'exact', head: true })
         .eq('family_member_id', myFm.id)
         .eq('income_role', 'primary')
-        .eq('recurrence', 'monthly');
+        .eq('recurrence', 'once');
       if ((ownIncome ?? 0) === 0) {
         redirect('/wizard/lonkonto');
       }

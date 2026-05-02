@@ -62,7 +62,7 @@ export default async function WizardLonkontoPage({
         .select('id', { count: 'exact', head: true })
         .eq('family_member_id', myFm.id)
         .eq('income_role', 'primary')
-        .eq('recurrence', 'monthly');
+        .eq('recurrence', 'once');
       if ((ownIncome ?? 0) > 0) {
         redirect('/wizard/oversigt');
       }
@@ -247,14 +247,16 @@ export default async function WizardLonkontoPage({
           ferietillæg, bonus og pension-justeringer giver små udsving fra
           måned til måned. Vi tager gennemsnittet af de seneste 3 udbetalinger
           som forecast for resten af året, så HeroStatus, cashflow-grafen og
-          rådighedsbeløb regner ud fra hvad du faktisk får — ikke en idealiseret
-          basislønsedlen.
+          rådighedsbeløb regner ud fra hvad du faktisk får — ikke en
+          idealiseret basislønsedlen.
         </p>
         <p className="mt-2">
-          Ét tal nu er nok til at komme i gang — du registrerer de 2 manglende
-          udbetalinger på{' '}
-          <span className="text-neutral-700">/indkomst</span> når du får dem
-          (Duplikér-knappen sparer dig for at indtaste alle felter forfra).
+          Du behøver ikke alle 3 nu — én er nok til at komme i gang. Hvis du
+          har dine seneste 2 lønsedler ved hånden kan du klikke{' '}
+          <span className="text-neutral-700">"Tilføj endnu en"</span> ovenfor.
+          Ellers registrerer du dem senere på{' '}
+          <span className="text-neutral-700">/indkomst</span> med Duplikér-
+          knappen.
         </p>
       </details>
     </div>

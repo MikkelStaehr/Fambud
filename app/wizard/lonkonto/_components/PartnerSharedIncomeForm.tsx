@@ -1,90 +1,59 @@
 'use client';
 
-// Indkomst-only-formular for partner i fællesøkonomi-mode. Vi opretter
-// IKKE en ny lønkonto — den fælles eksisterer allerede fra ejer's wizard.
-// Vi registrerer kun en månedlig indkomst på den fælles konto, tagged med
-// partnerens family_member_id så forecast-motoren stadig kan adskille
-// hver persons paychecks.
+// Indkomst-only-form for partner i fællesøkonomi-mode. Vi opretter ikke
+// en lønkonto — den fælles eksisterer fra ejer's wizard. Vi registrerer
+// 1-3 paycheck-samples med family_member_id sat til partneren, så forecast-
+// motoren kan beregne hendes månedlige andel separat fra ejer's.
 
 import { useState } from 'react';
-import { CalendarDays, CalendarCheck } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { AmountInput } from '@/app/(app)/_components/AmountInput';
 
 const fieldClass =
   'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
 const labelClass = 'block text-xs font-medium text-neutral-600';
 
-type DayRule = 'fixed' | 'last-banking-day';
-
 type Props = {
   action: (formData: FormData) => Promise<void>;
   error?: string;
 };
 
+function defaultDateForRow(rowIndex: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - rowIndex);
+  return d.toISOString().slice(0, 10);
+}
+
 export function PartnerSharedIncomeForm({ action, error }: Props) {
-  const [rule, setRule] = useState<DayRule>('fixed');
+  const [paycheckCount, setPaycheckCount] = useState(1);
 
   return (
-    <form action={action} className="space-y-4 rounded-md border border-neutral-200 bg-white p-4">
-      <div>
-        <label htmlFor="amount" className={labelClass}>
-          Beløb pr. måned <span className="text-neutral-400">(kr. netto)</span>
-        </label>
-        <AmountInput id="amount" name="amount" required />
-      </div>
-
-      <div>
-        <div className={labelClass}>Lønudbetaling</div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <RuleCard
-            value="fixed"
-            label="Fast dato"
-            desc="Samme dag hver måned. Rykkes til fredagen før hvis det er weekend."
-            icon={<CalendarDays className="h-4 w-4" />}
-            checked={rule === 'fixed'}
-            onSelect={() => setRule('fixed')}
-          />
-          <RuleCard
-            value="last-banking-day"
-            label="Sidste bankdag"
-            desc="Sidste hverdag i måneden — typisk for offentligt ansatte."
-            icon={<CalendarCheck className="h-4 w-4" />}
-            checked={rule === 'last-banking-day'}
-            onSelect={() => setRule('last-banking-day')}
-          />
-        </div>
-      </div>
-
-      {rule === 'fixed' && (
-        <div>
-          <label htmlFor="day_of_month" className={labelClass}>
-            Dag i måneden
-          </label>
-          <input
-            id="day_of_month"
-            name="day_of_month"
-            type="number"
-            min={1}
-            max={31}
-            defaultValue={1}
-            required
-            className={fieldClass}
-          />
-        </div>
-      )}
-
-      <div>
-        <label htmlFor="description" className={labelClass}>
-          Beskrivelse <span className="text-neutral-400">(valgfrit)</span>
-        </label>
-        <input
-          id="description"
-          name="description"
-          type="text"
-          defaultValue="Månedsløn"
-          className={fieldClass}
+    <form
+      action={action}
+      className="space-y-4 rounded-md border border-neutral-200 bg-white p-4"
+    >
+      {[0, 1, 2].slice(0, paycheckCount).map((idx) => (
+        <PaycheckRow
+          key={idx}
+          index={idx}
+          removable={idx > 0 && idx === paycheckCount - 1}
+          onRemove={() => setPaycheckCount((c) => c - 1)}
         />
-      </div>
+      ))}
+
+      {paycheckCount < 3 && (
+        <button
+          type="button"
+          onClick={() => setPaycheckCount((c) => c + 1)}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Tilføj endnu en lønudbetaling{' '}
+          {paycheckCount === 1
+            ? '(2 mere giver præcist forecast)'
+            : '(1 mere giver præcist forecast)'}
+        </button>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -102,46 +71,60 @@ export function PartnerSharedIncomeForm({ action, error }: Props) {
   );
 }
 
-function RuleCard({
-  value,
-  label,
-  desc,
-  icon,
-  checked,
-  onSelect,
+function PaycheckRow({
+  index,
+  removable,
+  onRemove,
 }: {
-  value: DayRule;
-  label: string;
-  desc: string;
-  icon: React.ReactNode;
-  checked: boolean;
-  onSelect: () => void;
+  index: number;
+  removable: boolean;
+  onRemove: () => void;
 }) {
+  const requiredLabel = index === 0 ? 'krævet' : 'valgfri';
   return (
-    <label
-      className={`flex cursor-pointer flex-col gap-1.5 rounded-md border p-3 transition ${
-        checked
-          ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900'
-          : 'border-neutral-200 bg-white hover:border-neutral-300'
-      }`}
-    >
-      <input
-        type="radio"
-        name="day_rule"
-        value={value}
-        checked={checked}
-        onChange={onSelect}
-        className="sr-only"
-      />
-      <div
-        className={`inline-flex h-6 w-6 items-center justify-center rounded ${
-          checked ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500'
-        }`}
-      >
-        {icon}
+    <div className="rounded-md border border-neutral-200 bg-neutral-50/60 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-medium text-neutral-700">
+          Lønudbetaling {index + 1}{' '}
+          <span className="font-normal text-neutral-400">({requiredLabel})</span>
+        </h3>
+        {removable && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded p-1 text-neutral-300 transition hover:bg-red-50 hover:text-red-700"
+            title="Fjern"
+            aria-label="Fjern denne lønudbetaling"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
-      <div className="text-sm font-medium text-neutral-900">{label}</div>
-      <div className="text-xs text-neutral-500">{desc}</div>
-    </label>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={`paycheck_${index}_date`} className={labelClass}>
+            Dato
+          </label>
+          <input
+            id={`paycheck_${index}_date`}
+            name={`paycheck_${index}_date`}
+            type="date"
+            required={index === 0}
+            defaultValue={defaultDateForRow(index)}
+            className={fieldClass}
+          />
+        </div>
+        <div>
+          <label htmlFor={`paycheck_${index}_amount`} className={labelClass}>
+            Netto-beløb <span className="text-neutral-400">(kr.)</span>
+          </label>
+          <AmountInput
+            id={`paycheck_${index}_amount`}
+            name={`paycheck_${index}_amount`}
+            required={index === 0}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

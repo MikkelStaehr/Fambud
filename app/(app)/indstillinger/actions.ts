@@ -2,8 +2,16 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, resetTour } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
+
+// Genstart dashboard-touren — sætter tour_completed_at tilbage til null
+// så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
+// rundtur"-knappen i Min profil-sektionen.
+export async function restartTour() {
+  await resetTour();
+  redirect('/dashboard');
+}
 
 // Opdaterer den indloggede brugers egen family_member-række. Felter der
 // ikke er udfyldt sættes til null så brugeren kan rydde dem aktivt.

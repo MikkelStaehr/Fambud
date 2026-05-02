@@ -379,6 +379,7 @@ export type Database = {
           workplace_address: string | null;
           workplace_zip_code: string | null;
           workplace_city: string | null;
+          tour_completed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -399,6 +400,7 @@ export type Database = {
           workplace_address?: string | null;
           workplace_zip_code?: string | null;
           workplace_city?: string | null;
+          tour_completed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -419,6 +421,7 @@ export type Database = {
           workplace_address?: string | null;
           workplace_zip_code?: string | null;
           workplace_city?: string | null;
+          tour_completed_at?: string | null;
         };
         Relationships: [];
       };

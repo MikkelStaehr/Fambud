@@ -12,6 +12,7 @@ import {
   createFamilyMember,
   deleteFamilyMember,
   updateMyProfile,
+  restartTour,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
 
@@ -119,6 +120,17 @@ export default async function IndstillingerPage({
               className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
             >
               Gem
+            </button>
+          </form>
+
+          {/* Genstart rundtur — nuller tour_completed_at og redirecter til
+              /dashboard hvor Tour-komponenten auto-starter. */}
+          <form action={restartTour} className="mt-3">
+            <button
+              type="submit"
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
+            >
+              Genstart rundtur på dashboard →
             </button>
           </form>
         </section>

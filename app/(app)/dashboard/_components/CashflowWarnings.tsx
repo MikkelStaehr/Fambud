@@ -30,7 +30,7 @@ export function CashflowWarnings({
   const hasAnyAlert = fixes.length > 0;
 
   return (
-    <section>
+    <section data-tour="cashflow-warnings">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           <Sparkles className="h-3 w-3" />

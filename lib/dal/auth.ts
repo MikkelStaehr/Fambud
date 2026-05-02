@@ -43,7 +43,7 @@ export async function getMyMembership() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('family_members')
-    .select('household_id, role, setup_completed_at, joined_at')
+    .select('household_id, role, setup_completed_at, joined_at, tour_completed_at')
     .eq('user_id', user.id)
     .maybeSingle();
   if (error) throw error;
@@ -53,4 +53,27 @@ export async function getMyMembership() {
 export async function isSetupComplete(): Promise<boolean> {
   const { membership } = await getMyMembership();
   return membership?.setup_completed_at != null;
+}
+
+// Brugeren afsluttede (eller sprang over) dashboard-touren. Vi sætter
+// timestamp så auto-start-logikken ved næste besøg ved at vi har vist
+// turen. /indstillinger har en "Genstart rundtur"-knap der nuller det
+// tilbage til null.
+export async function markTourCompleted() {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from('family_members')
+    .update({ tour_completed_at: new Date().toISOString() })
+    .eq('user_id', user.id);
+  if (error) throw error;
+}
+
+// Resetter tour-flag'et — brugeren vil se rundturen igen.
+export async function resetTour() {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from('family_members')
+    .update({ tour_completed_at: null })
+    .eq('user_id', user.id);
+  if (error) throw error;
 }

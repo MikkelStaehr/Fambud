@@ -61,7 +61,10 @@ export function OnboardingChecklist({ progress }: Props) {
   if (doneCount === totalCount) return null;
 
   return (
-    <section className="mt-6 rounded-md border border-emerald-200 bg-emerald-50/50 p-4">
+    <section
+      data-tour="onboarding-checklist"
+      className="mt-6 rounded-md border border-emerald-200 bg-emerald-50/50 p-4"
+    >
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-emerald-900">
           <Sparkles className="h-3 w-3" />

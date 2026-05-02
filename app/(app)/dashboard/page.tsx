@@ -6,6 +6,7 @@ import {
   getDashboardData,
   getFamilyMembers,
   getMonthlyExpensesByGroup,
+  getMyMembership,
   getOnboardingProgress,
   getOtherMembersOnboardingStatus,
   getPrimaryIncomeForecast,
@@ -20,6 +21,7 @@ import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import { CashflowGraph } from './_components/CashflowGraph';
 import { CashflowWarnings } from './_components/CashflowWarnings';
 import { CategoryGroupChart } from './_components/CategoryGroupChart';
+import { DashboardTour } from './_components/DashboardTour';
 import { FamilyStatus } from './_components/FamilyStatus';
 import { HeroStatus } from './_components/HeroStatus';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
@@ -64,6 +66,13 @@ export default async function DashboardPage() {
     getFamilyMembers(),
     getOtherMembersOnboardingStatus(),
   ]);
+  // Tour-state — auto-start hvis brugeren ikke har set rundturen endnu
+  // (men kun efter wizard er færdig, så vi ikke spammer dem mens de
+  // stadig sætter op).
+  const { membership } = await getMyMembership();
+  const shouldAutoStartTour =
+    membership?.setup_completed_at != null &&
+    membership?.tour_completed_at == null;
 
   // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
   // primary_income_source men endnu ikke har én eneste paycheck registreret.
@@ -107,6 +116,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <DashboardTour
+        ownerName={firstName}
+        autoStart={shouldAutoStartTour}
+      />
       <header className="border-b border-neutral-200 pb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
           {personalGreeting}
@@ -151,7 +164,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <section className="mt-8">
+      <section data-tour="cashflow-graph" className="mt-8">
         <h2 className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Pengestrøm
           <InfoTooltip>

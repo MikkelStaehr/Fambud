@@ -59,7 +59,10 @@ export function HeroStatus({
   }[status.tone];
 
   return (
-    <section className="mt-6 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+    <section
+      data-tour="hero-status"
+      className="mt-6 overflow-hidden rounded-lg border border-neutral-200 bg-white"
+    >
       <div className="flex items-baseline justify-between border-b border-neutral-100 px-5 py-3">
         <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Er du på rette spor?

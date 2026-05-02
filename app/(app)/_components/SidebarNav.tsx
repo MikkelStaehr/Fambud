@@ -59,15 +59,17 @@ export function SidebarNav() {
         <NavLink key={item.href} item={item} pathname={pathname} />
       ))}
 
-      <div className="mt-4 mb-1 flex items-center gap-1.5 px-2.5">
-        <Wrench className="h-3 w-3 text-neutral-400" />
-        <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
-          Værktøjer
-        </span>
+      <div data-tour="sidebar-tools">
+        <div className="mt-4 mb-1 flex items-center gap-1.5 px-2.5">
+          <Wrench className="h-3 w-3 text-neutral-400" />
+          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+            Værktøjer
+          </span>
+        </div>
+        {NAV_TOOLS.map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} />
+        ))}
       </div>
-      {NAV_TOOLS.map((item) => (
-        <NavLink key={item.href} item={item} pathname={pathname} />
-      ))}
 
       <div className="mt-4">
         {NAV_BOTTOM.map((item) => (

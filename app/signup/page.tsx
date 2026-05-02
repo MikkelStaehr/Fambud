@@ -120,7 +120,7 @@ export default async function SignupPage({
 
           <button
             type="submit"
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Opret konto
           </button>

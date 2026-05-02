@@ -53,7 +53,7 @@ export default async function LaanPage() {
         </div>
         <Link
           href="/laan/ny"
-          className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+          className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" />
           Nyt lån
@@ -69,7 +69,7 @@ export default async function LaanPage() {
           </p>
           <Link
             href="/laan/ny"
-            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             <Plus className="h-4 w-4" />
             Nyt lån

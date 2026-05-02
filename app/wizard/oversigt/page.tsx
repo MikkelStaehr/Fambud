@@ -191,7 +191,7 @@ export default async function WizardOversigtPage() {
       <div className="mt-8">
         <Link
           href="/wizard/opsparing"
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           Næste — opret dine private opsparinger
           <ArrowRight className="h-3.5 w-3.5" />

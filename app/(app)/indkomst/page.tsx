@@ -256,7 +256,7 @@ function HovedindkomstCard({
           </select>
           <button
             type="submit"
-            className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white transition hover:bg-emerald-700"
           >
             Gem
           </button>
@@ -357,7 +357,7 @@ function SalaryForecastView({
 
       <Link
         href={newPaycheckHref}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
       >
         <Plus className="h-3.5 w-3.5" />
         Registrer lønudbetaling for {memberName}

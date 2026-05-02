@@ -108,7 +108,7 @@ export default async function HusholdningPage({
           <div className="mt-4">
             <Link
               href={createHref}
-              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
             >
               Opret husholdningskonto
             </Link>
@@ -292,7 +292,7 @@ function HouseholdAccountCard({
           />
           <button
             type="submit"
-            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Tilføj
           </button>

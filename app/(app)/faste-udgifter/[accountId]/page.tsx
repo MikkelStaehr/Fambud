@@ -242,7 +242,7 @@ export default async function BudgetAccountPage({
             {next ? (
               <Link
                 href={`/faste-udgifter/${next.id}`}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
               >
                 Næste konto ({next.name})
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -250,7 +250,7 @@ export default async function BudgetAccountPage({
             ) : (
               <Link
                 href="/dashboard"
-                className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-neutral-800"
+                className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-emerald-700"
               >
                 Færdig
               </Link>
@@ -616,7 +616,7 @@ function ExpenseRow({
             </select>
             <button
               type="submit"
-              className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-neutral-800"
+              className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700"
             >
               Tilføj
             </button>

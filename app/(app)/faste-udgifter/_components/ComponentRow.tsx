@@ -83,7 +83,7 @@ export function ComponentRow({ component, accountId, familyMembers }: Props) {
             </button>
             <button
               type="submit"
-              className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-neutral-800"
+              className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-emerald-700"
             >
               Gem
             </button>

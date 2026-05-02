@@ -146,7 +146,7 @@ export default async function ForudsigeligePage({
                 />
                 <button
                   type="submit"
-                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
                 >
                   Tilføj
                 </button>

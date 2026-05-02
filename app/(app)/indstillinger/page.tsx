@@ -116,7 +116,7 @@ export default async function IndstillingerPage({
             />
             <button
               type="submit"
-              className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+              className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
             >
               Gem
             </button>
@@ -190,7 +190,7 @@ export default async function IndstillingerPage({
           </div>
           <button
             type="submit"
-            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Tilføj
           </button>
@@ -306,7 +306,7 @@ export default async function IndstillingerPage({
 
           <button
             type="submit"
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Generér kode
           </button>
@@ -430,7 +430,7 @@ export default async function IndstillingerPage({
           </div>
           <button
             type="submit"
-            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Tilføj
           </button>

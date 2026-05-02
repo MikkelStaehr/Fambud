@@ -103,7 +103,7 @@ export default async function BudgetOverviewPage() {
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Link
               href={NY_BUDGETKONTO_HREF}
-              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+              className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
             >
               <Plus className="h-4 w-4" />
               Opret budgetkonto

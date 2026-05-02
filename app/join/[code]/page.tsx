@@ -75,7 +75,7 @@ export default async function JoinByCodePage({
               <input type="hidden" name="code" value={code} />
               <button
                 type="submit"
-                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
               >
                 Log ud og brug invitation
               </button>
@@ -168,7 +168,7 @@ export default async function JoinByCodePage({
 
           <button
             type="submit"
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             Tilslut husstand
           </button>

@@ -170,7 +170,7 @@ export default async function WizardEjerePage({
       <div className="mt-6">
         <Link
           href="/wizard/done"
-          className="block w-full rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-neutral-800"
+          className="block w-full rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           Næste
         </Link>

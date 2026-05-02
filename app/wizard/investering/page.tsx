@@ -257,7 +257,7 @@ export default async function WizardInvesteringPage({
       <div className="mt-6 flex items-center gap-3">
         <Link
           href="/wizard/ejere"
-          className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-neutral-800"
+          className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           Næste
         </Link>

@@ -6,12 +6,22 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Baby, Mail, User, UserPlus, Users, X } from 'lucide-react';
-import { getHouseholdContext, getMyMembership } from '@/lib/dal';
+import {
+  Baby,
+  Coins,
+  HandCoins,
+  Mail,
+  User,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
+import { getHouseholdContext, getHouseholdEconomyType, getMyMembership } from '@/lib/dal';
 import {
   addChild,
   addPartner,
   removeFamilyMember,
+  setEconomyType,
 } from './actions';
 
 const fieldClass =
@@ -48,13 +58,17 @@ export default async function WizardFamiliePage({
   );
   const hasDependents = dependents.length > 0;
 
-  // Auto-detekter familie-mode hvis der allerede er pre-godkendte medlemmer
-  // (fx hvis brugeren har tilføjet og er gået tilbage).
-  const view: 'choice' | 'solo' | 'family' = hasDependents
+  const economyType = await getHouseholdEconomyType();
+  const isShared = economyType === 'shared';
+
+  // Auto-detekter familie-mode hvis der allerede er pre-godkendte medlemmer,
+  // eller hvis husstanden er sat til 'shared' (så har brugeren allerede valgt
+  // familiemodel og skal kun udfylde resten).
+  const view: 'choice' | 'solo' | 'family' = hasDependents || isShared
     ? 'family'
     : sp.type === 'solo'
       ? 'solo'
-      : sp.type === 'family'
+      : sp.type === 'family' || sp.type === 'shared'
         ? 'family'
         : 'choice';
 
@@ -137,6 +151,82 @@ export default async function WizardFamiliePage({
 
       {view === 'family' && (
         <div className="mt-6 space-y-6">
+          {/* Økonomi-model: hver-for-sig vs pooled. Vises som to klikbare
+              kort. Aktive valg (matcher households.economy_type) markeres
+              med ring + farvet ikon. Skift mellem mode'er retager ejer's
+              eksisterende lønkonto via setEconomyType-action. */}
+          <section>
+            <h2 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+              Hvordan håndterer I økonomien?
+            </h2>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <form action={setEconomyType}>
+                <input type="hidden" name="economy_type" value="separate" />
+                <button
+                  type="submit"
+                  className={`group flex w-full flex-col gap-1.5 rounded-md border p-3 text-left transition ${
+                    !isShared
+                      ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900'
+                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                  }`}
+                >
+                  <div
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded ${
+                      !isShared
+                        ? 'bg-neutral-900 text-white'
+                        : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    <Coins className="h-4 w-4" />
+                  </div>
+                  <div className="text-sm font-semibold text-neutral-900">
+                    Særskilt økonomi
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    Hver har sin egen lønkonto. I sender til Fælles for delte
+                    udgifter — resten er privat.
+                  </p>
+                </button>
+              </form>
+
+              <form action={setEconomyType}>
+                <input type="hidden" name="economy_type" value="shared" />
+                <button
+                  type="submit"
+                  className={`group flex w-full flex-col gap-1.5 rounded-md border p-3 text-left transition ${
+                    isShared
+                      ? 'border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900'
+                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                  }`}
+                >
+                  <div
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded ${
+                      isShared
+                        ? 'bg-neutral-900 text-white'
+                        : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    <HandCoins className="h-4 w-4" />
+                  </div>
+                  <div className="text-sm font-semibold text-neutral-900">
+                    Fællesøkonomi
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    Begge lønninger lander på én Fælles Lønkonto. Overskuddet
+                    deles eller fordeles som I selv vil.
+                  </p>
+                </button>
+              </form>
+            </div>
+            {isShared && (
+              <p className="mt-2 text-xs text-emerald-700">
+                ✓ Jeres lønkonto fra trin 1 er nu Fælles Lønkonto. Begge
+                lønninger lander her — partner registrerer bare sin
+                indkomst når hun joiner.
+              </p>
+            )}
+          </section>
+
           {/* Liste over eksisterende familiemedlemmer (inkl. ejeren). */}
           <section>
             <h2 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-neutral-500">

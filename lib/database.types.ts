@@ -27,6 +27,10 @@ export type InvestmentType =
 // Specialfunktion for kind='savings'. Bruges til at identificere konti
 // med beregnede målbeløb baseret på brugerens egne tal.
 export type SavingsPurpose = 'buffer' | 'predictable_unexpected';
+// Familie-økonomi-modellen styrer wizard-forgreningen og hvor lønindkomst
+// lander: 'separate' (hver sin lønkonto, sender til fælles) eller 'shared'
+// (begge lønninger på én Fælles Lønkonto).
+export type HouseholdEconomyType = 'separate' | 'shared';
 
 export type PredictableEstimate = {
   id: string;
@@ -56,9 +60,24 @@ export type Database = {
   public: {
     Tables: {
       households: {
-        Row: { id: string; name: string; created_at: string };
-        Insert: { id?: string; name?: string; created_at?: string };
-        Update: { id?: string; name?: string; created_at?: string };
+        Row: {
+          id: string;
+          name: string;
+          created_at: string;
+          economy_type: HouseholdEconomyType;
+        };
+        Insert: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+          economy_type?: HouseholdEconomyType;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+          economy_type?: HouseholdEconomyType;
+        };
         Relationships: [];
       };
       accounts: {

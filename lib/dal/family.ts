@@ -84,6 +84,22 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   return data ?? [];
 }
 
+// Læser husstandens economy_type. Bruges af wizard-forgreningen for at
+// vide om vi er i særskilt- eller fælles-økonomi-mode. Default 'separate'
+// for husstande oprettet før migration 0035.
+export async function getHouseholdEconomyType(): Promise<
+  'separate' | 'shared'
+> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('households')
+    .select('economy_type')
+    .eq('id', householdId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.economy_type ?? 'separate';
+}
+
 // Onboarding-status pr. voksent familiemedlem. Bruges af dashboardets
 // "Familie-status"-sektion til at vise om de andre i husstanden også
 // har sat deres del op — lønkonto, indkomst, overførsler. Den indloggede

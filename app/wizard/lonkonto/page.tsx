@@ -10,10 +10,18 @@
 // husstand, ikke starter fra nul.
 
 import { redirect } from 'next/navigation';
-import { Check, Shield, Users, Wallet } from 'lucide-react';
-import { getHouseholdContext, getMyMembership } from '@/lib/dal';
+import { Check, HandCoins, Shield, Users, Wallet } from 'lucide-react';
+import {
+  getHouseholdContext,
+  getHouseholdEconomyType,
+  getMyMembership,
+} from '@/lib/dal';
 import { LonkontoIncomeForm } from './_components/LonkontoIncomeForm';
-import { createPersonalAccountWithIncome } from './actions';
+import { PartnerSharedIncomeForm } from './_components/PartnerSharedIncomeForm';
+import {
+  createPersonalAccountWithIncome,
+  registerSharedIncome,
+} from './actions';
 
 export default async function WizardLonkontoPage({
   searchParams,
@@ -30,18 +38,68 @@ export default async function WizardLonkontoPage({
   // til næste rolle-specifikke trin i stedet. /wizard/page.tsx har samme
   // logik, men vi gentager den her så direkte URL-adgang er sikker.
   const { supabase, user } = await getHouseholdContext();
-  const { count: ownChecking } = await supabase
-    .from('accounts')
-    .select('id', { count: 'exact', head: true })
-    .eq('created_by', user.id)
-    .eq('kind', 'checking')
-    .eq('archived', false);
-  if ((ownChecking ?? 0) > 0) {
-    redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/oversigt');
+
+  // Fællesøkonomi-detektion: hvis husstanden er sat til 'shared', så er
+  // den fælles lønkonto allerede oprettet af ejer. Partner skal IKKE
+  // oprette endnu en — de skal kun registrere deres indkomst på den.
+  const economyType = await getHouseholdEconomyType();
+  const isPartnerInSharedMode = !isOwner && economyType === 'shared';
+
+  // Guard: hvis brugeren allerede har gjort sin del af trin 1, skip videre.
+  //   - Owner: har de oprettet en checking-konto?
+  //   - Partner særskilt: har de oprettet egen checking-konto?
+  //   - Partner shared: har de allerede registreret månedlig indkomst
+  //     tagged med deres family_member_id?
+  if (isPartnerInSharedMode) {
+    const { data: myFm } = await supabase
+      .from('family_members')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (myFm) {
+      const { count: ownIncome } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('family_member_id', myFm.id)
+        .eq('income_role', 'primary')
+        .eq('recurrence', 'monthly');
+      if ((ownIncome ?? 0) > 0) {
+        redirect('/wizard/oversigt');
+      }
+    }
+  } else {
+    const { count: ownChecking } = await supabase
+      .from('accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('created_by', user.id)
+      .eq('kind', 'checking')
+      .eq('archived', false);
+    if ((ownChecking ?? 0) > 0) {
+      redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/oversigt');
+    }
   }
   // Owner: 7 trin (lonkonto, faelleskonti, familie, opsparing, investering,
   // ejere, done). Partner: 4 trin (lonkonto, oversigt, opsparing, done).
   const totalSteps = isOwner ? 7 : 4;
+
+  // Find den fælles lønkonto til partneren i shared-mode (bruges af
+  // PartnerSharedIncomeForm til at vise hvilken konto deres løn lander
+  // på).
+  let sharedLonkonto: { id: string; name: string } | null = null;
+  if (isPartnerInSharedMode) {
+    const { supabase: sb, householdId } = await getHouseholdContext();
+    const { data } = await sb
+      .from('accounts')
+      .select('id, name')
+      .eq('household_id', householdId)
+      .eq('kind', 'checking')
+      .eq('owner_name', 'Fælles')
+      .eq('archived', false)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (data) sharedLonkonto = data;
+  }
 
   // For partner: hent et hurtigt sammendrag af husstanden så velkomst-
   // panelet kan vise hvad ejeren allerede har sat op.
@@ -148,19 +206,36 @@ export default async function WizardLonkontoPage({
         Trin 1 af {totalSteps}
       </div>
       <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
-        Din lønkonto og indkomst
+        {isPartnerInSharedMode ? 'Din månedsløn' : 'Din lønkonto og indkomst'}
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Opret den konto hvor du modtager løn, og fortæl os hvor meget der
-        kommer ind hver måned.
+        {isPartnerInSharedMode
+          ? 'I jeres husstand pooles indkomsten — din løn lander på den fælles lønkonto. Vi skal bare bruge dit beløb til at beregne det samlede billede.'
+          : 'Opret den konto hvor du modtager løn, og fortæl os hvor meget der kommer ind hver måned.'}
       </p>
 
       <div className="mt-6">
-        <LonkontoIncomeForm
-          action={createPersonalAccountWithIncome}
-          isOwner={isOwner}
-          error={error}
-        />
+        {isPartnerInSharedMode && sharedLonkonto ? (
+          <>
+            <div className="mb-4 inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <HandCoins className="h-3.5 w-3.5" />
+              <span>
+                Din løn lander på{' '}
+                <span className="font-medium">{sharedLonkonto.name}</span>
+              </span>
+            </div>
+            <PartnerSharedIncomeForm
+              action={registerSharedIncome}
+              error={error}
+            />
+          </>
+        ) : (
+          <LonkontoIncomeForm
+            action={createPersonalAccountWithIncome}
+            isOwner={isOwner}
+            error={error}
+          />
+        )}
       </div>
 
       <details className="mt-4 rounded-md border border-neutral-200 bg-neutral-50/50 p-3 text-xs text-neutral-600">

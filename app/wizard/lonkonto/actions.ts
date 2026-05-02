@@ -10,6 +10,37 @@ import {
   toISODate,
 } from '@/lib/banking-days';
 
+// Hjælper: find eller opret 'Løn'-kategori for husstanden. Den deles
+// mellem alle indkomst-transaktioner uanset om vi er i særskilt- eller
+// fælles-økonomi-mode.
+async function ensureLonCategory(
+  supabase: Awaited<ReturnType<typeof getHouseholdContext>>['supabase'],
+  householdId: string
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('household_id', householdId)
+    .eq('name', 'Løn')
+    .eq('kind', 'income')
+    .maybeSingle();
+  if (existing?.id) return existing.id;
+  const { data: created, error } = await supabase
+    .from('categories')
+    .insert({
+      household_id: householdId,
+      name: 'Løn',
+      kind: 'income',
+      color: '#22c55e',
+    })
+    .select('id')
+    .single();
+  if (error || !created) {
+    throw new Error(error?.message ?? 'Kunne ikke oprette Løn-kategori');
+  }
+  return created.id;
+}
+
 // Trin 1 i den nye wizard kombinerer to ting der hører sammen — uden løn
 // er kontoen tom og resten af appen har intet at vise. Vi opretter:
 //
@@ -178,4 +209,91 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
   // Partner skipper faelleskonti og familie (begge er ejer-only) og går
   // til oversigt-trinet hvor de ser hvad ejeren har sat op.
   redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/oversigt');
+}
+
+// Partner i fællesøkonomi-mode registrerer KUN indkomst — den fælles
+// lønkonto eksisterer allerede fra ejer's wizard. Vi finder den, opretter
+// månedlig recurring income tagged med partnerens family_member_id, og
+// fortsætter til /wizard/oversigt.
+export async function registerSharedIncome(formData: FormData) {
+  const amount = parseAmountToOere(String(formData.get('amount') ?? ''));
+  if (amount === null || amount <= 0) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent('Indtast et lønbeløb større end 0')
+    );
+  }
+
+  const dayRule = String(formData.get('day_rule') ?? 'fixed');
+  const today = new Date();
+  let occurs_on: string;
+  if (dayRule === 'last-banking-day') {
+    occurs_on = toISODate(nextLastBankingDay(today));
+  } else {
+    const dayOfMonth = Number(formData.get('day_of_month') ?? '1');
+    if (!Number.isFinite(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
+      redirect(
+        '/wizard/lonkonto?error=' + encodeURIComponent('Ugyldig dag i måneden')
+      );
+    }
+    occurs_on = toISODate(nextFixedDayOccurrence(today, dayOfMonth));
+  }
+
+  const description =
+    String(formData.get('description') ?? '').trim() || 'Månedsløn';
+
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  // Find den fælles lønkonto. Hvis den mangler, er der noget i opsætningen
+  // der er gået galt — vi sender brugeren tilbage med en klar fejl.
+  const { data: shared } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('household_id', householdId)
+    .eq('kind', 'checking')
+    .eq('owner_name', 'Fælles')
+    .eq('archived', false)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!shared) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent(
+          'Kunne ikke finde fælles lønkonto — bed ejeren tjekke opsætningen'
+        )
+    );
+  }
+
+  const { data: fm } = await supabase
+    .from('family_members')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!fm) {
+    redirect(
+      '/wizard/lonkonto?error=' +
+        encodeURIComponent('Kunne ikke finde din profil — log ud og log ind igen')
+    );
+  }
+
+  const categoryId = await ensureLonCategory(supabase, householdId);
+
+  const { error: txErr } = await supabase.from('transactions').insert({
+    household_id: householdId,
+    account_id: shared.id,
+    category_id: categoryId,
+    family_member_id: fm.id,
+    amount,
+    description,
+    occurs_on,
+    recurrence: 'monthly',
+    income_role: 'primary',
+  });
+  if (txErr) {
+    redirect('/wizard/lonkonto?error=' + encodeURIComponent(txErr.message));
+  }
+
+  revalidatePath('/wizard');
+  redirect('/wizard/oversigt');
 }

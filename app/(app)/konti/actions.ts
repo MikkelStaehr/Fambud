@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere, parseOptionalAmount } from '@/lib/format';
+import { parseAmountToOere } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import type {
   AccountKind,
@@ -48,9 +48,6 @@ function readAccountForm(formData: FormData):
         investment_type: InvestmentType | null;
         savings_purposes: SavingsPurpose[] | null;
         opening_balance: number;
-        goal_amount: number | null;
-        goal_date: string | null;
-        goal_label: string | null;
         editable_by_all: boolean;
       };
     } {
@@ -96,20 +93,6 @@ function readAccountForm(formData: FormData):
   const openingRaw = String(formData.get('opening_balance') ?? '0');
   const opening_balance = parseAmountToOere(openingRaw) ?? 0;
 
-  const goalRes = parseOptionalAmount(
-    String(formData.get('goal_amount') ?? ''),
-    'Målbeløb',
-    { allowZero: false }
-  );
-  if (!goalRes.ok) return { error: goalRes.error };
-  const goal_amount = goalRes.value;
-
-  const goalDateRaw = String(formData.get('goal_date') ?? '').trim();
-  const goal_date = goalDateRaw || null;
-
-  const goalLabelRaw = String(formData.get('goal_label') ?? '').trim();
-  const goal_label = goalLabelRaw || null;
-
   const ownerRaw = String(formData.get('owner_name') ?? '').trim();
   const owner_name = ownerRaw || null;
 
@@ -119,7 +102,7 @@ function readAccountForm(formData: FormData):
   return {
     data: {
       name, owner_name, kind, investment_type, savings_purposes,
-      opening_balance, goal_amount, goal_date, goal_label, editable_by_all,
+      opening_balance, editable_by_all,
     },
   };
 }

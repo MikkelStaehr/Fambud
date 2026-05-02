@@ -50,9 +50,6 @@ type Props = {
     investment_type?: InvestmentType | null;
     savings_purposes?: SavingsPurpose[] | null;
     opening_balance?: number;
-    goal_amount?: number | null;
-    goal_date?: string | null;
-    goal_label?: string | null;
     editable_by_all?: boolean;
   };
   submitLabel: string;
@@ -209,50 +206,6 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
           defaultValue={dv.opening_balance != null ? formatOereForInput(dv.opening_balance) : '0.00'}
         />
       </div>
-
-      <fieldset className="rounded-md border border-neutral-200 bg-neutral-50/50 p-4">
-        <legend className="px-1 text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Mål <span className="ml-1 normal-case font-normal text-neutral-400">(valgfrit)</span>
-        </legend>
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="goal_label" className={labelClass}>Beskrivelse</label>
-            <input
-              id="goal_label"
-              name="goal_label"
-              type="text"
-              defaultValue={dv.goal_label ?? ''}
-              placeholder="Sommerferie 2027 / Buffer"
-              className={fieldClass}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="goal_amount" className={labelClass}>
-                Målbeløb <span className="text-neutral-400">(kr.)</span>
-              </label>
-              <AmountInput
-                id="goal_amount"
-                name="goal_amount"
-                defaultValue={dv.goal_amount != null ? formatOereForInput(dv.goal_amount) : ''}
-                placeholder=""
-              />
-            </div>
-            <div>
-              <label htmlFor="goal_date" className={labelClass}>Måldato</label>
-              <input
-                id="goal_date"
-                name="goal_date"
-                type="date"
-                defaultValue={dv.goal_date ?? ''}
-                className={fieldClass}
-              />
-            </div>
-          </div>
-        </div>
-      </fieldset>
 
       <div className="rounded-md border border-neutral-200 bg-white p-4">
         <label className="flex items-start gap-3 text-sm text-neutral-700 select-none">

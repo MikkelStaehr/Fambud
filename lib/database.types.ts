@@ -71,12 +71,8 @@ export type Database = {
           owner_name: string | null;
           kind: AccountKind;
           opening_balance: number;
-          currency: string;
           archived: boolean;
           created_at: string;
-          goal_amount: number | null;
-          goal_date: string | null;
-          goal_label: string | null;
           editable_by_all: boolean;
           created_by: string | null;
           interest_rate: number | null;
@@ -103,12 +99,8 @@ export type Database = {
           owner_name?: string | null;
           kind?: AccountKind;
           opening_balance?: number;
-          currency?: string;
           archived?: boolean;
           created_at?: string;
-          goal_amount?: number | null;
-          goal_date?: string | null;
-          goal_label?: string | null;
           editable_by_all?: boolean;
           created_by?: string | null;
           interest_rate?: number | null;
@@ -135,12 +127,8 @@ export type Database = {
           owner_name?: string | null;
           kind?: AccountKind;
           opening_balance?: number;
-          currency?: string;
           archived?: boolean;
           created_at?: string;
-          goal_amount?: number | null;
-          goal_date?: string | null;
-          goal_label?: string | null;
           editable_by_all?: boolean;
           created_by?: string | null;
           interest_rate?: number | null;

@@ -6,7 +6,6 @@ import {
   INVESTMENT_TYPE_LABEL_DA,
   INVESTMENT_TYPE_CAP_DA,
   formatAmount,
-  formatShortDateDA,
 } from '@/lib/format';
 import { archiveAccount, restoreAccount } from './actions';
 import type { Account, AccountKind } from '@/lib/database.types';
@@ -211,16 +210,6 @@ function AccountRow({
               <span className="text-neutral-300">·</span>
               <span className="text-amber-700">
                 {INVESTMENT_TYPE_CAP_DA[a.investment_type]}
-              </span>
-            </>
-          )}
-          {a.goal_amount && (
-            <>
-              <span className="text-neutral-300">·</span>
-              <span>
-                Mål: {formatAmount(a.goal_amount)} kr.
-                {a.goal_date && ` til ${formatShortDateDA(a.goal_date)}`}
-                {a.goal_label && ` — ${a.goal_label}`}
               </span>
             </>
           )}

@@ -44,9 +44,6 @@ export default async function EditKontoPage({
             investment_type: account.investment_type,
             savings_purposes: account.savings_purposes,
             opening_balance: account.opening_balance,
-            goal_amount: account.goal_amount,
-            goal_date: account.goal_date,
-            goal_label: account.goal_label,
             editable_by_all: account.editable_by_all,
           }}
           submitLabel="Gem ændringer"

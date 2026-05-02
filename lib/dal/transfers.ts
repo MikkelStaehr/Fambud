@@ -7,7 +7,7 @@ import type { Account, RecurrenceFreq, Transfer } from '@/lib/database.types';
 import { monthBounds, monthlyEquivalent } from '@/lib/format';
 import { getHouseholdContext } from './auth';
 
-export type TransferWithRelations = Transfer & {
+type TransferWithRelations = Transfer & {
   from_account: Pick<Account, 'id' | 'name'> | null;
   to_account: Pick<Account, 'id' | 'name'> | null;
 };
@@ -61,7 +61,7 @@ export async function getTransferById(id: string): Promise<Transfer> {
 // Vi inkluderer engangs-overførsler ('once') i modsætning til dashboard-
 // grafen — på /overforsler er hver enkelt overførsel relevant, også
 // engangs-poster.
-export type TransferEdge = {
+type TransferEdge = {
   from: string;            // from_account_id
   to: string;              // to_account_id
   totalMonthly: number;    // sum af monthlyEquivalent over alle overførsler i parret
@@ -74,7 +74,7 @@ export type TransferEdge = {
   }[];
 };
 
-export type TransferGraphData = {
+type TransferGraphData = {
   accounts: Account[];
   edges: TransferEdge[];
 };

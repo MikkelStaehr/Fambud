@@ -35,9 +35,9 @@ function greetingFor(date: Date): string {
 }
 
 export default async function DashboardPage() {
-  // Alt dashboard-data hentes parallelt. getCashflowGraph() bruges stadig
-  // til at finde underskud (CashflowWarnings) — Sankey'en der visualiserede
-  // det samme data er fjernet fordi den var kompleks og marginalt nyttig.
+  // Alt dashboard-data hentes parallelt. getCashflowGraph() returnerer
+  // memoized data via React's cache() så både getDashboardData (intern
+  // monthlyTotals-aggregering) og CashflowGraph-rendering deler én DB-tur.
   const [
     { monthlyTotals, yearMonth },
     onboardingProgress,
@@ -89,12 +89,6 @@ export default async function DashboardPage() {
   );
   const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
 
-  // Buffer-tjekket bor nu i OnboardingChecklist (et af tre fundamentale trin).
-  // CashflowWarnings beholder dog feltet i tilfælde af at vi senere vil
-  // genindføre advarslen (fx hvis brugeren sletter sin bufferkonto efter
-  // onboarding) — for nu sættes den altid til false.
-  const showBufferWarning = false;
-
   const today = new Date();
   const longDate = formatLongDateDA(today);
   const longDateCapitalised = longDate.charAt(0).toUpperCase() + longDate.slice(1);
@@ -139,7 +133,6 @@ export default async function DashboardPage() {
         <CashflowWarnings
           fixes={fixes}
           pendingMembers={ctx.pendingMembers}
-          showBufferWarning={showBufferWarning}
         />
       </div>
 

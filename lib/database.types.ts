@@ -52,8 +52,6 @@ export type RecurrenceFreq =
   | 'semiannual'
   | 'yearly';
 
-type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
-
 export type Database = {
   public: {
     Tables: {
@@ -477,6 +475,3 @@ export type TransactionComponent = Database['public']['Tables']['transaction_com
 export type FamilyMember = Database['public']['Tables']['family_members']['Row'];
 export type Household = Database['public']['Tables']['households']['Row'];
 export type HouseholdInvite = Database['public']['Tables']['household_invites']['Row'];
-
-// Suppresses unused-export lint while we boot.
-export type _Json = Json;

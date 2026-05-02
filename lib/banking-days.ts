@@ -15,7 +15,7 @@ function startOfDay(d: Date): Date {
 
 // If `d` is Saturday or Sunday, return the previous Friday. Otherwise return
 // `d` unchanged (a fresh copy).
-export function adjustToBankingDay(d: Date): Date {
+function adjustToBankingDay(d: Date): Date {
   const r = new Date(d);
   const dow = r.getDay(); // 0=Sun..6=Sat
   if (dow === 0) r.setDate(r.getDate() - 2); // Sun → Fri

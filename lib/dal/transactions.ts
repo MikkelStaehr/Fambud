@@ -126,22 +126,6 @@ export async function getDistinctExpenseGroups(): Promise<string[]> {
   return Array.from(seen).sort((a, b) => a.localeCompare(b, 'da'));
 }
 
-// Used by the dashboard CTA — we want it to disappear only once the user has
-// actually set up at least one recurring EXPENSE. The wizard's auto-created
-// monthly income (Månedsløn) shouldn't count, otherwise the CTA hides
-// immediately after onboarding.
-export async function hasAnyRecurringExpenses(): Promise<boolean> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('id, category:categories(kind)')
-    .eq('household_id', householdId)
-    .neq('recurrence', 'once')
-    .returns<{ id: string; category: { kind: string } | null }[]>();
-  if (error) throw error;
-  return (data ?? []).some((t) => t.category?.kind === 'expense');
-}
-
 // Onboarding-progress: hvilke fundamentale trin har brugeren udført siden
 // wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
 // er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.

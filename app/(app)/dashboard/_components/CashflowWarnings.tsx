@@ -9,7 +9,7 @@
 // deler resultatet). Det undgår dobbelt-fetch sammen med CashflowGraph.
 
 import Link from 'next/link';
-import { AlertTriangle, Shield, Sparkles, UserPlus } from 'lucide-react';
+import { AlertTriangle, Sparkles, UserPlus } from 'lucide-react';
 import { formatAmount } from '@/lib/format';
 import type { CashflowFix, CashflowIssue } from '@/lib/cashflow-analysis';
 import type { PendingMember } from '@/lib/dal';
@@ -19,18 +19,14 @@ type FixEntry = { issue: CashflowIssue; fix: CashflowFix };
 type Props = {
   fixes: FixEntry[];
   pendingMembers: PendingMember[];
-  // True når brugeren har faste udgifter men ingen bufferkonto. Vises som
-  // strukturel advarsel (mangler fundament), ikke som per-konto deficit.
-  showBufferWarning: boolean;
 };
 
 export function CashflowWarnings({
   fixes,
   pendingMembers,
-  showBufferWarning,
 }: Props) {
   const hasPending = pendingMembers.length > 0;
-  const hasAnyAlert = showBufferWarning || fixes.length > 0;
+  const hasAnyAlert = fixes.length > 0;
 
   return (
     <section>
@@ -42,10 +38,8 @@ export function CashflowWarnings({
         <span className="text-xs text-neutral-400">
           {!hasAnyAlert
             ? 'Alt dækket'
-            : `${fixes.length + (showBufferWarning ? 1 : 0)} ${
-                fixes.length + (showBufferWarning ? 1 : 0) === 1
-                  ? 'opmærksomhedspunkt'
-                  : 'opmærksomhedspunkter'
+            : `${fixes.length} ${
+                fixes.length === 1 ? 'opmærksomhedspunkt' : 'opmærksomhedspunkter'
               }`}
         </span>
       </div>
@@ -60,30 +54,6 @@ export function CashflowWarnings({
             </span>{' '}
             Tjekket viser kun din andel af fælles-konti.
           </div>
-        </div>
-      )}
-
-      {showBufferWarning && (
-        <div className="mb-2 flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-start">
-          <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-            <Shield className="h-5 w-5" />
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-medium text-amber-900">
-              I har ingen bufferkonto sat op
-            </div>
-            <p className="mt-0.5 text-sm text-amber-800">
-              En bufferkonto er fundamentet i økonomien — den dækker uventede
-              udgifter, jobtab og sygdom. Tommelfinger: kunne dække 3 mdr af
-              jeres faste udgifter som minimum.
-            </p>
-          </div>
-          <Link
-            href="/opsparinger/buffer"
-            className="shrink-0 self-start rounded-md bg-amber-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-amber-800"
-          >
-            Sæt buffer op
-          </Link>
         </div>
       )}
 

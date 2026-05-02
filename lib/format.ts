@@ -88,26 +88,15 @@ export const MONTHS_DA: { value: number; label: string }[] = [
   { value: 12, label: 'December' },
 ];
 
-// All money is stored as integer øre (1/100 DKK). Display always goes through
-// these formatters — never inline an Intl.NumberFormat in a component.
-
-const dkkFormatter = new Intl.NumberFormat('da-DK', {
-  style: 'currency',
-  currency: 'DKK',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+// All money is stored as integer øre (1/100 DKK). Display goes via
+// formatAmount — kr-suffix tilføjes inline af kalderen så vi har ét sted
+// at justere antallet af decimaler eller tusind-separator.
 
 const dkkPlainFormatter = new Intl.NumberFormat('da-DK', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-export function formatDKK(oere: number): string {
-  return dkkFormatter.format(oere / 100);
-}
-
-// Without the "kr." suffix — useful in tables where the column header carries the unit.
 export function formatAmount(oere: number): string {
   return dkkPlainFormatter.format(oere / 100);
 }

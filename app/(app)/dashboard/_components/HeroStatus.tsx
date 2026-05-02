@@ -38,11 +38,12 @@ export function HeroStatus({
   missingIncomeContributors = [],
 }: Props) {
   const status = statusFor(net);
-  // Hvis vi har et reelt underskud OG der er bidragydere uden registreret
-  // indkomst, så er underskuddet sandsynligvis bare "venter på data" frem
-  // for et reelt problem. Vi gør det tydeligt så brugeren ikke får
-  // hjertebanken over et tal der løses af sig selv når partneren logger ind.
-  const showMissingIncomeNotice = net < -SMALL_OERE && missingIncomeContributors.length > 0;
+  // Hvis der er bidragydere uden registreret indkomst, viser vi en notis
+  // uanset om net er positivt eller negativt. Tidligere viste vi den kun
+  // ved underskud — men selv et "positivt" tal kan være misvisende hvis
+  // det forventede partner-bidrag mangler. Brugeren skal vide at billedet
+  // ikke er komplet før de tager beslutninger på baggrund af det.
+  const showMissingIncomeNotice = missingIncomeContributors.length > 0;
   const netSign = net >= 0 ? '+' : '−';
   const netClass =
     net > 0
@@ -77,13 +78,14 @@ export function HeroStatus({
         {showMissingIncomeNotice && (
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <span className="font-medium">
+              Tallet er ikke komplet —{' '}
               {missingIncomeContributors.length === 1
-                ? `${missingIncomeContributors[0]} har endnu ingen indkomst registreret`
-                : `${missingIncomeContributors.join(' og ')} har endnu ingen indkomst registreret`}
-            </span>
-            {' '}— underskuddet er sandsynligvis bare midlertidigt og forsvinder
-            når{' '}
-            {missingIncomeContributors.length === 1 ? 'lønnen er logget' : 'deres lønninger er logget'}.
+                ? `${missingIncomeContributors[0]} har endnu ingen indkomst registreret.`
+                : `${missingIncomeContributors.join(' og ')} har endnu ingen indkomst registreret.`}
+            </span>{' '}
+            {net < 0
+              ? 'Underskuddet løses sandsynligvis når lønnen er logget, men husstandens billede er først retvisende når alle bidragydere har registreret deres indkomst.'
+              : 'Husstandens nettoflow vises højere/lavere end det reelt er, indtil alle bidragydere har registreret deres indkomst.'}
           </div>
         )}
 

@@ -148,6 +148,38 @@ export default async function BudgetAccountPage({
         <h1 className="mt-2 text-xl font-semibold tracking-tight text-neutral-900">
           {account.name}
         </h1>
+
+        {/* Konto-skifter — viser alle konti som tabs så brugeren ser hvor
+            de kan tilføje udgifter uden at gå tilbage til /faste-udgifter.
+            Vises kun når der ER andre konti at skifte til. */}
+        {accounts.length > 1 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+              Skift konto:
+            </span>
+            {accounts.map((a) => {
+              const active = a.id === accountId;
+              return (
+                <Link
+                  key={a.id}
+                  href={`/faste-udgifter/${a.id}`}
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition ${
+                    active
+                      ? 'border-neutral-900 bg-neutral-900 font-medium text-white'
+                      : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50'
+                  }`}
+                >
+                  {a.name}
+                  {a.owner_name === 'Fælles' && !active && (
+                    <span className="rounded-full bg-blue-50 px-1 text-[9px] font-medium text-blue-700">
+                      Fælles
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
         <p className="mt-1 text-sm text-neutral-500">
           {ACCOUNT_KIND_LABEL_DA[account.kind] ?? account.kind}
           {account.owner_name && (

@@ -46,7 +46,8 @@ export async function IncomeForecastBanner() {
         </div>
         <p className="mt-0.5 text-sm text-emerald-800">
           Vi beregner et månedligt forecast ud fra de seneste 3 lønudbetalinger.
-          Når der er logget nok udbetalinger, kan vi forudsige resten af året.
+          Tre tal fanger udsving fra overtid, ferietillæg og bonus — så
+          dashboardet viser hvad I faktisk får, ikke en idealiseret basisløn.
         </p>
         <ul className="mt-2 space-y-0.5 text-xs text-emerald-800">
           {forecasts.map(({ member, forecast }) => (

@@ -12,7 +12,23 @@ import { redirect } from 'next/navigation';
 import { Users } from 'lucide-react';
 import { getHouseholdContext, getMyMembership } from '@/lib/dal';
 import { ACCOUNT_KIND_LABEL_DA } from '@/lib/format';
+import type { Account } from '@/lib/database.types';
 import { updateAccountOwner } from './actions';
+
+// Smart default-ejer pr. konto. Familier deler typisk buffer (det er
+// fundamentet for hele husstanden), så hvis owner_name ikke er sat
+// eksplicit på en buffer-tagget konto, peger vi på 'Fælles' frem for
+// ejeren. Andre konti med null owner_name peger på ejeren som rimelig
+// default. Konti med eksplicit owner_name (børnekonti, fælleskonti)
+// bevarer det.
+function smartOwnerDefault(
+  a: Pick<Account, 'owner_name' | 'savings_purposes'>,
+  ownerName: string | undefined
+): string {
+  if (a.owner_name) return a.owner_name;
+  if (a.savings_purposes?.includes('buffer')) return 'Fælles';
+  return ownerName ?? '';
+}
 
 export default async function WizardEjerePage({
   searchParams,
@@ -125,7 +141,7 @@ export default async function WizardEjerePage({
               </div>
               <select
                 name="owner_name"
-                defaultValue={a.owner_name ?? owner?.name ?? ''}
+                defaultValue={smartOwnerDefault(a, owner?.name)}
                 className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
               >
                 {ownerOptions.map((opt) => (

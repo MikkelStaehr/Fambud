@@ -163,11 +163,25 @@ export default async function WizardLonkontoPage({
         />
       </div>
 
-      <p className="mt-4 text-xs text-neutral-500">
-        Du kan registrere flere konkrete lønudbetalinger på{' '}
-        <span className="text-neutral-700">/indkomst</span> efter wizarden —
-        med 3 udbetalinger laver vi et nøjagtigt forecast af din månedsløn.
-      </p>
+      <details className="mt-4 rounded-md border border-neutral-200 bg-neutral-50/50 p-3 text-xs text-neutral-600">
+        <summary className="cursor-pointer font-medium text-neutral-700">
+          Hvorfor 3 lønudbetalinger?
+        </summary>
+        <p className="mt-2">
+          Næsten ingen lønudbetalinger er præcis ens — overtid, sygedage,
+          ferietillæg, bonus og pension-justeringer giver små udsving fra
+          måned til måned. Vi tager gennemsnittet af de seneste 3 udbetalinger
+          som forecast for resten af året, så HeroStatus, cashflow-grafen og
+          rådighedsbeløb regner ud fra hvad du faktisk får — ikke en idealiseret
+          basislønsedlen.
+        </p>
+        <p className="mt-2">
+          Ét tal nu er nok til at komme i gang — du registrerer de 2 manglende
+          udbetalinger på{' '}
+          <span className="text-neutral-700">/indkomst</span> når du får dem
+          (Duplikér-knappen sparer dig for at indtaste alle felter forfra).
+        </p>
+      </details>
     </div>
   );
 }

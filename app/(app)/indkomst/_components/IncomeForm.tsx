@@ -44,7 +44,7 @@ function todayISO(): string {
 }
 
 // "1 234.56" / "1234,56" / "" → øre or null. Same parser as parseAmountToOere
-// — reused here so the live-summary can interpret what's currently in the
+// - reused here so the live-summary can interpret what's currently in the
 // AmountInput fields without going through form serialisation.
 function parseLooseAmount(raw: string): number | null {
   const t = raw.trim();
@@ -75,7 +75,7 @@ export function IncomeForm({
 
   // We mirror every numeric field's current text into state so the live
   // lønseddel-summary can recompute on every keystroke. AmountInput is
-  // uncontrolled — we use onInput on the form to capture changes.
+  // uncontrolled - we use onInput on the form to capture changes.
   const [grossStr, setGrossStr] = useState(
     dv.gross_amount != null ? formatOereForInput(dv.gross_amount) : ''
   );
@@ -113,7 +113,7 @@ export function IncomeForm({
   const skattefradrag = parseLooseAmount(deductionStr);
   const taxRatePct = parseLoosePct(taxRateStr);
 
-  // AM-bidrag er fast 8% i Danmark — gælder for alle lønmodtagere.
+  // AM-bidrag er fast 8% i Danmark - gælder for alle lønmodtagere.
   // Vi auto-beregner den så brugeren ikke skal indtaste den.
   const AM_RATE_PCT = 8;
 
@@ -161,7 +161,7 @@ export function IncomeForm({
 
   return (
     <form action={action} onInput={handleInput} className="space-y-5">
-      {/* Hovedindkomst vs biindkomst — hidden hvis det er sat fra parent
+      {/* Hovedindkomst vs biindkomst - hidden hvis det er sat fra parent
           (lønudbetaling-flow forudvælger 'primary'). Ellers null = ikke
           klassificeret, og /indkomst-listen viser banneret "fordel disse poster". */}
       {dv.income_role && (
@@ -251,11 +251,11 @@ export function IncomeForm({
 
       <fieldset className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Lønseddel <span className="lowercase text-neutral-400">(valgfrit — udfyld for fuldt billede)</span>
+          Lønseddel <span className="lowercase text-neutral-400">(valgfrit - udfyld for fuldt billede)</span>
         </legend>
         <p className="mb-4 text-xs text-neutral-500">
           Indtast bruttoløn og de fradrag der trækkes via din lønseddel.
-          Vi beregner nedenfor hvad der svarer til skat — så du kan
+          Vi beregner nedenfor hvad der svarer til skat - så du kan
           sammenligne mod det faktiske beløb på din lønseddel.
         </p>
 
@@ -274,7 +274,7 @@ export function IncomeForm({
 
           <div>
             <label htmlFor="other_deduction_amount" className={labelClass}>
-              Skattefradrag <span className="text-neutral-400">(kr. — fra din lønseddel)</span>
+              Skattefradrag <span className="text-neutral-400">(kr. - fra din lønseddel)</span>
             </label>
             <AmountInput
               id="other_deduction_amount"
@@ -321,7 +321,7 @@ export function IncomeForm({
 
           <div>
             <label htmlFor="tax_rate_pct" className={labelClass}>
-              Trækprocent <span className="text-neutral-400">(% — fra din lønseddel)</span>
+              Trækprocent <span className="text-neutral-400">(% - fra din lønseddel)</span>
             </label>
             <input
               id="tax_rate_pct"
@@ -360,7 +360,7 @@ export function IncomeForm({
                   label={`AM-bidrag (${AM_RATE_PCT}%)`}
                   amount={amBidrag}
                   sign="-"
-                  hint="fast i DK — beregnes af brutto efter pension"
+                  hint="fast i DK - beregnes af brutto efter pension"
                 />
               )}
               {skattegrundlag != null && (
@@ -417,11 +417,11 @@ export function IncomeForm({
                 </p>
               ) : (
                 <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-                  Forskel: {netDiff > 0 ? '+' : '−'}{formatAmount(Math.abs(netDiff))} kr —
+                  Forskel: {netDiff > 0 ? '+' : '−'}{formatAmount(Math.abs(netDiff))} kr -
                   sandsynligvis ATP, kantinekøb eller andre småfradrag.
                   {netDiff > 0
-                    ? ' (Din netto er højere end forudsagt — tjek pension/trækprocent.)'
-                    : ' (Din netto er lavere end forudsagt — der er sandsynligvis ekstra fradrag.)'}
+                    ? ' (Din netto er højere end forudsagt - tjek pension/trækprocent.)'
+                    : ' (Din netto er lavere end forudsagt - der er sandsynligvis ekstra fradrag.)'}
                 </p>
               )
             )}

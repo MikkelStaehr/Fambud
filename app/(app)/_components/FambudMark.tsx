@@ -1,10 +1,10 @@
-// Fambud wordmark — Familie + Budget. Sat i ZT Nature Bold (loaded via
+// Fambud wordmark - Familie + Budget. Sat i ZT Nature Bold (loaded via
 // next/font/local i app/fonts.ts) i én farve. Wordmark'et bærer brandet
 // alene gennem sin font-personlighed; brand-farverne lever i resten af
 // UI'et (CTAs, charts, badges).
 
 type Props = {
-  // Kontrol over størrelse — sidebar = base, marketing/auth = lg.
+  // Kontrol over størrelse - sidebar = base, marketing/auth = lg.
   size?: 'sm' | 'base' | 'lg';
   // Hvis brugt på mørk baggrund (fx hero), vendes farven til hvid.
   inverted?: boolean;

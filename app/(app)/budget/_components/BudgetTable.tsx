@@ -1,6 +1,6 @@
 'use client';
 
-// Budget-overblik som hierarkisk tabel — udgifter er grupperet på kategori-
+// Budget-overblik som hierarkisk tabel - udgifter er grupperet på kategori-
 // gruppe (Bolig & lån, Forsyning & forsikring, …) og hver gruppe er en
 // sammenklappelig parent-række. Default: grupperne er foldet sammen så
 // brugeren ser 9 totaler i stedet for 30 enkelt-poster. "Fold alt ud"-knap
@@ -27,7 +27,7 @@ export type BudgetRow = {
   accountName: string;
   isShared: boolean;
   effective: number;     // base + components, faktisk debitering
-  monthly: number;       // monthlyEquivalent — bruges til sortering & total
+  monthly: number;       // monthlyEquivalent - bruges til sortering & total
 };
 
 type SortKey = 'monthly' | 'name' | 'recurrence' | 'account';
@@ -39,7 +39,7 @@ type Props = {
 };
 
 export function BudgetTable({ rows }: Props) {
-  // Scope-toggle (Fælles / Private) er primær — matcher dashboardets
+  // Scope-toggle (Fælles / Private) er primær - matcher dashboardets
   // CategoryGroupChart + UpcomingEvents. Default 'shared' så folk lander
   // på fælles-økonomien som er den oftest interessante for husstanden.
   const [scope, setScope] = useState<ScopeTab>('shared');
@@ -51,7 +51,7 @@ export function BudgetTable({ rows }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [expanded, setExpanded] = useState<Set<CategoryGroup>>(new Set());
 
-  // Filtrér rækkerne ned til den valgte scope FØR alt andet — alle
+  // Filtrér rækkerne ned til den valgte scope FØR alt andet - alle
   // efterfølgende dropdowns og memos ser kun rows i det aktive scope.
   const scopeRows = useMemo(
     () => rows.filter((r) => (scope === 'shared' ? r.isShared : !r.isShared)),
@@ -59,7 +59,7 @@ export function BudgetTable({ rows }: Props) {
   );
 
   // Unikke værdier til filter-dropdowns. Vi viser kun værdier der faktisk
-  // optræder i det aktive scope — så fx Underholdning ikke står som tom
+  // optræder i det aktive scope - så fx Underholdning ikke står som tom
   // option hvis ingen private udgifter er i den gruppe.
   const accounts = useMemo(() => {
     const seen = new Map<string, string>();
@@ -107,7 +107,7 @@ export function BudgetTable({ rows }: Props) {
 
   // Grupper rækker pr. gruppe og beregn totaler. Child-rækker sorteres
   // efter den valgte sort-key. Selve grupperne sorteres altid efter total
-  // monthly desc — det er det mest naturlige overblik (de største poster
+  // monthly desc - det er det mest naturlige overblik (de største poster
   // øverst), uafhængigt af hvad child-sortering er sat til.
   const grouped = useMemo(() => {
     const map = new Map<CategoryGroup, BudgetRow[]>();
@@ -135,7 +135,7 @@ export function BudgetTable({ rows }: Props) {
       const sorted = [...items].sort(sortChildren);
       return { group, color, total, items: sorted };
     });
-    // Grupper altid sorteret efter total desc — overblik prioriterer størrelse.
+    // Grupper altid sorteret efter total desc - overblik prioriterer størrelse.
     groups.sort((a, b) => b.total - a.total);
     return groups;
   }, [filtered, sortKey, sortDir]);
@@ -173,7 +173,7 @@ export function BudgetTable({ rows }: Props) {
   const sortIndicator = (key: SortKey) =>
     sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '';
 
-  // Når brugeren skifter scope nulstiller vi sekundære filtre — ellers
+  // Når brugeren skifter scope nulstiller vi sekundære filtre - ellers
   // risikerer man at filtrere på en privat konto, skifte til Fælles og
   // ende med et tomt resultat-set uden synlig grund.
   const switchScope = (next: ScopeTab) => {
@@ -186,7 +186,7 @@ export function BudgetTable({ rows }: Props) {
     setExpanded(new Set());
   };
 
-  // Total for hele scopet (uafhængigt af aktive filtre) — vises på tab'en
+  // Total for hele scopet (uafhængigt af aktive filtre) - vises på tab'en
   // så brugeren ser fælles vs. private totaler uden at skulle klikke.
   const sharedTotal = useMemo(
     () =>
@@ -205,7 +205,7 @@ export function BudgetTable({ rows }: Props) {
 
   return (
     <div>
-      {/* Scope-tab — Fælles / Private. Matcher dashboardets toggle. */}
+      {/* Scope-tab - Fælles / Private. Matcher dashboardets toggle. */}
       <div className="mb-4 inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
         <button
           type="button"
@@ -358,7 +358,7 @@ export function BudgetTable({ rows }: Props) {
                 const interactive = !hasActiveFilters; // når filtre er aktive er rækken altid foldet ud
                 return (
                   <tbody key={g.group} className="border-b border-neutral-100 last:border-b-0">
-                    {/* Parent-række — gruppe-header */}
+                    {/* Parent-række - gruppe-header */}
                     <tr
                       className={`bg-neutral-50/60 transition ${
                         interactive ? 'cursor-pointer hover:bg-neutral-100/70' : ''
@@ -398,7 +398,7 @@ export function BudgetTable({ rows }: Props) {
                       </td>
                     </tr>
 
-                    {/* Child-rækker — udgifter under gruppen */}
+                    {/* Child-rækker - udgifter under gruppen */}
                     {open &&
                       g.items.map((r) => (
                         <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50">

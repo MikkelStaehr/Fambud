@@ -1,7 +1,7 @@
 -- ============================================================================
--- 0016 — Optional gross-salary + pension percentages on income transactions
+-- 0016 - Optional gross-salary + pension percentages on income transactions
 -- ----------------------------------------------------------------------------
--- transactions.amount stays the cashflow amount — what actually lands on the
+-- transactions.amount stays the cashflow amount - what actually lands on the
 -- account (typically nettoløn for income transactions). We add three optional
 -- companion fields that turn an income row into a full salary picture:
 --
@@ -15,7 +15,7 @@
 --   pension_employer_pct Employer contribution as % of gross. e.g. 10 = 10%.
 --
 -- Only meaningful for income transactions (category.kind = 'income'), but we
--- don't enforce that at the schema level — same pattern as group_label, which
+-- don't enforce that at the schema level - same pattern as group_label, which
 -- could theoretically apply to anything but in practice doesn't.
 --
 -- A later milestone (forsikrings-/pensionstjek) will read these fields to

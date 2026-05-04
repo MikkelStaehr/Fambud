@@ -1,6 +1,6 @@
 'use client';
 
-// "Næste 7 dage" — kompakt liste af kommende regninger og overførsler i den
+// "Næste 7 dage" - kompakt liste af kommende regninger og overførsler i den
 // nære fremtid. Komplementerer cashflow-tjekket: hvor advisoren siger "din
 // fælles-konto er underdækket på den lange bane", siger denne sektion "her
 // er hvad der konkret rammer din konto i denne uge".
@@ -66,7 +66,7 @@ export function UpcomingEvents({ events }: Props) {
         )}
       </div>
 
-      {/* Tab toggle — fælles / privat (default fælles, matcher kategori-chart) */}
+      {/* Tab toggle - fælles / privat (default fælles, matcher kategori-chart) */}
       <div className="mb-3 inline-flex shrink-0 rounded-md border border-neutral-200 p-0.5 text-xs">
         <button
           type="button"

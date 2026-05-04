@@ -15,7 +15,7 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           // Inside Server Components Next forbids cookie writes. We swallow
-          // the error — the proxy refreshes session cookies on every request,
+          // the error - the proxy refreshes session cookies on every request,
           // so missed writes here are recovered on the next round-trip.
           try {
             const sessionOnly = cookieStore.get(SESSION_ONLY_COOKIE)?.value === '1';

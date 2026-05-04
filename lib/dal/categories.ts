@@ -1,4 +1,4 @@
-// Categories — income/expense-tags på transactions. Husstanden har sit eget
+// Categories - income/expense-tags på transactions. Husstanden har sit eget
 // sæt; den unikke (household_id, name, kind) constraint fra migration 0008
 // tillader en race-safe upsert af standard-kategorierne via on-conflict.
 
@@ -34,7 +34,7 @@ export async function getCategoryById(id: string): Promise<Category> {
 // tabs, RSC streaming) can't end up creating duplicate rows. Relies on the
 // (household_id, name, kind) unique constraint added in migration 0008.
 //
-// ignoreDuplicates means: if the row already exists, do nothing — including
+// ignoreDuplicates means: if the row already exists, do nothing - including
 // not overwriting any colour the user may have customised in /indstillinger.
 export async function ensureStandardExpenseCategories() {
   const { supabase, householdId } = await getHouseholdContext();

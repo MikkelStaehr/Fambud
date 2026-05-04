@@ -6,7 +6,7 @@
 // The list mixes "shared-context" categories (Bolig, Forsyning, …) and
 // "private-context" categories (Træning, A-kasse, Privat forsikring, …).
 // The /budget step uses PRIVATE_ONLY_CATEGORY_NAMES below to hide the
-// private ones from shared accounts (Budgetkonto, Husholdningskonto) —
+// private ones from shared accounts (Budgetkonto, Husholdningskonto) -
 // those would feel out of place in a "fælles husleje"-context.
 export const STANDARD_EXPENSE_CATEGORIES = [
   // Shared/fixed-expense categories
@@ -20,7 +20,7 @@ export const STANDARD_EXPENSE_CATEGORIES = [
   { name: 'Bil',               color: '#475569' }, // service, vægtafgift, syn, dæk
   { name: 'Institution',       color: '#eab308' }, // børnehave, SFO, daginstitution
   { name: 'Mad',               color: '#16a34a' }, // dagligvarer, restaurant
-  // Private-context categories — typically only relevant on a personal account
+  // Private-context categories - typically only relevant on a personal account
   { name: 'A-kasse & Fagforening', color: '#0ea5e9' }, // bundlet kontingent
   { name: 'Privat forsikring',     color: '#b91c1c' }, // ulykke, liv, sundhed
   { name: 'Træning',           color: '#be185d' }, // fitness, klub, holdsport
@@ -33,8 +33,8 @@ export const STANDARD_EXPENSE_CATEGORIES = [
 ] as const;
 
 // Categories we hide from shared-account dropdowns (Budgetkonto,
-// Husholdningskonto). They stay in the database — Mikkel's Træning-udgift
-// shouldn't disappear if he later shares a Budgetkonto with someone else —
+// Husholdningskonto). They stay in the database - Mikkel's Træning-udgift
+// shouldn't disappear if he later shares a Budgetkonto with someone else -
 // they just don't show up in the picker for shared contexts.
 export const PRIVATE_ONLY_CATEGORY_NAMES: ReadonlySet<string> = new Set([
   'A-kasse & Fagforening',
@@ -52,7 +52,7 @@ export const PRIVATE_ONLY_CATEGORY_NAMES: ReadonlySet<string> = new Set([
 // børn, …) og hver gruppe har en stabil farve uafhængig af hvilke
 // underkategorier der er aktive denne måned.
 //
-// Mapping er forbunden via kategori-NAVN — det er stabilt nok til formålet
+// Mapping er forbunden via kategori-NAVN - det er stabilt nok til formålet
 // (alle standard-kategorier følger STANDARD_EXPENSE_CATEGORIES) og kategorier
 // brugeren selv opretter falder ned i 'Andet'.
 export type CategoryGroup =

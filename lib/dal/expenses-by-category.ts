@@ -1,4 +1,4 @@
-// Pr.-kategori og top-N — bruges af dashboardets charts.
+// Pr.-kategori og top-N - bruges af dashboardets charts.
 //
 // Alle tre helpers læser den samme transactions-baseline (recurring,
 // kategori=expense, normaliseret til monthlyEquivalent) men aggregerer
@@ -14,7 +14,7 @@ import {
 } from '@/lib/categories';
 import { getHouseholdContext } from './auth';
 
-// "Hvor går pengene hen?" — pr.-kategori-fordeling af alle faste udgifter
+// "Hvor går pengene hen?" - pr.-kategori-fordeling af alle faste udgifter
 // (recurring), normaliseret til månedligt beløb. Bruges af dashboardets
 // kategori-graf og er bevidst steady-state (monthlyEquivalent) i stedet for
 // "denne måneds bogførte poster" så folk kan se den gennemsnitlige
@@ -59,7 +59,7 @@ export async function getMonthlyExpensesByCategory(): Promise<CategoryExpenseSum
   return Array.from(map.values()).sort((a, b) => b.monthly - a.monthly);
 }
 
-// "Udgifter pr. gruppe" — samme data som getMonthlyExpensesByCategory, men
+// "Udgifter pr. gruppe" - samme data som getMonthlyExpensesByCategory, men
 // rullet op til de tematiske kategori-grupper (Bolig & lån, Transport, Børn …)
 // og opdelt på private vs. fælles konti. Splittet sker ved konto-ejerskab:
 // `accounts.owner_name === 'Fælles'` → fælles, alt andet → privat.
@@ -121,7 +121,7 @@ export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> 
 }
 
 // Top-N største enkelt-udgifter normaliseret til månedlig sats. Praktisk på
-// dashboardet til "hvor er de store sten?" — typisk husleje, lån, afdragene.
+// dashboardet til "hvor er de store sten?" - typisk husleje, lån, afdragene.
 export type TopExpenseRow = {
   id: string;
   description: string | null;

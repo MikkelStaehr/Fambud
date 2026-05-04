@@ -1,4 +1,4 @@
-// Transfers — penge-overførsler mellem to konti i samme husstand. To FK'er
+// Transfers - penge-overførsler mellem to konti i samme husstand. To FK'er
 // peger til `accounts` (from + to), så queries skal disambiguere via
 // kolonnenavn fremfor constraint-navn (mere robust mod auto-genererede
 // Postgres-navne).
@@ -50,7 +50,7 @@ export async function getTransferById(id: string): Promise<Transfer> {
 }
 
 // ----------------------------------------------------------------------------
-// Transfer graph — datamodel for /overforsler graf-visning
+// Transfer graph - datamodel for /overforsler graf-visning
 // ----------------------------------------------------------------------------
 // Hvor cashflow-grafen på dashboard viser HELE flowet (income → konti →
 // expense), er denne fokuseret KUN på de kant-til-kant overførsler mellem
@@ -59,7 +59,7 @@ export async function getTransferById(id: string): Promise<Transfer> {
 // for at redigere den.
 //
 // Vi inkluderer engangs-overførsler ('once') i modsætning til dashboard-
-// grafen — på /overforsler er hver enkelt overførsel relevant, også
+// grafen - på /overforsler er hver enkelt overførsel relevant, også
 // engangs-poster.
 type TransferEdge = {
   from: string;            // from_account_id

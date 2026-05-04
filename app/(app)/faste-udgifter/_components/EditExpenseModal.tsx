@@ -19,7 +19,7 @@ const labelClass = 'block text-xs font-medium text-neutral-600';
 // dropdown and adjusts the next-occurrence date directly. We don't store
 // the day-rule in the schema yet, so reconstructing the full add-form state
 // for editing isn't possible without losing fidelity. This is a pragmatic
-// tradeoff — re-creating the expense is the path for changing the rule.
+// tradeoff - re-creating the expense is the path for changing the rule.
 const RECURRENCE_OPTIONS: { value: RecurrenceFreq; label: string }[] = [
   { value: 'monthly', label: RECURRENCE_LABEL_DA.monthly },
   { value: 'quarterly', label: RECURRENCE_LABEL_DA.quarterly },
@@ -54,7 +54,7 @@ export function EditExpenseModal({
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Bumped each time the dialog opens so the form remounts with fresh
-  // defaultValues — without this, an aborted edit (close without save)
+  // defaultValues - without this, an aborted edit (close without save)
   // would persist the unsaved input values into the next open.
   const [openCount, setOpenCount] = useState(0);
 

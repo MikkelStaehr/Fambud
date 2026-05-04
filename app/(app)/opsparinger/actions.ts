@@ -35,7 +35,7 @@ export async function addPredictableEstimate(formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  // Append to end. Position-baseret ordering — samme pattern som
+  // Append to end. Position-baseret ordering - samme pattern som
   // family_members og transaction_components.
   const { data: last } = await supabase
     .from('predictable_estimates')
@@ -105,7 +105,7 @@ export async function deletePredictableEstimate(formData: FormData) {
   revalidatePath('/opsparinger');
 }
 
-// Seed default-kategorier. Skal kun køre én gang — kaldes fra "Brug forslag"-
+// Seed default-kategorier. Skal kun køre én gang - kaldes fra "Brug forslag"-
 // knappen når listen er tom. Hvis brugeren har slettet alle og trykker igen,
 // får de defaults tilbage (det er fint, det er bare hjælpe-rækker).
 export async function seedDefaultEstimates() {

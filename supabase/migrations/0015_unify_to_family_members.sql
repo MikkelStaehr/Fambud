@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0015 — Single source of truth: drop household_members, extend family_members
+-- 0015 - Single source of truth: drop household_members, extend family_members
 -- ----------------------------------------------------------------------------
 -- Today we have two parallel concepts of "person":
 --   - household_members: auth users that can log in (Mikkel, Louise)
@@ -14,7 +14,7 @@
 -- This migration unifies them. After it runs:
 --   - family_members is the only "person" table.
 --   - A row with user_id IS NOT NULL is a logged-in member.
---   - A row with user_id IS NULL and email IS NOT NULL is pre-approved —
+--   - A row with user_id IS NULL and email IS NOT NULL is pre-approved -
 --     the signup trigger claims it on auth.user creation.
 --   - A row with both NULL is a dependent (Theo): just a tag for expenses.
 --   - household_members is dropped.
@@ -50,7 +50,7 @@ alter table family_members
 create unique index if not exists family_members_user_id_unique
   on family_members(user_id) where user_id is not null;
 
--- Email pre-approval must be globally unique — when an auth.users row is
+-- Email pre-approval must be globally unique - when an auth.users row is
 -- created with email X, the trigger needs an unambiguous family_member to
 -- claim. citext makes this case-insensitive.
 create unique index if not exists family_members_email_unique
@@ -67,7 +67,7 @@ create unique index if not exists family_members_email_unique
 --       row is immediately recognisable in the UI.
 --
 -- We do NOT try to fuzzy-match an existing family_member with user_id=NULL
--- by name — too fragile. After this migration, if you had manually added
+-- by name - too fragile. After this migration, if you had manually added
 -- yourself with user_id=NULL, you'll see a duplicate in /indstillinger.
 -- Delete the orphan one (the one without "Kan logge ind"-status); any
 -- expense tags on it can be re-pointed in a single click.
@@ -143,7 +143,7 @@ as $$
 $$;
 
 -- ----------------------------------------------------------------------------
--- 4. Rewrite handle_new_user() — adds the email-preapproval path
+-- 4. Rewrite handle_new_user() - adds the email-preapproval path
 -- ----------------------------------------------------------------------------
 -- Order of precedence at signup time:
 --   1. invite_code in raw_user_meta_data → join that household, mark code used
@@ -252,11 +252,11 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 5. Rewrite get_household_members() — only return rows that have a login
+-- 5. Rewrite get_household_members() - only return rows that have a login
 -- ----------------------------------------------------------------------------
 -- The /indstillinger "members" section in the new UI will pull all
 -- family_members directly via RLS. This RPC is kept for callers that still
--- want the auth-joined view (email + role) — limited to logins.
+-- want the auth-joined view (email + role) - limited to logins.
 -- ----------------------------------------------------------------------------
 create or replace function public.get_household_members(hid uuid)
 returns table (user_id uuid, email text, role text, joined_at timestamptz)

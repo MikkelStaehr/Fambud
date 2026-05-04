@@ -18,7 +18,7 @@ const labelClass = 'block text-xs font-medium text-neutral-600';
 type SharedKind = 'budget' | 'household' | 'savings' | 'other';
 
 const TYPES: { value: SharedKind; label: string; desc: string; Icon: LucideIcon }[] = [
-  { value: 'budget',    label: 'Budgetkonto',       desc: 'Faste regninger — husleje, el, forsikringer.', Icon: Wallet },
+  { value: 'budget',    label: 'Budgetkonto',       desc: 'Faste regninger - husleje, el, forsikringer.', Icon: Wallet },
   { value: 'household', label: 'Husholdningskonto', desc: 'Den I bruger til daglige indkøb.',               Icon: ShoppingCart },
   { value: 'savings',   label: 'Opsparing',         desc: 'Fælles opsparing til ferie, bil, kommende køb.',  Icon: PiggyBank },
   { value: 'other',     label: 'Anden',             desc: 'Hvad der ellers er fælles.',                       Icon: Circle },

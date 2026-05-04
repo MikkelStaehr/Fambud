@@ -57,7 +57,7 @@ export function PredictableCard({ account, estimates }: Props) {
         ) : (
           <p className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-3 text-[11px] text-neutral-600">
             Sæt jeres egne kategorier op for at få et konkret månedligt
-            beløb — hvad bruger I om året på gaver, tandlæge, bilvedligehold
+            beløb - hvad bruger I om året på gaver, tandlæge, bilvedligehold
             og lignende?
           </p>
         )}
@@ -75,7 +75,7 @@ export function PredictableCard({ account, estimates }: Props) {
           </p>
         )}
 
-        {/* CTA til detail-siden hvor selve værktøjet bor — hold oversigten
+        {/* CTA til detail-siden hvor selve værktøjet bor - hold oversigten
             ren. Tekst skifter alt efter om brugeren har sat noget op. */}
         <Link
           href="/opsparinger/forudsigelige"

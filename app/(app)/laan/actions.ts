@@ -71,7 +71,7 @@ function readLoanForm(formData: FormData):
 
   // opening_balance on a loan account is restgæld stored as a negative number
   // (consistent with how credit-cards and the rest of the app treat debt as
-  // signed bigint). Users routinely type the positive number — we auto-negate
+  // signed bigint). Users routinely type the positive number - we auto-negate
   // so they don't have to remember the convention.
   const balanceRaw = String(formData.get('opening_balance') ?? '').trim();
   let opening_balance = 0;
@@ -118,7 +118,7 @@ function readLoanForm(formData: FormData):
     'Bidrag'
   );
   if (!bidrag.ok) return { error: bidrag.error };
-  // Rabat (KundeKroner) er negativ — derfor allowNegative.
+  // Rabat (KundeKroner) er negativ - derfor allowNegative.
   const rabat = parseOptionalAmount(
     String(formData.get('payment_rabat') ?? ''),
     'Rabat',
@@ -127,7 +127,7 @@ function readLoanForm(formData: FormData):
   if (!rabat.ok) return { error: rabat.error };
 
   // Auto-compute payment_amount from breakdown if user didn't enter it
-  // explicitly but did fill the breakdown — saves them from typing the sum.
+  // explicitly but did fill the breakdown - saves them from typing the sum.
   let payment_amount = payment.value;
   const anyBreakdown =
     rente.value != null || afdrag.value != null || bidrag.value != null || rabat.value != null;
@@ -229,7 +229,7 @@ export async function deleteLoan(formData: FormData) {
   redirect(noticeUrl('/laan', 'Lån slettet'));
 }
 
-// "Tilføj som ydelse på Budgetkonto X" — creates a recurring expense on
+// "Tilføj som ydelse på Budgetkonto X" - creates a recurring expense on
 // `account_id` mirroring the loan's payment_amount + interval, with the
 // loan's name as the description. Categorised under 'Lån' (created on demand
 // if missing, same idempotent pattern as 'Løn' for income).
@@ -317,7 +317,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       // components can naturally sum to the parent total.
       components.push({ label: 'Rabat', amount: loan.payment_rabat, position: pos++ });
   } else if (loan.interest_rate != null && loan.opening_balance < 0) {
-    // No explicit breakdown but we have rente% + restgæld — derive a rente
+    // No explicit breakdown but we have rente% + restgæld - derive a rente
     // estimate so the budget shows where the cashflow goes. Most users
     // forget to count rente when laying out their budget, which is exactly
     // where this should help. The derived split is a snapshot of the FIRST
@@ -384,7 +384,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
 
   // Look up the budget account's name so we can show a confirmation toast
   // on redirect ("Tilføjet på X"). Cheap one-row read; failure is non-fatal
-  // — we just fall back to a generic message.
+  // - we just fall back to a generic message.
   const { data: targetAccount } = await supabase
     .from('accounts')
     .select('name')

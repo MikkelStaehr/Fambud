@@ -1,8 +1,8 @@
-// Advisor-context — udvider getCashflowGraph med data CashflowAdvisor skal
+// Advisor-context - udvider getCashflowGraph med data CashflowAdvisor skal
 // bruge for at lave per-bruger-forslag på fælles-konti.
 //
 // Når en fælles-konto er underdækket, skal forslaget kun adressere DEN
-// indloggede brugers manglende andel — ikke det fulde underskud. Det
+// indloggede brugers manglende andel - ikke det fulde underskud. Det
 // kræver at vi ved:
 //   1. Hvem har bidraget til kontoen (transfers grupperet efter
 //      from_account.created_by)
@@ -91,7 +91,7 @@ export async function getAdvisorContext(): Promise<AdvisorContext> {
 
   // Antal forventede bidragsydere: alle family_members der enten ER
   // logget-ind eller er pre-godkendt via email. Børn (begge null) tælles
-  // ikke med — de bidrager ikke økonomisk.
+  // ikke med - de bidrager ikke økonomisk.
   const contributors = (familyRes.data ?? []).filter(
     (fm) => fm.user_id != null || fm.email != null
   );

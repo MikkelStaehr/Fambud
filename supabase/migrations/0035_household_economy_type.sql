@@ -5,10 +5,10 @@
 --                         for delte regninger. Mest almindelige model.
 --   'shared'             : begge lønninger lander på én Fælles Lønkonto.
 --                          Indkomst registreres stadig pr. person (samme
---                          paycheck-forecast-mekanik) — det er bare kontoen
+--                          paycheck-forecast-mekanik) - det er bare kontoen
 --                          der er pooled.
 --
--- Solo-husstande behøver ikke flag'et — der er kun ét valg. For dem holder
+-- Solo-husstande behøver ikke flag'et - der er kun ét valg. For dem holder
 -- vi 'separate' som default. Wizarden viser kun valget for familier.
 --
 -- Skift mellem typer er ikke understøttet UI-mæssigt: hvis brugeren senere

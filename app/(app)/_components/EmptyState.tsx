@@ -1,5 +1,5 @@
 // Genbrugelig empty-state til lister og oversigter. Tre forskellige stilarter
-// var i brug rundt om i appen før dette blev introduceret — auditten i
+// var i brug rundt om i appen før dette blev introduceret - auditten i
 // DEVLOG.md (28. apr-pass) identificerede dem som "Stil A/B/C". Dette er
 // kanonen: dashed border, centreret tekst, valgfri CTA-knap eller -link.
 //

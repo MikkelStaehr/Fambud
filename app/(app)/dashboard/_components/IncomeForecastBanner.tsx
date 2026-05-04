@@ -1,7 +1,7 @@
 // Banner på dashboard der opfordrer brugeren til at registrere flere
 // lønudbetalinger hvis nogen family_member med primary_income_source='salary'
 // endnu ikke har 3 logged paychecks. Bliver først meningsfuldt visuelt
-// fokus, og forsvinder helt så snart alle har nok data — så det føles ikke
+// fokus, og forsvinder helt så snart alle har nok data - så det føles ikke
 // som permanent støj.
 
 import Link from 'next/link';
@@ -13,7 +13,7 @@ import { InfoTooltip } from '@/app/_components/InfoTooltip';
 export async function IncomeForecastBanner() {
   const members = await getFamilyMembers();
 
-  // Hent kun forecasts for personer der har 'salary' som primær kilde —
+  // Hent kun forecasts for personer der har 'salary' som primær kilde -
   // ydelses-folk og u-klassificerede behøver ikke status-tjekket her.
   const salaryMembers = members.filter((m) => m.primary_income_source === 'salary');
   if (salaryMembers.length === 0) return null;
@@ -28,7 +28,7 @@ export async function IncomeForecastBanner() {
   const insufficient = forecasts.filter((f) => f.forecast.status === 'insufficient');
   const ready = forecasts.filter((f) => f.forecast.status === 'ready');
 
-  // Helt dækket — ingen banner.
+  // Helt dækket - ingen banner.
   if (insufficient.length === 0) return null;
 
   // Den første som mangler får sit "registrer"-link prefilled. De andre
@@ -47,14 +47,14 @@ export async function IncomeForecastBanner() {
           <InfoTooltip>
             Forecast = gennemsnit af de 3 seneste lønudbetalinger pr.
             person. Fanger udsving fra overtid, ferietillæg og bonus så
-            HeroStatus + cashflow viser hvad I faktisk får — ikke en
+            HeroStatus + cashflow viser hvad I faktisk får - ikke en
             idealiseret basisløn. Med 1-2 paychecks bruger vi gennemsnittet
             af det vi har; med 3+ er det præcist.
           </InfoTooltip>
         </div>
         <p className="mt-0.5 text-sm text-emerald-800">
           Vi beregner et månedligt forecast ud fra de seneste 3 lønudbetalinger.
-          Tre tal fanger udsving fra overtid, ferietillæg og bonus — så
+          Tre tal fanger udsving fra overtid, ferietillæg og bonus - så
           dashboardet viser hvad I faktisk får, ikke en idealiseret basisløn.
         </p>
         <ul className="mt-2 space-y-0.5 text-xs text-emerald-800">
@@ -74,7 +74,7 @@ export async function IncomeForecastBanner() {
             </li>
           ))}
           {/* Marker readyness eksplicit hvis alle var ready (vi viser banneret
-              kun når mindst én er insufficient — denne sti rammes ikke,
+              kun når mindst én er insufficient - denne sti rammes ikke,
               men den holder logikken læselig). */}
           {ready.length > 0 && insufficient.length === 0 && (
             <li className="text-emerald-700">Forecast er klar for alle.</li>

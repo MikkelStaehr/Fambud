@@ -142,7 +142,7 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
             onChange={(e) => setInvestmentType(e.target.value as InvestmentType | '')}
             className={fieldClass}
           >
-            <option value="">— Vælg type —</option>
+            <option value="">- Vælg type -</option>
             {INVESTMENT_TYPE_ORDER.map((t) => (
               <option key={t} value={t}>
                 {INVESTMENT_TYPE_LABEL_DA[t]}
@@ -158,7 +158,7 @@ export function AccountForm({ action, defaultValues = {}, submitLabel, cancelHre
       {showSavingsPurpose && (
         <div>
           <span className={labelClass}>
-            Specialfunktion <span className="text-neutral-400">(valgfrit — vælg én eller begge)</span>
+            Specialfunktion <span className="text-neutral-400">(valgfrit - vælg én eller begge)</span>
           </span>
           <div className="mt-2 space-y-2">
             {SAVINGS_PURPOSE_ORDER.map((p) => {

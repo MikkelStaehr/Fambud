@@ -1,7 +1,7 @@
 // Accounts CRUD + flow-aggregation pr. konto. Domænet dækker både den
 // almindelige konto-liste (/konti) og specialiserede views (/budget,
 // /opsparinger). Lån (kind='credit') hører til loans.ts og er bevidst
-// EKSKLUDERET fra alle helpers her — /laan har sin egen flow.
+// EKSKLUDERET fra alle helpers her - /laan har sin egen flow.
 
 import type { Account, AccountKind, RecurrenceFreq } from '@/lib/database.types';
 import { effectiveAmount, monthlyEquivalent } from '@/lib/format';
@@ -33,7 +33,7 @@ export async function getAccountById(id: string): Promise<Account> {
 // Steady-state cashflow per account in monthly øre. "in" tæller penge der
 // ankommer på kontoen (income-transaktioner + indgående overførsler) og
 // "out" tæller penge der forlader kontoen (expense-transaktioner + udgående
-// overførsler). Engangs-poster ('once') tælles ikke med — vi vil have det
+// overførsler). Engangs-poster ('once') tælles ikke med - vi vil have det
 // stabile billede, ikke en bestemt måneds tilfældigheder.
 //
 // Bruges af /konti til at erstatte den misvisende opening_balance-saldo med
@@ -93,19 +93,19 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
 }
 
 // ----------------------------------------------------------------------------
-// Budget-kategorisering — hvilke kinds der hører i hver "bucket"
+// Budget-kategorisering - hvilke kinds der hører i hver "bucket"
 // ----------------------------------------------------------------------------
 // Account kinds we surface i /budget. Excludes:
 //   - 'household': har sin egen side (/husholdning) til daily-spend tracking
 //   - 'savings'/'investment': vises som "Opsparinger & buffer"-sektion på
-//     /budget — de modtager indskud, ikke udgifter
-//   - 'credit': payments go TO, not FROM — håndteres på /laan
+//     /budget - de modtager indskud, ikke udgifter
+//   - 'credit': payments go TO, not FROM - håndteres på /laan
 //   - 'cash': sjælden
 // Brugere der alligevel vil registrere udgifter på en af de udelukkede
 // kinds kan bruge /poster direkte.
 export const BUDGET_ACCOUNT_KINDS: AccountKind[] = ['checking', 'budget', 'other'];
 
-// Kinds vi viser i "Opsparinger & buffer"-sektionen — det er konti man
+// Kinds vi viser i "Opsparinger & buffer"-sektionen - det er konti man
 // IKKE bruger fra, men overfører TIL. Sektionen hjælper brugeren se hvilke
 // konti der mangler en månedlig overførsel.
 export const SAVINGS_ACCOUNT_KINDS: AccountKind[] = ['savings', 'investment'];

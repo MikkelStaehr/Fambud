@@ -1,4 +1,4 @@
-// Income — convenience wrappers around income-category transactions samt
+// Income - convenience wrappers around income-category transactions samt
 // hovedindkomst-forecast. We treat any transaction whose category.kind =
 // 'income' as income; /indkomst-siden filtrerer og dekorerer med family-
 // member tags og valgfri brutto/pension-felter.
@@ -38,7 +38,7 @@ const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_
 
 export async function getIncomeTransactions(): Promise<IncomeRow[]> {
   const { supabase, householdId } = await getHouseholdContext();
-  // !inner makes this filter via a join — PostgREST only allows filtering
+  // !inner makes this filter via a join - PostgREST only allows filtering
   // through joined columns when the join is inner.
   const { data, error } = await supabase
     .from('transactions')
@@ -50,7 +50,7 @@ export async function getIncomeTransactions(): Promise<IncomeRow[]> {
     .returns<(IncomeRow & { category: { kind: 'income' } })[]>();
 
   if (error) throw error;
-  // Strip the join-only `category` field — callers don't need it.
+  // Strip the join-only `category` field - callers don't need it.
   return (data ?? []).map(({ category: _c, ...rest }) => rest);
 }
 
@@ -66,7 +66,7 @@ export async function getIncomeById(id: string): Promise<IncomeRow> {
   return data;
 }
 
-// "Min seneste lønudbetaling" — bruges til at pre-fylde formen for nye
+// "Min seneste lønudbetaling" - bruges til at pre-fylde formen for nye
 // paychecks. Brutto, pension-procent, trækprocent, skattefradrag og konto
 // ændrer sig sjældent; ved at hente dem fra sidste udbetaling sparer vi
 // brugeren for at indtaste dem hver måned. Den ene ting der typisk varierer
@@ -101,19 +101,19 @@ export async function getMostRecentPaycheck(
 }
 
 // ----------------------------------------------------------------------------
-// Hovedindkomst-forecast — gennemsnit af de seneste N lønudbetalinger
+// Hovedindkomst-forecast - gennemsnit af de seneste N lønudbetalinger
 // ----------------------------------------------------------------------------
 // I stedet for at lade brugeren gætte "ca. så meget tjener jeg pr. md", lader
 // vi dem registrere faktiske udbetalinger som 'once'-transaktioner med
 // fuldt brutto/fradrag/pension/netto-breakdown. Når vi har 3+ logged
 // paychecks beregner vi et glidende gennemsnit til at forudsige resten af
-// året — og fanger dermed automatisk variansen i overtid, bonus og
+// året - og fanger dermed automatisk variansen i overtid, bonus og
 // ferietillæg uden at brugeren behøver vedligeholde et manuelt skøn.
 //
 // status:
-//   'insufficient' — færre end 3 udbetalinger registreret. Forecast kan
+//   'insufficient' - færre end 3 udbetalinger registreret. Forecast kan
 //     ikke beregnes; UI skal vise "log flere lønsedler"-CTA.
-//   'ready' — mindst 3 udbetalinger; gennemsnit er pålideligt nok til
+//   'ready' - mindst 3 udbetalinger; gennemsnit er pålideligt nok til
 //     forecast.
 export type PaycheckSample = {
   id: string;
@@ -169,7 +169,7 @@ export async function getPrimaryIncomeForecast(
     samples.reduce((s, p) => s + p.amount, 0) / samples.length
   );
 
-  // Brutto-gennemsnit kun hvis ALLE samples har gross udfyldt — ellers
+  // Brutto-gennemsnit kun hvis ALLE samples har gross udfyldt - ellers
   // bliver gennemsnittet skævt af de manglende felter (regnet som 0).
   const allHaveGross = samples.every((p) => p.gross_amount != null);
   const monthlyGross = allHaveGross

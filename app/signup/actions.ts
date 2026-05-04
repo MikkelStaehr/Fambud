@@ -27,7 +27,7 @@ export async function signup(formData: FormData) {
   const inviteCode = String(formData.get('invite_code') ?? '').trim().toUpperCase();
 
   // When an invite code is in play, errors should land back on /join/[code]
-  // — that's the page the visitor is actually looking at.
+  // - that's the page the visitor is actually looking at.
   const errorBase = inviteCode ? `/join/${encodeURIComponent(inviteCode)}` : '/signup';
 
   if (!email || !password) {

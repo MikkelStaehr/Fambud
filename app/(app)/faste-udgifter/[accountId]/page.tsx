@@ -50,7 +50,7 @@ export default async function BudgetAccountPage({
   const idx = accounts.findIndex((a) => a.id === accountId);
   if (idx === -1) {
     // Husholdningskonto har sin egen side. Andre kind=savings/investment/credit
-    // havner også her — men /faste-udgifter overview viser dem som links der peger
+    // havner også her - men /faste-udgifter overview viser dem som links der peger
     // andre steder hen, så et direkte deep-link til /faste-udgifter/[savingsId] er
     // sjældent og bouncer bare tilbage til oversigten.
     const { supabase, householdId } = await getHouseholdContext();
@@ -107,7 +107,7 @@ export default async function BudgetAccountPage({
   // Per-month equivalent totals so we can compare across mixed recurrences
   // (yearly insurance + monthly subscription on the same line). Annual is
   // shown alongside as context. We use the effective amount (parent +
-  // additive components) — components are tilkøb stacked on top, not a
+  // additive components) - components are tilkøb stacked on top, not a
   // breakdown of parent.
   const accountMonthly = expenses.reduce(
     (sum, e) =>
@@ -149,7 +149,7 @@ export default async function BudgetAccountPage({
           {account.name}
         </h1>
 
-        {/* Konto-skifter — viser alle konti som tabs så brugeren ser hvor
+        {/* Konto-skifter - viser alle konti som tabs så brugeren ser hvor
             de kan tilføje udgifter uden at gå tilbage til /faste-udgifter.
             Vises kun når der ER andre konti at skifte til. */}
         {accounts.length > 1 && (
@@ -193,13 +193,13 @@ export default async function BudgetAccountPage({
           {isShared ? (
             <>
               Tilføj de <span className="font-medium">fælles</span> faste udgifter der
-              trækkes fra <span className="font-medium">{account.name}</span> — fx
+              trækkes fra <span className="font-medium">{account.name}</span> - fx
               husleje, forsyning, fælles abonnementer.
             </>
           ) : (
             <>
               Tilføj de <span className="font-medium">private</span> faste udgifter
-              der trækkes fra <span className="font-medium">{account.name}</span> —
+              der trækkes fra <span className="font-medium">{account.name}</span> -
               fx træning, eget abonnement, forsikringer du står alene for.
             </>
           )}
@@ -311,7 +311,7 @@ export default async function BudgetAccountPage({
 }
 
 // Foldable category group. Uses native <details>/<summary> so we don't need
-// client-side state or an "open"-tracking refactor — accessibility comes for
+// client-side state or an "open"-tracking refactor - accessibility comes for
 // free, and the chevron rotates via the `group-open:` Tailwind variant.
 function CategoryGroup({
   category,
@@ -439,7 +439,7 @@ function SubGroup({
   );
 
   return (
-    // Closed by default — the summary with running total is enough overview.
+    // Closed by default - the summary with running total is enough overview.
     // Stronger bg-tint contrasts with the white items inside when expanded,
     // making the parent/child relationship visible at a glance.
     <details className="group/sub border-b border-neutral-100 bg-neutral-100/70 last:border-b-0">
@@ -476,7 +476,7 @@ function SubGroup({
 }
 
 // Single expense row + its components + an inline form to add another
-// component. Components share the parent's recurrence and date — they're
+// component. Components share the parent's recurrence and date - they're
 // purely a breakdown of the parent amount.
 function ExpenseRow({
   expense,
@@ -556,7 +556,7 @@ function ExpenseRow({
         </div>
       </div>
 
-      {/* Components — indented breakdown of the parent amount. Each row is
+      {/* Components - indented breakdown of the parent amount. Each row is
           inline-editable via the ComponentRow client component. */}
       {hasComponents && (
         <ul className="mt-2 ml-3 space-y-1 border-l border-neutral-100 pl-3">
@@ -571,7 +571,7 @@ function ExpenseRow({
         </ul>
       )}
 
-      {/* Inline add-form via <details> — no client state needed. The form
+      {/* Inline add-form via <details> - no client state needed. The form
           re-keys on the component count so it resets after each submit. */}
       <details className="group/comp mt-2 ml-3">
         <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 [&::-webkit-details-marker]:hidden">

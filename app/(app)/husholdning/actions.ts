@@ -8,7 +8,7 @@ import { parseOptionalAmount, parseRequiredAmount } from '@/lib/format';
 // /husholdning er et forbrugsspor pr. husholdningskonto. Hvert "køb" er en
 // almindelig transaction med recurrence='once' på den valgte dato. Vi
 // kategoriserer dem under 'Husholdning' (auto-oprettet på første brug,
-// samme pattern som 'Lån' for loans og 'Løn' for indkomst) — så filtrering
+// samme pattern som 'Lån' for loans og 'Løn' for indkomst) - så filtrering
 // "vis mig al mad-spend" er let senere.
 
 async function getOrCreateHouseholdCategoryId(
@@ -30,7 +30,7 @@ async function getOrCreateHouseholdCategoryId(
       household_id: householdId,
       name: 'Husholdning',
       kind: 'expense',
-      // Samme grøn-tone som 'Mad' — visuelt aligneret men distinkt fra de
+      // Samme grøn-tone som 'Mad' - visuelt aligneret men distinkt fra de
       // restaurant-spend brugeren måske kategoriserer som 'Mad' separat.
       color: '#16a34a',
     })
@@ -91,7 +91,7 @@ export async function addHouseholdPurchase(
 }
 
 // Manuelt månedligt rådighedsbeløb. Gemmes på accounts.monthly_budget
-// (migration 0024). Beløbet er intent-baseret — det skal ikke nødvendigvis
+// (migration 0024). Beløbet er intent-baseret - det skal ikke nødvendigvis
 // matche de faktiske recurring transfers ind på kontoen.
 export async function setMonthlyBudget(
   accountId: string,
@@ -100,7 +100,7 @@ export async function setMonthlyBudget(
   if (!accountId) redirect('/husholdning');
 
   // Tomt felt = brugeren vil fjerne budgettet (null). Det betyder bare
-  // "intet budget sat" — siden falder tilbage til kun at vise spend.
+  // "intet budget sat" - siden falder tilbage til kun at vise spend.
   const amountRes = parseOptionalAmount(
     String(formData.get('amount') ?? ''),
     'Beløb'

@@ -1,5 +1,5 @@
-// /wizard/investering — Trin 5 i ejer-flowet. Aldersopsparing,
-// aktiesparekonto, aktiedepot og børneopsparing. Alle valgfri — bruger
+// /wizard/investering - Trin 5 i ejer-flowet. Aldersopsparing,
+// aktiesparekonto, aktiedepot og børneopsparing. Alle valgfri - bruger
 // kan tilføje senere via /konti hvis de ikke kan huske detaljer på dem
 // nu. Kreditkort/lån er fjernet fra wizarden helt; de håndteres via
 // in-app onboarding når brugeren rent faktisk har tid og dokumenter.
@@ -48,7 +48,7 @@ export default async function WizardInvesteringPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  // Owner only — partner skipper investerings-trinet (de kan tilføje
+  // Owner only - partner skipper investerings-trinet (de kan tilføje
   // egne investeringskonti post-wizard).
   const { membership } = await getMyMembership();
   if (membership?.role !== 'owner') {
@@ -66,7 +66,7 @@ export default async function WizardInvesteringPage({
     .eq('kind', 'investment')
     .order('created_at', { ascending: true });
 
-  // Børn (uden email/user_id) — bruges til "Tilføj børneopsparing"-knapper.
+  // Børn (uden email/user_id) - bruges til "Tilføj børneopsparing"-knapper.
   const { data: allFamilyMembers } = await supabase
     .from('family_members')
     .select('id, name, email, user_id')
@@ -76,7 +76,7 @@ export default async function WizardInvesteringPage({
     (m) => m.email == null && m.user_id == null
   );
   // Eksisterende børneopsparinger pr. barn (matchet på owner_name +
-  // investment_type) — så knappen skifter til "✓ oprettet" når den findes.
+  // investment_type) - så knappen skifter til "✓ oprettet" når den findes.
   const childSavingsByOwner = new Map<string, { id: string; name: string }>();
   for (const a of existing ?? []) {
     if (a.investment_type === 'boerneopsparing' && a.owner_name) {
@@ -95,7 +95,7 @@ export default async function WizardInvesteringPage({
         Investeringskonti
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Aldersopsparing, aktiesparekonto, aktiedepot og børneopsparing — alt
+        Aldersopsparing, aktiesparekonto, aktiedepot og børneopsparing - alt
         valgfrit. Du kan altid tilføje flere senere.
       </p>
 
@@ -145,7 +145,7 @@ export default async function WizardInvesteringPage({
         </div>
       )}
 
-      {/* Add-form — vælg type, derefter navn (default udfyldes baseret på
+      {/* Add-form - vælg type, derefter navn (default udfyldes baseret på
           type). Form-key resetter inputs efter hver submit. */}
       <form
         key={count}
@@ -168,7 +168,7 @@ export default async function WizardInvesteringPage({
             </option>
             {TYPES_FOR_FORM.map((t) => (
               <option key={t.value} value={t.value}>
-                {t.label} — {t.desc}
+                {t.label} - {t.desc}
               </option>
             ))}
           </select>
@@ -195,7 +195,7 @@ export default async function WizardInvesteringPage({
         </button>
       </form>
 
-      {/* Børneopsparing — én ét-kliks knap pr. barn der allerede er oprettet
+      {/* Børneopsparing - én ét-kliks knap pr. barn der allerede er oprettet
           i familie-trinet. */}
       {children.length > 0 && (
         <section className="mt-6">
@@ -205,7 +205,7 @@ export default async function WizardInvesteringPage({
           </h2>
           <p className="mb-3 text-xs text-neutral-500">
             Skattefordels-konto til opsparing pr. barn (max 6.000 kr/år/barn).
-            Én konto pr. barn — vi opretter med ét klik.
+            Én konto pr. barn - vi opretter med ét klik.
           </p>
           <div className="space-y-2">
             {children.map((c) => {

@@ -1,4 +1,4 @@
-// /opsparinger/forudsigelige — detail-side til at sætte de konkrete
+// /opsparinger/forudsigelige - detail-side til at sætte de konkrete
 // kategorier op for "Forudsigelige uforudsete"-puljen. Selve oversigten
 // (/opsparinger) viser kun en summary; al CRUD sker her.
 //
@@ -8,7 +8,7 @@
 // månedlig overførsel til den dedikerede konto.
 //
 // Default-rækker (Gaver, Tandlæge, Bil, Cykel) seedes via "Brug forslag"-
-// knappen — bevidst manuel handling så brugeren ejer sit eget budget i
+// knappen - bevidst manuel handling så brugeren ejer sit eget budget i
 // stedet for at få det hældt ned over hovedet.
 
 import Link from 'next/link';
@@ -56,7 +56,7 @@ export default async function ForudsigeligePage({
               Forudsigelige uforudsete
             </h1>
             <p className="mt-0.5 text-sm text-neutral-500">
-              Pulje til ting du VED kommer — bilvedligehold, tandlæge, gaver,
+              Pulje til ting du VED kommer - bilvedligehold, tandlæge, gaver,
               ferie. Sæt jeres egne tal op nedenfor.
             </p>
           </div>
@@ -81,7 +81,7 @@ export default async function ForudsigeligePage({
             </div>
             <p className="mt-1 text-xs text-amber-800">
               {formatAmount(yearlyTotal)} kr/år fordelt på 12 måneder. Bygger
-              op løbende — pulje bruges når udgifterne dukker op.
+              op løbende - pulje bruges når udgifterne dukker op.
             </p>
           </div>
         )}
@@ -123,7 +123,7 @@ export default async function ForudsigeligePage({
               </ul>
             )}
 
-            {/* Add-form — altid synlig så det er nemt at tilføje. */}
+            {/* Add-form - altid synlig så det er nemt at tilføje. */}
             <form
               action={addPredictableEstimate}
               className="border-t border-neutral-100 bg-neutral-50/50 p-3"

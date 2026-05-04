@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0013 — Rename 'Streaming' category to 'Medie'
+-- 0013 - Rename 'Streaming' category to 'Medie'
 -- ----------------------------------------------------------------------------
 -- 'Medie' is a slightly broader bucket: streaming + Yousee/Stofa-style
 -- TV-pakker + aviser/podcasts. Fits the household's mental model better

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0007 — quarterly + semiannual recurrence
+-- 0007 - quarterly + semiannual recurrence
 -- ----------------------------------------------------------------------------
 -- The budget wizard mental model is "månedlig / kvartalvis / halvårligt /
 -- årligt", which the original enum doesn't cover. Added between 'monthly'

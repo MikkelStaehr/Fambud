@@ -7,7 +7,7 @@
 // ingen nøgle. Vi henter forslag når brugeren har skrevet >=3 tegn,
 // debounced 200ms. Klik på et forslag fylder gade+postnr+by automatisk.
 //
-// Vi beholder den manuelle indtastning som fallback — hvis DAWA er nede
+// Vi beholder den manuelle indtastning som fallback - hvis DAWA er nede
 // eller ikke matcher, kan brugeren stadig taste i alle 3 felter manuelt.
 // Ingen validering på submit; appen accepterer hvad bruger taster.
 
@@ -68,7 +68,7 @@ export function DawaAddressInput({
   const abortRef = useRef<AbortController | null>(null);
 
   // Hent DAWA-forslag når brugeren har tastet >=3 tegn. Debounced 200ms.
-  // Vi annullerer in-flight requests hvis brugeren taster videre — undgår
+  // Vi annullerer in-flight requests hvis brugeren taster videre - undgår
   // race conditions hvor et gammelt svar overskriver et nyere.
   useEffect(() => {
     const trimmed = address.trim();
@@ -90,9 +90,9 @@ export function DawaAddressInput({
         setSuggestions(data);
         setActiveIndex(-1);
       } catch (err) {
-        // AbortError er forventet ved hurtig tastning — ignorér stille
+        // AbortError er forventet ved hurtig tastning - ignorér stille
         if ((err as Error).name !== 'AbortError') {
-          // Stille fejl — DAWA-nedbrud må ikke blokere signup
+          // Stille fejl - DAWA-nedbrud må ikke blokere signup
           setSuggestions([]);
         }
       }
@@ -167,7 +167,7 @@ export function DawaAddressInput({
               <li
                 key={s.adresse.id}
                 onMouseDown={(e) => {
-                  // mousedown frem for click — undgår at input mister focus
+                  // mousedown frem for click - undgår at input mister focus
                   // før vi når at vælge.
                   e.preventDefault();
                   selectSuggestion(s);

@@ -8,7 +8,7 @@
 // udbetaling afveg (fx forskudt løn, ferie-tillæg).
 //
 // Hver paycheck er en 'once'-transaktion med income_role='primary'.
-// Forecast-motoren bruger gennemsnittet — én er nok til at komme i gang,
+// Forecast-motoren bruger gennemsnittet - én er nok til at komme i gang,
 // 3 giver præcist forecast.
 
 import { useEffect, useState } from 'react';
@@ -121,7 +121,7 @@ export function LonkontoIncomeForm({ action, isOwner, error }: Props) {
   );
 
   // Når regel eller dag ændrer sig, re-fyld alle rows. Vi accepterer at
-  // dette overskriver manuelle ændringer — UX-trade-off for at holde
+  // dette overskriver manuelle ændringer - UX-trade-off for at holde
   // logikken simpel. Hvis brugeren har en konkret afvigelse kan de altid
   // editere igen efter regelvalget er låst.
   useEffect(() => {
@@ -170,7 +170,7 @@ export function LonkontoIncomeForm({ action, isOwner, error }: Props) {
                 Del kontoen med resten af husstanden
               </span>
               <span className="mt-0.5 block text-xs text-neutral-500">
-                Som standard er lønkontoen privat — kun du kan se dens
+                Som standard er lønkontoen privat - kun du kan se dens
                 transaktioner. Tjek af hvis du vil dele indsigten.
               </span>
             </span>
@@ -197,7 +197,7 @@ export function LonkontoIncomeForm({ action, isOwner, error }: Props) {
           <RuleCard
             value="last-banking"
             label="Sidste bankdag"
-            desc="Sidste hverdag i måneden — typisk for offentligt ansatte."
+            desc="Sidste hverdag i måneden - typisk for offentligt ansatte."
             icon={<CalendarCheck className="h-4 w-4" />}
             checked={rule === 'last-banking'}
             onSelect={() => setRule('last-banking')}
@@ -205,7 +205,7 @@ export function LonkontoIncomeForm({ action, isOwner, error }: Props) {
           <RuleCard
             value="second-last-banking"
             label="Næstsidste bankdag"
-            desc="Hverdagen før sidste hverdag — fx mange privatansatte."
+            desc="Hverdagen før sidste hverdag - fx mange privatansatte."
             icon={<CalendarRange className="h-4 w-4" />}
             checked={rule === 'second-last-banking'}
             onSelect={() => setRule('second-last-banking')}

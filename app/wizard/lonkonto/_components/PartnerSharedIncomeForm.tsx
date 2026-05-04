@@ -1,7 +1,7 @@
 'use client';
 
 // Indkomst-only-form for partner i fællesøkonomi-mode. Vi opretter ikke
-// en lønkonto — den fælles eksisterer fra ejer's wizard. Vi registrerer
+// en lønkonto - den fælles eksisterer fra ejer's wizard. Vi registrerer
 // 1-3 paycheck-samples med family_member_id sat til partneren, så forecast-
 // motoren kan beregne hendes månedlige andel separat fra ejer's.
 
@@ -133,7 +133,7 @@ export function PartnerSharedIncomeForm({ action, error }: Props) {
           <RuleCard
             value="last-banking"
             label="Sidste bankdag"
-            desc="Sidste hverdag i måneden — typisk for offentligt ansatte."
+            desc="Sidste hverdag i måneden - typisk for offentligt ansatte."
             icon={<CalendarCheck className="h-4 w-4" />}
             checked={rule === 'last-banking'}
             onSelect={() => setRule('last-banking')}
@@ -141,7 +141,7 @@ export function PartnerSharedIncomeForm({ action, error }: Props) {
           <RuleCard
             value="second-last-banking"
             label="Næstsidste bankdag"
-            desc="Hverdagen før sidste hverdag — fx mange privatansatte."
+            desc="Hverdagen før sidste hverdag - fx mange privatansatte."
             icon={<CalendarRange className="h-4 w-4" />}
             checked={rule === 'second-last-banking'}
             onSelect={() => setRule('second-last-banking')}

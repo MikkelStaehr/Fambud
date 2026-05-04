@@ -1,12 +1,12 @@
 -- ============================================================================
--- 0003 — Per-account write permissions + wizard completion flag
+-- 0003 - Per-account write permissions + wizard completion flag
 -- ----------------------------------------------------------------------------
 -- Two changes:
 --   1. Each account gets editable_by_all + created_by. The default is "any
 --      household member can edit" (matches the common case where one person
 --      handles all bookkeeping). Setting editable_by_all=false restricts
---      writes — and writes to transactions/transfers that touch the account
---      — to the creator only. Reads stay open to all members.
+--      writes - and writes to transactions/transfers that touch the account
+--      - to the creator only. Reads stay open to all members.
 --   2. household_members gains setup_completed_at. The wizard sets it when
 --      onboarding finishes; until then the (app) layout redirects to /wizard.
 -- ============================================================================
@@ -29,7 +29,7 @@ set created_by = (
 where created_by is null;
 
 -- BEFORE INSERT trigger to auto-set created_by from auth.uid() if the app
--- forgets to send it. Belt-and-braces — the action sets it explicitly, but
+-- forgets to send it. Belt-and-braces - the action sets it explicitly, but
 -- this guarantees the column is never NULL on a freshly inserted row.
 create or replace function public.set_account_created_by()
 returns trigger
@@ -48,11 +48,11 @@ before insert on accounts
 for each row execute function public.set_account_created_by();
 
 -- ----------------------------------------------------------------------------
--- can_write_account() — the central permission predicate
+-- can_write_account() - the central permission predicate
 -- ----------------------------------------------------------------------------
 -- True if the caller is allowed to mutate the given account or any row that
 -- references it (transactions, transfers). SECURITY DEFINER so the inner
--- account-lookup bypasses RLS — otherwise we'd need a SELECT policy that
+-- account-lookup bypasses RLS - otherwise we'd need a SELECT policy that
 -- mirrors this exact logic, which would be circular.
 create or replace function public.can_write_account(account_id uuid)
 returns boolean
@@ -149,7 +149,7 @@ create policy "writable delete transactions"
     and public.can_write_account(account_id)
   );
 
--- transfers — write requires can_write_account on BOTH sides
+-- transfers - write requires can_write_account on BOTH sides
 drop policy "members all transfers" on transfers;
 
 create policy "members read transfers"

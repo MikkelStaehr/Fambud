@@ -30,7 +30,7 @@ const VALID_PRIMARY_SOURCES: readonly PrimaryIncomeSource[] = ['salary', 'benefi
 // Income gets its own form / action pair so we don't have to conditionally
 // expose pension fields in the generic TransactionForm. Behind the scenes
 // it still writes to `transactions` with the household's 'Løn' (income)
-// category — looked up or created on demand, same pattern as the wizard.
+// category - looked up or created on demand, same pattern as the wizard.
 
 type ParsedIncome = {
   account_id: string;
@@ -90,7 +90,7 @@ function readIncomeForm(formData: FormData):
   const description = descRaw || null;
 
   // Optional gross + pension. Empty strings parse to null; non-empty must be
-  // valid. We don't reject "0%" as invalid — explicit zero may be meaningful.
+  // valid. We don't reject "0%" as invalid - explicit zero may be meaningful.
   const grossRes = parseOptionalAmount(
     String(formData.get('gross_amount') ?? ''),
     'Bruttoløn'
@@ -140,7 +140,7 @@ function readIncomeForm(formData: FormData):
     income_role = roleRaw as IncomeRole;
   }
 
-  // Trækprocent — bruges sammen med skattefradrag til at forudsige netto.
+  // Trækprocent - bruges sammen med skattefradrag til at forudsige netto.
   // Genbruger parsePct (0-100, accepterer komma-decimal).
   const taxRateRaw = String(formData.get('tax_rate_pct') ?? '').trim();
   const tax_rate_pct = taxRateRaw === '' ? null : parsePct(taxRateRaw);

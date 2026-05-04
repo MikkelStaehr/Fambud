@@ -1,4 +1,4 @@
-// /husholdning — månedligt forbrugsspor mod et manuelt sat rådighedsbeløb.
+// /husholdning - månedligt forbrugsspor mod et manuelt sat rådighedsbeløb.
 //
 // Modsat /budget (faste recurring expenses) er husholdningskontoen variabel
 // fra dag til dag og fra måned til måned. Sidens job er at vise:
@@ -9,10 +9,10 @@
 // Hver "post" er en transaction med recurrence='once', kategori 'Husholdning',
 // dato = købsdatoen. Tabellen "genstarter sig selv" hver måned simpelthen
 // fordi vi filtrerer på den valgte måned (default = nuværende). Historik
-// findes stadig — bare ikke i fokus.
+// findes stadig - bare ikke i fokus.
 //
 // Budgettet (accounts.monthly_budget, migration 0024) er en INTENTION der
-// gemmes på kontoen. Det er bevidst adskilt fra de faktiske transfers ind —
+// gemmes på kontoen. Det er bevidst adskilt fra de faktiske transfers ind -
 // brugeren kan have overført 8.000 men have et mentalt loft på 9.000, eller
 // omvendt.
 
@@ -95,7 +95,7 @@ export default async function HusholdningPage({
               </h2>
               <p className="mt-1 text-sm text-neutral-600">
                 En <span className="font-medium text-neutral-900">husholdningskonto</span>{' '}
-                er en separat konto til de variable hverdagsudgifter — typisk
+                er en separat konto til de variable hverdagsudgifter - typisk
                 dagligvarer, takeaway, mindre indkøb. Modsat budgetkontoen er
                 forbruget her ikke fast hver måned.
               </p>
@@ -129,7 +129,7 @@ export default async function HusholdningPage({
             Husholdning
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Spor dit dagligvareforbrug. Hver måned starter med blank tabel —
+            Spor dit dagligvareforbrug. Hver måned starter med blank tabel -
             tidligere måneder kan stadig ses via filtret.
           </p>
         </div>
@@ -174,7 +174,7 @@ function HouseholdAccountCard({
   const overBudget = budget > 0 && remaining < 0;
 
   // Subtilt værdineutralt: emerald indtil 80% (fri kapital), amber 80-100%
-  // (tæt på), rød over (cap brudt). Bevidst ikke "rød fra dag 1" — det
+  // (tæt på), rød over (cap brudt). Bevidst ikke "rød fra dag 1" - det
   // skal være OK at bruge.
   const barClass =
     pct >= 100
@@ -199,7 +199,7 @@ function HouseholdAccountCard({
           <span className="text-xs text-neutral-500">{monthCap}</span>
         </div>
 
-        {/* Manuelt månedligt rådighedsbeløb. Inline form — beløbet kan
+        {/* Manuelt månedligt rådighedsbeløb. Inline form - beløbet kan
             ændres når som helst og gælder fremadrettet (ingen historik
             for budget-ændringer; det er en current-state-værdi). */}
         <form
@@ -318,7 +318,7 @@ function HouseholdAccountCard({
                   {formatShortDateDA(p.occurs_on)}
                 </span>
                 <span className="truncate text-sm text-neutral-900">
-                  {p.description ?? '—'}
+                  {p.description ?? '-'}
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-2">

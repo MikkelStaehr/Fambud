@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0014 — Family members + per-member tagging on expenses & components
+-- 0014 - Family members + per-member tagging on expenses & components
 -- ----------------------------------------------------------------------------
 -- household_members tracks USERS who can log in. family_members is the
 -- broader concept: everyone in the family, with or without a login. Kids
@@ -15,7 +15,7 @@
 --
 -- Both are nullable. NULL = "applies to the household" (default).
 -- ON DELETE SET NULL on the FKs so deleting a family member doesn't break
--- referential integrity — transactions just lose their tag.
+-- referential integrity - transactions just lose their tag.
 -- ============================================================================
 
 create table if not exists family_members (

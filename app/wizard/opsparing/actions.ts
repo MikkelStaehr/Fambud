@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 
-// Generel privat opsparing — kind=savings, intet specifikt formål-tag.
+// Generel privat opsparing - kind=savings, intet specifikt formål-tag.
 // Forbliver på siden efter success så brugeren kan tilføje flere.
 export async function createPrivateSavings(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
@@ -52,7 +52,7 @@ export async function createBufferSavings() {
   revalidatePath('/wizard/opsparing');
 }
 
-// Børneforbrugskonto — én konto pr. barn til lommepenge, fritidsaktiviteter
+// Børneforbrugskonto - én konto pr. barn til lommepenge, fritidsaktiviteter
 // osv. Vi opretter den som kind=savings med owner_name=barnets navn så
 // /opsparinger og cashflow-tjekket kan vise hvor meget der overføres pr. md
 // til hvert barn. Skal kun tilbydes hvis barn-rækken faktisk eksisterer.
@@ -65,7 +65,7 @@ export async function createChildSpendingAccount(formData: FormData) {
   const { supabase, householdId, user } = await getHouseholdContext();
 
   // Læs barnets navn fra family_members. Vi tjekker både household_id-match
-  // og at det rent faktisk er et barn (ingen email, ingen user_id) — det
+  // og at det rent faktisk er et barn (ingen email, ingen user_id) - det
   // forhindrer at en bruger fra et andet member ved et uheld bliver markeret
   // som ejer på en konto.
   const { data: child } = await supabase

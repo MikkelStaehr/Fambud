@@ -8,7 +8,7 @@ const SHARED_KINDS = ['budget', 'household', 'savings', 'other'] as const;
 type SharedKind = (typeof SHARED_KINDS)[number];
 
 // Add a single shared account. The form lives on the same /wizard/faelleskonti
-// page, so after success we revalidate and stay on the page — the user can
+// page, so after success we revalidate and stay on the page - the user can
 // keep adding more, then click "Næste" to continue. Credit/loan accounts are
 // handled in their own wizard step (/wizard/kredit-laan).
 export async function createSharedAccount(formData: FormData) {

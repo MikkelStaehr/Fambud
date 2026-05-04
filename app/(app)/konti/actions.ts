@@ -150,7 +150,7 @@ export async function updateAccount(id: string, formData: FormData) {
 
 // Soft-delete: transactions/transfers reference accounts ON DELETE RESTRICT,
 // so a hard delete fails the moment any history exists. Archiving is the
-// equivalent UI affordance — archived accounts disappear from the default
+// equivalent UI affordance - archived accounts disappear from the default
 // list view and from the dashboard.
 export async function archiveAccount(formData: FormData) {
   const id = String(formData.get('id') ?? '');

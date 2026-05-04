@@ -1,5 +1,5 @@
 -- ============================================================================
--- Fambud — initial schema
+-- Fambud - initial schema
 -- ----------------------------------------------------------------------------
 -- Money is stored as integer øre (1/100 DKK) in bigint columns.
 -- Reason: the cashflow forecast in a later milestone will sum hundreds of
@@ -179,7 +179,7 @@ create policy "self or fellow read membership"
   on household_members for select
   using (user_id = auth.uid() or public.is_household_member(household_id));
 
--- accounts / categories / transactions / transfers — same household-scoped rule
+-- accounts / categories / transactions / transfers - same household-scoped rule
 create policy "members all accounts"
   on accounts for all
   using (public.is_household_member(household_id))

@@ -1,6 +1,6 @@
 -- Strammer SELECT-policies så private konti (editable_by_all=false) kun er
 -- synlige for deres creator. Tidligere kunne alle husstandsmedlemmer
--- læse ALT — så Louise så Mikkel's private udgifter fra hans lønkonto.
+-- læse ALT - så Louise så Mikkel's private udgifter fra hans lønkonto.
 -- Read-permissions matcher nu write-permissions: editable_by_all=true er
 -- "fælles" (alle ser + skriver), mens editable_by_all=false er "privat"
 -- (kun creator ser + skriver).
@@ -14,7 +14,7 @@
 --
 -- Transfers: synlige hvis MINDST én af from/to er læsbar. Det betyder
 -- Louise stadig kan se "Fælles modtog 5.000 kr" selvom kilden er Mikkel's
--- private lønkonto — UI må håndtere at from_account-joinet returnerer
+-- private lønkonto - UI må håndtere at from_account-joinet returnerer
 -- null (RLS strips når kontoen ikke er læsbar).
 
 -- ----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ create policy "private-aware read accounts"
   );
 
 -- ----------------------------------------------------------------------------
--- transactions.SELECT — gates på den underliggende kontos læs-permission
+-- transactions.SELECT - gates på den underliggende kontos læs-permission
 -- ----------------------------------------------------------------------------
 drop policy if exists "members read transactions" on transactions;
 
@@ -42,7 +42,7 @@ create policy "private-aware read transactions"
   );
 
 -- ----------------------------------------------------------------------------
--- transfers.SELECT — synlig hvis enten from eller to er læsbar
+-- transfers.SELECT - synlig hvis enten from eller to er læsbar
 -- ----------------------------------------------------------------------------
 drop policy if exists "members read transfers" on transfers;
 

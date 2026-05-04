@@ -1,20 +1,20 @@
-// /opsparinger — den tredje del af "budget-treenigheden":
-//   1. Faste udgifter (/budget) — det der trækkes hver måned
-//   2. Husholdning (/husholdning) — daily-spend tracking
-//   3. Opsparinger & buffer (denne side) — det der lægges til side
+// /opsparinger - den tredje del af "budget-treenigheden":
+//   1. Faste udgifter (/budget) - det der trækkes hver måned
+//   2. Husholdning (/husholdning) - daily-spend tracking
+//   3. Opsparinger & buffer (denne side) - det der lægges til side
 //
 // Sidens opbygning:
-//   - Anbefalede opsparinger (ØVERST) — to "must-have"-konti vi aktivt
+//   - Anbefalede opsparinger (ØVERST) - to "must-have"-konti vi aktivt
 //     foreslår: Buffer Konto og Forudsigelige uforudsete. Hver med beregnet
 //     målbeløb baseret på brugerens egne tal (faste udgifter, nettoindkomst).
 //     Hvis konto ikke findes: prompt om at oprette. Hvis findes: vis
 //     overførsels-status.
-//   - Alle opsparinger (NEDERST) — konventionel liste over alle
+//   - Alle opsparinger (NEDERST) - konventionel liste over alle
 //     opsparings/investeringskonti med deres månedlige indskud.
 //
 // Buffer + predictable_unexpected er identificeret via accounts.savings_purposes
 // (migration 0029, omdøbt fra savings_purpose). Det er nu et array, så ÉN
-// konto kan dække begge formål samtidig — typisk for familier der har én
+// konto kan dække begge formål samtidig - typisk for familier der har én
 // "Bufferkonto" til både nødfond og forudsigelige uforudsete.
 
 import Link from 'next/link';
@@ -38,7 +38,7 @@ export default async function OpsparingerPage() {
 
   const totalInflow = savings.reduce((s, a) => s + a.monthlyInflow, 0);
 
-  // Find første konto med hvert tag. En konto kan have BEGGE tags — så
+  // Find første konto med hvert tag. En konto kan have BEGGE tags - så
   // bufferAccount og predictableAccount kan pege på samme konto. Det er
   // bevidst: brugeren kan tagge én konto med begge formål.
   const bufferAccount = savings.find((a) =>
@@ -72,14 +72,14 @@ export default async function OpsparingerPage() {
         </div>
       </header>
 
-      {/* Anbefalede konti — det vigtige er at brugeren VED de bør have
+      {/* Anbefalede konti - det vigtige er at brugeren VED de bør have
           disse. Vi viser dem altid, uanset om brugeren har dem eller ej. */}
       <section className="mt-8">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Anbefalede opsparinger
         </h2>
         <p className="mb-4 max-w-2xl text-xs text-neutral-500">
-          To opsparinger vi anbefaler at I prioriterer — beregnet ud fra jeres
+          To opsparinger vi anbefaler at I prioriterer - beregnet ud fra jeres
           egne tal. De øvrige (aldersopsparing, aktiesparekonto, ferieopsparing
           mv.) er nice-to-have; disse er fundamentet.
         </p>

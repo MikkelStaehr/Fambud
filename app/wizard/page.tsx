@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getHouseholdEconomyType, getMyMembership } from '@/lib/dal';
 
 // Wizard-router: bestemmer hvilket trin brugeren skal lande på baseret på
-// hvad de allerede har sat op. Det er ikke en fuld state-machine — vi
+// hvad de allerede har sat op. Det er ikke en fuld state-machine - vi
 // detekterer kun "har du oprettet en konto?" og sender derefter videre til
 // rolle-specifikke næste trin. Hvis bruger åbner /wizard mens de er midt
 // i flowet er det acceptabelt at lande på et tidligere trin og klikke
@@ -12,7 +12,7 @@ export default async function WizardEntryPage() {
   const { supabase, user, membership } = await getMyMembership();
 
   if (!membership) {
-    // Skulle ikke ske — auth-trigger opretter altid en family_member-række.
+    // Skulle ikke ske - auth-trigger opretter altid en family_member-række.
     // Hvis det sker, er en re-auth den hurtigste vej tilbage til en kendt
     // tilstand.
     redirect('/login');
@@ -27,7 +27,7 @@ export default async function WizardEntryPage() {
   // For partner i fællesøkonomi-mode: de opretter ikke en lønkonto
   // (den fælles eksisterer fra ejer's wizard), men registrerer indkomst
   // på den fælles. Vi router dem til /wizard/lonkonto hvis de endnu ikke
-  // har gjort det — der detekterer page'n shared-mode og viser det rigtige
+  // har gjort det - der detekterer page'n shared-mode og viser det rigtige
   // form.
   const economyType = await getHouseholdEconomyType();
   const isPartnerInSharedMode = !isOwner && economyType === 'shared';
@@ -53,7 +53,7 @@ export default async function WizardEntryPage() {
   }
 
   // Har brugeren oprettet sin lønkonto? Det er trin 1 i de andre flows.
-  // Hvis ikke, send dem dertil — der oprettes både konto og første
+  // Hvis ikke, send dem dertil - der oprettes både konto og første
   // lønudbetaling i samme transaktion.
   const { count } = await supabase
     .from('accounts')
@@ -64,7 +64,7 @@ export default async function WizardEntryPage() {
     redirect('/wizard/lonkonto');
   }
 
-  // Lønkonto er på plads — gå til næste rolle-specifikke trin. Owner
+  // Lønkonto er på plads - gå til næste rolle-specifikke trin. Owner
   // fortsætter med fælleskonti, partner skipper fælleskonti og familie
   // (begge er ejer-only) og går direkte til oversigt.
   redirect(isOwner ? '/wizard/faelleskonti' : '/wizard/oversigt');

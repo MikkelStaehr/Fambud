@@ -92,7 +92,7 @@ export function RecommendedCard({
               <span className="font-medium text-neutral-700">
                 Ingen konto linket.
               </span>{' '}
-              Værktøjet virker uafhængigt — pengene kan stå hvor som helst.
+              Værktøjet virker uafhængigt - pengene kan stå hvor som helst.
               Link en dedikeret konto hvis I vil tracke månedlige indskud.
             </div>
             <Link

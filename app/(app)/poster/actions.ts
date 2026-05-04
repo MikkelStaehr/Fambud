@@ -32,7 +32,7 @@ function readTransactionForm(formData: FormData):
   const account_id = String(formData.get('account_id') ?? '').trim();
   if (!account_id) return { error: 'Vælg en konto' };
 
-  // Required because the cashflow forecast derives sign from category.kind —
+  // Required because the cashflow forecast derives sign from category.kind -
   // an uncategorised transaction has no defined sign.
   const category_id = String(formData.get('category_id') ?? '').trim();
   if (!category_id) return { error: 'Vælg en kategori' };

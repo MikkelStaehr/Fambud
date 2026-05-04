@@ -16,7 +16,7 @@ const VALID_FREQS = new Set<RecurrenceFreq>([
 ]);
 
 // Pre-fill query params kommer typisk fra CashflowAdvisor's "Opret denne
-// overførsel"-knap (med konkret fix). Vi validerer hver param defensivt —
+// overførsel"-knap (med konkret fix). Vi validerer hver param defensivt -
 // en bruger med en dårligt-kopieret URL skal ikke få en ødelagt form.
 function readPrefill(
   sp: Record<string, string | undefined>,
@@ -89,7 +89,7 @@ export default async function NyOverforselPage({
               <div className="mb-4 inline-flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                 <Wand2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Vi har pre-udfyldt formularen baseret på vores forslag — tjek
+                  Vi har pre-udfyldt formularen baseret på vores forslag - tjek
                   det igennem og tryk Opret når det ser rigtigt ud.
                 </span>
               </div>

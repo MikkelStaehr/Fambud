@@ -2,12 +2,12 @@
 
 // Horisontal bar-chart over månedlige udgifter, rullet op til de tematiske
 // kategori-grupper (Bolig & lån, Transport, …) i stedet for individuelle
-// kategorier — giver et hurtigere "hvor går pengene hen?"-overblik på
+// kategorier - giver et hurtigere "hvor går pengene hen?"-overblik på
 // dashboardet.
 //
 // Tab-toggle skifter mellem private og fælles udgifter. Splittet sker ved
 // konto-ejerskab i DAL'en (owner_name === 'Fælles' → fælles), så ingen
-// genberegning her — vi bare viser den valgte bucket.
+// genberegning her - vi bare viser den valgte bucket.
 
 import Link from 'next/link';
 import { useState } from 'react';
@@ -36,7 +36,7 @@ export function CategoryGroupChart({ privateGroups, sharedGroups }: Props) {
           <InfoTooltip>
             Faste udgifter rullet op til tematiske grupper (Bolig & lån,
             Transport, Børn osv.) i stedet for individuelle kategorier.
-            Toggle mellem Fælles og Private — splittet sker på konto-
+            Toggle mellem Fælles og Private - splittet sker på konto-
             ejerskab. Gruppe-tilknytningen styres af kategori-navnet.
           </InfoTooltip>
         </h3>
@@ -45,7 +45,7 @@ export function CategoryGroupChart({ privateGroups, sharedGroups }: Props) {
         </span>
       </div>
 
-      {/* Tab toggle — privat / fælles */}
+      {/* Tab toggle - privat / fælles */}
       <div className="mb-4 inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
         <button
           type="button"
@@ -73,7 +73,7 @@ export function CategoryGroupChart({ privateGroups, sharedGroups }: Props) {
 
       {data.length === 0 ? (
         <div className="rounded-md border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500">
-          Ingen {tab === 'shared' ? 'fælles' : 'private'} udgifter endnu — opret dem under{' '}
+          Ingen {tab === 'shared' ? 'fælles' : 'private'} udgifter endnu - opret dem under{' '}
           <Link href="/faste-udgifter" className="underline hover:text-neutral-900">
             Faste udgifter
           </Link>

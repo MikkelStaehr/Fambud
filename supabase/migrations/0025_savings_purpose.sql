@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0025 — savings_purpose: special-purpose opsparingskonti
+-- 0025 - savings_purpose: special-purpose opsparingskonti
 -- ----------------------------------------------------------------------------
 -- Vi har brug for at kunne identificere to specifikke konto-formål blandt
 -- kind='savings'-konti, så vi kan beregne målbeløb og hjælpe brugeren med
@@ -10,7 +10,7 @@
 --                           ved godt niveau. Ved jobtab, sygdom, akut
 --                           reparation.
 --
---   predictable_unexpected: "Forudsigelige uforudsete" — pulje til ting
+--   predictable_unexpected: "Forudsigelige uforudsete" - pulje til ting
 --                           du VED kommer (bilvedligehold, tandlæge,
 --                           gaver, ferie). Foreslået: 15% af husstandens
 --                           samlede nettoindkomst pr. år.
@@ -21,7 +21,7 @@
 -- constraint i stedet for en enum så vi let kan tilføje flere formål
 -- senere uden ALTER TYPE-cirkus.
 --
--- Kolonnen er nullable — almindelige opsparingskonti uden specifikt
+-- Kolonnen er nullable - almindelige opsparingskonti uden specifikt
 -- formål (fx "Sommerferie 2027") behøver ikke sætte den.
 -- ============================================================================
 

@@ -1,9 +1,9 @@
-// Dashboardets hero-tile: "Er du på rette spor?" — det første brugeren ser
+// Dashboardets hero-tile: "Er du på rette spor?" - det første brugeren ser
 // efter velkomst-headeren. Svaret er nettoflow for indeværende måned med en
 // kort interpretiv linje ("du har overskud", "udgifter overstiger indtægter")
 // så folk uden saldo-baggrund også kan aflæse status med ét blik.
 //
-// Vi viser bevidst ikke noget "trygt at bruge"-tal — det ville kræve
+// Vi viser bevidst ikke noget "trygt at bruge"-tal - det ville kræve
 // saldo-data vi ikke har. Hero'en er ren cashflow.
 
 import { formatAmount } from '@/lib/format';
@@ -13,15 +13,15 @@ type Props = {
   income: number;
   expense: number;
   net: number;
-  monthLabel: string;  // fx "April 2026" — allerede capitalized
+  monthLabel: string;  // fx "April 2026" - allerede capitalized
   // Familiemedlemmer der har primary_income_source sat men ingen paychecks
-  // registreret. Bruges til at forklare et tilsyneladende underskud — fx
+  // registreret. Bruges til at forklare et tilsyneladende underskud - fx
   // når Mikkel's løn er registreret men Louise's mangler, ser husstands-
   // tallet rødt ud uden at det reelt er et problem.
   missingIncomeContributors?: string[];
 };
 
-// Beløbsgrænser for fortolkning. Tærsklerne er bevidst forsigtige — vi vil
+// Beløbsgrænser for fortolkning. Tærsklerne er bevidst forsigtige - vi vil
 // hellere sige "du går omtrent lige op" end at fejre 200 kr som overskud.
 const SMALL_OERE = 50_000; // 500 kr
 
@@ -41,7 +41,7 @@ export function HeroStatus({
   const status = statusFor(net);
   // Hvis der er bidragydere uden registreret indkomst, viser vi en notis
   // uanset om net er positivt eller negativt. Tidligere viste vi den kun
-  // ved underskud — men selv et "positivt" tal kan være misvisende hvis
+  // ved underskud - men selv et "positivt" tal kan være misvisende hvis
   // det forventede partner-bidrag mangler. Brugeren skal vide at billedet
   // ikke er komplet før de tager beslutninger på baggrund af det.
   const showMissingIncomeNotice = missingIncomeContributors.length > 0;
@@ -70,7 +70,7 @@ export function HeroStatus({
             Husstandens samlede netto for den aktuelle måned: indtægter
             (forecast fra 3 seneste lønudbetalinger + recurring income)
             minus alle faste udgifter på tværs af jeres konti. Et negativt
-            tal betyder ikke nødvendigvis krise — tjek om en bidragyder
+            tal betyder ikke nødvendigvis krise - tjek om en bidragyder
             mangler at registrere sin løn.
           </InfoTooltip>
         </h2>
@@ -89,7 +89,7 @@ export function HeroStatus({
         {showMissingIncomeNotice && (
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <span className="font-medium">
-              Tallet er ikke komplet —{' '}
+              Tallet er ikke komplet -{' '}
               {missingIncomeContributors.length === 1
                 ? `${missingIncomeContributors[0]} har endnu ingen indkomst registreret.`
                 : `${missingIncomeContributors.join(' og ')} har endnu ingen indkomst registreret.`}

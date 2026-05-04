@@ -5,7 +5,7 @@
 -- udfylder:
 --   - currency (alle rækker er 'DKK', ingen multi-valuta-support i UI)
 --   - goal_amount, goal_date, goal_label (0 ud af 10 konti har sat
---     målfelterne — feature blev aldrig faktisk brugt)
+--     målfelterne - feature blev aldrig faktisk brugt)
 --
 -- Drop er sikker fordi DAL'en og UI'en altid har behandlet dem som
 -- valgfri/ignoreret. Hvis vi senere genintroducerer mål eller multi-

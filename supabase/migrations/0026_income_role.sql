@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0026 — hovedindkomst vs biindkomst + indkomst-kilde pr. familiemedlem
+-- 0026 - hovedindkomst vs biindkomst + indkomst-kilde pr. familiemedlem
 -- ----------------------------------------------------------------------------
 -- Indkomst-motoren har hidtil behandlet alle income-kategoriserede
 -- transaktioner ens. Det giver to problemer:
@@ -7,13 +7,13 @@
 --   1. Vi kan ikke skelne en hovedindkomst (løn / understøttelse) fra en
 --      biindkomst (freelance, B-skat, udbytte) når vi vil lave forecast.
 --   2. Brugeren kan kun skrive "ca. så meget tjener jeg pr. md" som et
---      brugerskøn — vi har intet ankerpunkt i faktiske udbetalinger og
+--      brugerskøn - vi har intet ankerpunkt i faktiske udbetalinger og
 --      kan derfor ikke fange variansen i overtid, bonus, mv.
 --
 -- Vi tilføjer to felter:
 --
 --   transactions.income_role
---     'primary' = hovedindkomst (én pr. person — løn eller understøttelse)
+--     'primary' = hovedindkomst (én pr. person - løn eller understøttelse)
 --     'secondary' = biindkomst (alt andet income-kategoriseret)
 --     null = ikke kategoriseret endnu (bagudkompatibel med eksisterende rows)
 --
@@ -25,7 +25,7 @@
 -- Forecast-motoren bruger kombinationen: den finder personens primær-
 -- transaktioner (income_role='primary'), kigger på de seneste N
 -- 'once'-udbetalinger, og beregner et glidende gennemsnit. Vi håndhæver
--- IKKE i DB at en person kun har én 'primary' — UI'et håndterer det.
+-- IKKE i DB at en person kun har én 'primary' - UI'et håndterer det.
 --
 -- Idempotent: enum-types kun hvis ikke eksisterer, kolonner med if not exists.
 -- ============================================================================

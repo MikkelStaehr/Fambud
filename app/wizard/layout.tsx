@@ -1,7 +1,7 @@
 import { LogOut } from 'lucide-react';
 import { signOut } from '../(app)/actions';
 
-// Minimal wrapper — no sidebar, no app chrome. Auth is handled by the proxy.
+// Minimal wrapper - no sidebar, no app chrome. Auth is handled by the proxy.
 // We do show a top-right "Log ud" so users who land here mid-wizard (or get
 // stuck on it via the setup gate) can always escape.
 export default function WizardLayout({

@@ -2,7 +2,7 @@
 
 // Interaktiv guided tour for dashboardet. Viser et spotlight på et
 // element + tooltip med forklaring, Næste/Forrige/Spring over-knapper.
-// Bygget custom (uden bibliotek) for at have fuld kontrol over UX —
+// Bygget custom (uden bibliotek) for at have fuld kontrol over UX -
 // målgruppen er ikke-tekniske familier og det skal være krystalklart.
 //
 // Spotlight bruger box-shadow-tricket: én div positioneret over target,
@@ -111,7 +111,7 @@ export function Tour({ steps, onComplete }: Props) {
     if (!isFirst) setIndex(index - 1);
   }
 
-  // Modal-step (ingen target) — centreret popup
+  // Modal-step (ingen target) - centreret popup
   if (!step.target) {
     return createPortal(
       <div
@@ -154,7 +154,7 @@ export function Tour({ steps, onComplete }: Props) {
     );
   }
 
-  // Spotlight-step — hvis rect ikke kunne findes, render alligevel modal som fallback
+  // Spotlight-step - hvis rect ikke kunne findes, render alligevel modal som fallback
   if (!rect) {
     return createPortal(
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -167,7 +167,7 @@ export function Tour({ steps, onComplete }: Props) {
             {step.content}
           </div>
           <p className="mt-4 text-xs text-neutral-500">
-            (Vi kunne ikke finde det element vi ville pege på — det er sikkert
+            (Vi kunne ikke finde det element vi ville pege på - det er sikkert
             scrollet ud af syne.)
           </p>
           <TourFooter
@@ -226,7 +226,7 @@ export function Tour({ steps, onComplete }: Props) {
 
 type Placement = 'top' | 'bottom' | 'left' | 'right';
 
-// Antal pixels vi forventer tooltip optager — generøst estimat så vi
+// Antal pixels vi forventer tooltip optager - generøst estimat så vi
 // ikke vælger en placement der ikke kan rumme den fulde tooltip.
 const TIP_W_EST = 320;
 const TIP_H_EST = 320;
@@ -241,16 +241,16 @@ function decidePlacement(rect: DOMRect): Placement {
   const spaceRight = vw - rect.right - margin;
 
   // Foretræk vertikal placering (under, så over). Skift til siden kun
-  // hvis tooltip ALDRIG kan fitte vertikalt — så vi undgår at tooltip
+  // hvis tooltip ALDRIG kan fitte vertikalt - så vi undgår at tooltip
   // overlapper det vi prøver at highlighte.
   if (spaceBelow >= TIP_H_EST) return 'bottom';
   if (spaceAbove >= TIP_H_EST) return 'top';
   if (spaceRight >= TIP_W_EST) return 'right';
   if (spaceLeft >= TIP_W_EST) return 'left';
 
-  // Ingen placement kan rumme den fulde tooltip — vælg den med mest plads
+  // Ingen placement kan rumme den fulde tooltip - vælg den med mest plads
   // og lad clamping i TourTooltipBox sørge for at den ikke går ud over
-  // skærmen (kan resultere i at tooltip overlapper target lidt — accepteret
+  // skærmen (kan resultere i at tooltip overlapper target lidt - accepteret
   // som sidste udvej).
   return spaceBelow > spaceAbove ? 'bottom' : 'top';
 }

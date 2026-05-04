@@ -15,7 +15,7 @@ export default async function EditKontoPage({
   const { error } = await searchParams;
   const account = await getAccountById(id);
 
-  // Server action with the row id pre-bound — the form submits a clean FormData.
+  // Server action with the row id pre-bound - the form submits a clean FormData.
   const action = updateAccount.bind(null, id);
 
   return (

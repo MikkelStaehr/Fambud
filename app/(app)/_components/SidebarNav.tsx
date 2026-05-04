@@ -22,7 +22,7 @@ import {
 // be passed as props from a Server Component.
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
-// Hovednavigation — overblikssider og indkomst/udgift-flows. Budget er det
+// Hovednavigation - overblikssider og indkomst/udgift-flows. Budget er det
 // hierarkiske overblik over alle faste udgifter; selve værktøjerne til at
 // vedligeholde dem ligger samlet under "Værktøjer" nedenfor.
 const NAV_MAIN: NavItem[] = [
@@ -30,14 +30,14 @@ const NAV_MAIN: NavItem[] = [
   { href: '/konti', label: 'Konti', icon: Wallet },
   { href: '/laan', label: 'Lån', icon: Landmark },
   { href: '/indkomst', label: 'Indkomst', icon: Coins },
-  // Budget er det flade overblik (read-only tabel) — Table2-ikonet adskiller
+  // Budget er det flade overblik (read-only tabel) - Table2-ikonet adskiller
   // den visuelt fra "Faste udgifter" (CRUD-værktøjet) der bruger ClipboardList.
   { href: '/budget', label: 'Budget', icon: Table2 },
   { href: '/poster', label: 'Poster', icon: Receipt },
   { href: '/overforsler', label: 'Overførsler', icon: ArrowLeftRight },
 ];
 
-// Værktøjer — sider hvor brugeren beriger systemet med data (oprette faste
+// Værktøjer - sider hvor brugeren beriger systemet med data (oprette faste
 // udgifter, registrere husholdningskøb, sætte opsparingsmål). Adskilt fra
 // hovedflow'et så sidebaren ikke blander "se" og "vedligehold".
 const NAV_TOOLS: NavItem[] = [

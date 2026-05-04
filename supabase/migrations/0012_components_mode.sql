@@ -1,13 +1,13 @@
 -- ============================================================================
--- 0012 — components_mode: additive vs breakdown
+-- 0012 - components_mode: additive vs breakdown
 -- ----------------------------------------------------------------------------
 -- Components fit two distinct real-world patterns:
 --
---   1. ADDITIVE (default) — parent is a base price, components stack on top.
+--   1. ADDITIVE (default) - parent is a base price, components stack on top.
 --      "Mobilabonnement 170 kr + Spotify 200 + Premium 99 = 469 kr/md"
 --      effective = parent + sum(components)
 --
---   2. BREAKDOWN — parent IS the total bill, components describe the parts.
+--   2. BREAKDOWN - parent IS the total bill, components describe the parts.
 --      "Bilforsikring 806.09 kr/md, broken down as: Ansvar 164 + Kasko 438
 --       + Friskade 36 + Statsafgift 70 + …"
 --      effective = parent  (components are informational only)

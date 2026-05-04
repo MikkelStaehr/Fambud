@@ -22,7 +22,7 @@ const LOAN_TYPE_LABEL_DA: Record<LoanType, string> = {
 export default async function LaanPage() {
   const loans = await getLoans();
 
-  // Sum gæld and monthly burden — gives a single-glance picture of the
+  // Sum gæld and monthly burden - gives a single-glance picture of the
   // household's debt situation. abs() so positive-saved rows still count.
   // payment_amount is per payment_interval, so normalise to /md before summing.
   const totalDebt = loans.reduce(
@@ -64,7 +64,7 @@ export default async function LaanPage() {
         <div className="mt-8 rounded-md border border-dashed border-neutral-200 bg-white px-6 py-12 text-center">
           <p className="text-sm text-neutral-500">
             Ingen lån endnu. Tilføj jeres realkreditlån, banklån, kreditkort
-            eller kassekredit her — så har I rente, restgæld og ydelse samlet
+            eller kassekredit her - så har I rente, restgæld og ydelse samlet
             ét sted.
           </p>
           <Link
@@ -79,7 +79,7 @@ export default async function LaanPage() {
         <div className="mt-6 grid gap-3">
           {loans.map((l) => {
             // abs() keeps the display sane regardless of which sign convention
-            // the row was saved with — older rows or manual SQL edits may have
+            // the row was saved with - older rows or manual SQL edits may have
             // positive values. The form auto-negates new saves.
             const debt = Math.abs(l.opening_balance);
             const principal = l.original_principal ?? 0;
@@ -90,7 +90,7 @@ export default async function LaanPage() {
             // (typisk kassekredit/kreditkort) ELLER hvis brugeren udtrykkeligt
             // har sat afdragsdelen til 0 i breakdown'et (realkredit i
             // afdragsfri periode). En manglende breakdown med kun en samlet
-            // ydelse betyder IKKE afdragsfri — det betyder bare at vi ikke
+            // ydelse betyder IKKE afdragsfri - det betyder bare at vi ikke
             // kender splittet endnu.
             const hasYdelse = l.payment_amount != null && l.payment_amount > 0;
             const isInterestOnly =
@@ -123,7 +123,7 @@ export default async function LaanPage() {
                       {isInterestOnly && (
                         <span
                           className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
-                          title="Lånet afdrages ikke pt. — kun rente betales"
+                          title="Lånet afdrages ikke pt. - kun rente betales"
                         >
                           Afdragsfri
                         </span>

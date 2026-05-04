@@ -93,7 +93,7 @@ export default async function SignupPage({
           <DawaAddressInput
             legend="Bopælsadresse (valgfrit)"
             namePrefix="home"
-            hint="Bruges til kommune-baserede ydelser senere — du kan altid redigere det under Indstillinger."
+            hint="Bruges til kommune-baserede ydelser senere - du kan altid redigere det under Indstillinger."
           />
 
           <div>

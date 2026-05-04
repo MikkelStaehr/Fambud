@@ -1,4 +1,4 @@
-// DAL for predictable_estimates — kategori-baseret budget for "forudsigelige
+// DAL for predictable_estimates - kategori-baseret budget for "forudsigelige
 // uforudsete" udgifter. Bruges af /opsparinger PredictableCard til at lade
 // brugeren tænke konkret igennem hvad puljen skal dække (gaver, tandlæge,
 // bil, cykel, andet) og udregne et månedligt indskud baseret på det.

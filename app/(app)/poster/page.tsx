@@ -1,6 +1,6 @@
-// /poster — overblik over faktiske posteringer i en valgt måned. Til
+// /poster - overblik over faktiske posteringer i en valgt måned. Til
 // forskel fra /budget der viser theoretical kr/md (monthlyEquivalent),
-// viser denne side hvad der faktisk er bogført — så fx en årlig forsikring
+// viser denne side hvad der faktisk er bogført - så fx en årlig forsikring
 // står med fuld pris i den måned den falder, ikke 1/12.
 //
 // Hierarkisk tabel grupperet på kategori-grupper med Fælles/Private-tab.
@@ -23,7 +23,7 @@ import { MonthFilter } from '../_components/MonthFilter';
 import { PosterTable, type PosterRow } from './_components/PosterTable';
 
 // Sanity-check the month parameter so a malformed URL doesn't blow up the
-// SQL query — fall back to the current month silently.
+// SQL query - fall back to the current month silently.
 function normaliseYearMonth(raw: string | undefined): string {
   if (raw && /^\d{4}-\d{2}$/.test(raw)) return raw;
   return currentYearMonth();
@@ -49,7 +49,7 @@ export default async function PosterPage({
   );
   const net = totals.income - totals.expense;
 
-  // Tabel-rækker — kun udgifts-poster (indkomst hører til /indkomst og er
+  // Tabel-rækker - kun udgifts-poster (indkomst hører til /indkomst og er
   // sammenfattet i kortene øverst). Hver række inkluderer den joined konto-
   // og kategori-info så client-komponenten kan filtrere/gruppere uden
   // ekstra queries.
@@ -100,7 +100,7 @@ export default async function PosterPage({
         </div>
       </header>
 
-      {/* Månedssammendrag — indtægter, udgifter, netto */}
+      {/* Månedssammendrag - indtægter, udgifter, netto */}
       <section className="mt-6 grid grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-md border border-neutral-200 bg-white px-3 py-3 sm:px-4">
           <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500 sm:text-xs">

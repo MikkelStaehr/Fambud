@@ -1,10 +1,10 @@
-// /opsparinger/buffer — detail-side med kalkulatoren der viser hvor lang
+// /opsparinger/buffer - detail-side med kalkulatoren der viser hvor lang
 // tid der går før bufferen kan dække 1, 3, 6 og 12 mdr af husstandens
 // faste udgifter. Selve oversigten (/opsparinger) viser kun et kompakt
 // summary; al regning sker her.
 //
 // Mental model: "starter ved hvad jeg kan afsætte, ser timeline til mål"
-// — det modsatte af "her er hvad du SKAL afsætte for at nå mål". Mere
+// - det modsatte af "her er hvad du SKAL afsætte for at nå mål". Mere
 // ærligt: ingen abstrakte anbefalinger der ikke matcher virkeligheden.
 
 import Link from 'next/link';
@@ -62,7 +62,7 @@ export default async function BufferPage() {
       </header>
 
       <div className="mt-6 max-w-2xl space-y-6">
-        {/* Kontostatus — primært CTA når der mangler en bufferkonto, ellers
+        {/* Kontostatus - primært CTA når der mangler en bufferkonto, ellers
             kort statusnote. Det er det første brugeren bør kunne handle på,
             så det ligger over kalkulatoren. */}
         {bufferAccount ? (
@@ -72,12 +72,12 @@ export default async function BufferPage() {
             {bufferAccount.monthlyInflow > 0 ? (
               <>
                 {' '}
-                — {formatAmount(bufferAccount.monthlyInflow)} kr/md kommer ind.
+                - {formatAmount(bufferAccount.monthlyInflow)} kr/md kommer ind.
               </>
             ) : (
               <>
                 {' '}
-                — ingen månedlig overførsel sat op endnu.{' '}
+                - ingen månedlig overførsel sat op endnu.{' '}
                 <Link
                   href={`/overforsler/ny?to=${encodeURIComponent(bufferAccount.id)}&recurrence=monthly&description=${encodeURIComponent('Til ' + bufferAccount.name)}`}
                   className="font-medium underline hover:no-underline"
@@ -98,7 +98,7 @@ export default async function BufferPage() {
               </div>
               <p className="mt-0.5 text-xs text-amber-800">
                 Næste skridt: opret en dedikeret konto så I kan tracke jeres
-                månedlige indskud. Vi pre-udfylder typen og formålet — I skal
+                månedlige indskud. Vi pre-udfylder typen og formålet - I skal
                 bare bekræfte navnet.
               </p>
             </div>
@@ -119,7 +119,7 @@ export default async function BufferPage() {
           />
         ) : (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Vi kan ikke beregne målene endnu — I har ikke registreret nogen
+            Vi kan ikke beregne målene endnu - I har ikke registreret nogen
             faste udgifter. Tilføj dem på{' '}
             <Link href="/faste-udgifter" className="underline">
               Faste udgifter

@@ -11,7 +11,7 @@ import { archiveAccount, restoreAccount } from './actions';
 import type { Account, AccountKind } from '@/lib/database.types';
 
 // Sektioner på /konti grupperer konti efter formål, så man hurtigt kan se
-// hvad der hører hvor — i stedet for én lang flad liste. Lån (kind='credit')
+// hvad der hører hvor - i stedet for én lang flad liste. Lån (kind='credit')
 // vises ikke her; de bor på /laan og linkes nederst.
 const SECTION_GROUPS: {
   key: string;
@@ -51,7 +51,7 @@ export default async function KontiPage({
     getAccountFlows(),
   ]);
 
-  // Lån filtreres ud af sektionerne — de bor på /laan. Vi tæller dem alligevel
+  // Lån filtreres ud af sektionerne - de bor på /laan. Vi tæller dem alligevel
   // så vi kan vise et lille link nederst når der findes lån i husstanden.
   const loanCount = accounts.filter((a) => a.kind === 'credit').length;
   const nonLoan = accounts.filter((a) => a.kind !== 'credit');
@@ -157,7 +157,7 @@ export default async function KontiPage({
 
         {loanCount > 0 && (
           <p className="text-sm text-neutral-500">
-            Du har {loanCount} {loanCount === 1 ? 'lån' : 'lån'} — se{' '}
+            Du har {loanCount} {loanCount === 1 ? 'lån' : 'lån'} - se{' '}
             <Link href="/laan" className="underline hover:text-neutral-900">
               låneoversigten
             </Link>

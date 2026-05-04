@@ -74,7 +74,7 @@ begin
     return new;
   end if;
 
-  -- Path 2: email pre-approval — partner er allerede oprettet af owner
+  -- Path 2: email pre-approval - partner er allerede oprettet af owner
   -- via /wizard/familie. Vi opdaterer den eksisterende række med
   -- user_id, role og home_address (hvis ikke allerede sat) men holder
   -- name fra owner's pre-fyld.

@@ -1,9 +1,9 @@
-// /budget — flad tabel-overblik over alle faste udgifter på tværs af konti.
+// /budget - flad tabel-overblik over alle faste udgifter på tværs af konti.
 // Kolonner: Gruppe / Navn / Interval / Konto / Beløb. Filter-bar i toppen
 // (søg + dropdowns for konto/gruppe/interval) gør det nemt at skære data ned.
 //
 // Forskellen til /faste-udgifter (værktøjet): denne side er kun til at se
-// — alle CRUD-handlinger sker via /faste-udgifter/[accountId]. Hver række
+// - alle CRUD-handlinger sker via /faste-udgifter/[accountId]. Hver række
 // linker dertil for redigering. Det matcher sidebar-strukturen
 // (Budget = overblik; Faste udgifter = værktøj under Værktøjer-gruppen).
 

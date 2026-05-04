@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0017 — Loan-specific metadata on credit accounts
+-- 0017 - Loan-specific metadata on credit accounts
 -- ----------------------------------------------------------------------------
 -- /wizard/kredit-laan already creates accounts with kind='credit', and 0005
 -- gave them interest_rate + apr. This migration adds the rest of what a
@@ -7,16 +7,16 @@
 --
 --   loan_type           Visual flavour ('kreditkort' | 'realkredit' | 'banklan'
 --                       | 'kassekredit' | 'andet'). The wizard had this as a
---                       form field but never persisted it — now it does.
---   original_principal  Hovedstol — the loan amount when first taken. Stays
+--                       form field but never persisted it - now it does.
+--   original_principal  Hovedstol - the loan amount when first taken. Stays
 --                       fixed; opening_balance / current rest tracks paydown.
 --   term_months         Løbetid in months (e.g. 360 for a 30-year realkredit).
---   lender              Långiver — free text (Realkredit Danmark, Nordea,…).
+--   lender              Långiver - free text (Realkredit Danmark, Nordea,…).
 --   monthly_payment     Månedlig ydelse i øre. Used as the default amount when
 --                       linking the loan to a budget account as a recurring
 --                       expense ("Tilføj som månedlig udgift" on /laan).
 --
--- All nullable — credit cards don't need term_months or original_principal,
+-- All nullable - credit cards don't need term_months or original_principal,
 -- realkredit doesn't really have a single monthly_payment if you mix afdrag
 -- + bidrag + rente in components, etc.
 -- ============================================================================

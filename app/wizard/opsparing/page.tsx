@@ -1,9 +1,9 @@
-// /wizard/opsparing — Trin 4 i ejer-flowet (trin 2 i partner-flowet).
+// /wizard/opsparing - Trin 4 i ejer-flowet (trin 2 i partner-flowet).
 // Fundamentet (buffer) + private opsparinger + børneforbrugskonti pr.
 // barn der allerede er oprettet i familie-trinet.
 //
 // Børneforbrugskonti modelleres som kind=savings med owner_name=barnets
-// navn — så /opsparinger viser dem ved siden af de øvrige opsparinger
+// navn - så /opsparinger viser dem ved siden af de øvrige opsparinger
 // med en tydelig ejer-tag, og cashflow-tjekket fanger underskud pr. barn
 // hvis brugeren glemmer den månedlige overførsel.
 
@@ -54,7 +54,7 @@ export default async function WizardOpsparingPage({
   );
 
   // For partner: tjek om husstanden ALLEREDE har en buffer (oprettet af
-  // ejeren). Hvis ja, skjuler vi anbefalings-kortet — partneren behøver
+  // ejeren). Hvis ja, skjuler vi anbefalings-kortet - partneren behøver
   // ikke en privat buffer hvis husstanden har én. Vi viser i stedet en
   // notis om at den eksisterende buffer dækker hele familien.
   let householdHasBuffer = hasOwnBuffer;
@@ -68,7 +68,7 @@ export default async function WizardOpsparingPage({
       .limit(1);
     householdHasBuffer = (householdBuffer?.length ?? 0) > 0;
   }
-  // hasBuffer-variablen styrer om vi skjuler anbefalings-kortet — det
+  // hasBuffer-variablen styrer om vi skjuler anbefalings-kortet - det
   // skal ske både hvis brugeren selv har en buffer og hvis husstanden har
   // en (kun relevant for partner).
   const hasBuffer = householdHasBuffer;
@@ -105,23 +105,23 @@ export default async function WizardOpsparingPage({
         Opsparinger
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Buffer (fundamentet), private opsparinger og forbrugskonti pr. barn —
+        Buffer (fundamentet), private opsparinger og forbrugskonti pr. barn -
         alt der lægges til side hver måned.
       </p>
 
       {/* For partner: hvis husstanden ALLEREDE har en buffer (oprettet af
           ejeren), viser vi en lille notis i stedet for anbefalings-kortet.
-          Partneren behøver ikke en privat buffer — den fælles dækker hele
+          Partneren behøver ikke en privat buffer - den fælles dækker hele
           familien. */}
       {!isOwner && !hasOwnBuffer && householdHasBuffer && (
         <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
           <span className="font-medium">Husstanden har allerede en buffer</span>{' '}
-          — den dækker hele familien. Du behøver ikke oprette en privat
+          - den dækker hele familien. Du behøver ikke oprette en privat
           buffer, men kan gøre det hvis du vil holde noget for dig selv.
         </div>
       )}
 
-      {/* Buffer-anbefaling — den ENE opsparing vi aktivt foreslår. Skjules
+      {/* Buffer-anbefaling - den ENE opsparing vi aktivt foreslår. Skjules
           når der allerede er en konto med 'buffer'-tag (egen eller
           husstandens). */}
       {!hasBuffer && (
@@ -135,7 +135,7 @@ export default async function WizardOpsparingPage({
                 Vi anbefaler at I starter med en buffer
               </h2>
               <p className="mt-1 text-xs text-emerald-900/80">
-                Bufferen er nødfond til jobtab, sygdom og akut reparation —
+                Bufferen er nødfond til jobtab, sygdom og akut reparation -
                 det er fundamentet i jeres økonomi. Tommelfingerregel: kunne
                 dække 3 mdr af jeres faste udgifter som minimum.
               </p>
@@ -152,7 +152,7 @@ export default async function WizardOpsparingPage({
         </div>
       )}
 
-      {/* Liste over alle savings oprettet af brugeren — buffer, private,
+      {/* Liste over alle savings oprettet af brugeren - buffer, private,
           børneforbrug. owner_name-taggen viser hvem kontoen tilhører. */}
       {hasAny && (
         <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
@@ -243,7 +243,7 @@ export default async function WizardOpsparingPage({
         </button>
       </form>
 
-      {/* Børneforbrugskonti — én ét-kliks knap pr. barn. Vises kun hvis
+      {/* Børneforbrugskonti - én ét-kliks knap pr. barn. Vises kun hvis
           ejer har børn registreret i familie-trinet. Hvis kontoen
           allerede findes (matchet på owner_name), vises status i stedet
           for en knap. */}
@@ -254,7 +254,7 @@ export default async function WizardOpsparingPage({
             Forbrugskonti til børn
           </h2>
           <p className="mb-3 text-xs text-neutral-500">
-            Lommepenge, fritidsaktiviteter, mindre indkøb — én konto pr.
+            Lommepenge, fritidsaktiviteter, mindre indkøb - én konto pr.
             barn så I kan planlægge månedlige overførsler.
           </p>
           <div className="space-y-2">

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, resetTour } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 
-// Genstart dashboard-touren — sætter tour_completed_at tilbage til null
+// Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
 // rundtur"-knappen i Min profil-sektionen.
 export async function restartTour() {
@@ -29,7 +29,7 @@ export async function updateMyProfile(formData: FormData) {
   const { error } = await supabase
     .from('family_members')
     .update({
-      name: name || 'Bruger', // navn er NOT NULL — fald tilbage til placeholder
+      name: name || 'Bruger', // navn er NOT NULL - fald tilbage til placeholder
       home_address: homeAddress || null,
       home_zip_code: homeZipCode || null,
       home_city: homeCity || null,
@@ -65,7 +65,7 @@ export async function createInvite(formData: FormData) {
       ? null
       : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
-  // `code` has a SQL default of generate_invite_code() — we don't pass it.
+  // `code` has a SQL default of generate_invite_code() - we don't pass it.
   const { error } = await supabase.from('household_invites').insert({
     household_id: householdId,
     created_by: user.id,
@@ -196,7 +196,7 @@ export async function restoreCategory(formData: FormData) {
 // ----------------------------------------------------------------------------
 // Family members
 // ----------------------------------------------------------------------------
-// Lightweight email validation — Postgres citext + the global unique index
+// Lightweight email validation - Postgres citext + the global unique index
 // handle the canonical checks. We just guard against obvious typos here.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -222,7 +222,7 @@ export async function createFamilyMember(formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  // Append to the end. Same pattern as transaction_components — sequence-based
+  // Append to the end. Same pattern as transaction_components - sequence-based
   // ordering, no gaps to manage.
   const { data: last } = await supabase
     .from('family_members')
@@ -261,7 +261,7 @@ export async function deleteFamilyMember(formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
   // ON DELETE SET NULL on the FK columns means existing transactions and
-  // components keep working — they just lose their tag.
+  // components keep working - they just lose their tag.
   const { error } = await supabase
     .from('family_members')
     .delete()

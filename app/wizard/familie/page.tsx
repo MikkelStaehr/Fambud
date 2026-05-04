@@ -1,4 +1,4 @@
-// /wizard/familie — Trin 3 i ejer-flowet. Brugeren vælger mellem solo og
+// /wizard/familie - Trin 3 i ejer-flowet. Brugeren vælger mellem solo og
 // familiebudget. Familie → opret partner (navn+email, pre-godkendt) og
 // børn (kun navn, ingen login). Begge bliver til family_member-rækker
 // som senere bruges som ejere på børneopsparing/børneforbrugskonti og
@@ -33,7 +33,7 @@ export default async function WizardFamiliePage({
 }: {
   searchParams: Promise<{ type?: string; error?: string }>;
 }) {
-  // Owner only — partner skipper familie-trinet helt og går direkte fra
+  // Owner only - partner skipper familie-trinet helt og går direkte fra
   // lonkonto til privat-opsparing.
   const { membership } = await getMyMembership();
   if (membership?.role !== 'owner') {
@@ -81,7 +81,7 @@ export default async function WizardFamiliePage({
         Familie eller solobudget?
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Skal Fambud holde styr på flere voksne og børn — eller er det kun dig?
+        Skal Fambud holde styr på flere voksne og børn - eller er det kun dig?
         Du kan altid tilføje familie senere fra Indstillinger.
       </p>
 
@@ -104,7 +104,7 @@ export default async function WizardFamiliePage({
               Solobudget
             </div>
             <p className="text-xs text-neutral-500">
-              Det er kun mig — ingen partner eller børn at koordinere med.
+              Det er kun mig - ingen partner eller børn at koordinere med.
             </p>
           </Link>
 
@@ -119,7 +119,7 @@ export default async function WizardFamiliePage({
               Familiebudget
             </div>
             <p className="text-xs text-neutral-500">
-              Vi er flere — opret partner og børn så vi kan vise jeres
+              Vi er flere - opret partner og børn så vi kan vise jeres
               fællesøkonomi.
             </p>
           </Link>
@@ -184,7 +184,7 @@ export default async function WizardFamiliePage({
                   </div>
                   <p className="text-xs text-neutral-500">
                     Hver har sin egen lønkonto. I sender til Fælles for delte
-                    udgifter — resten er privat.
+                    udgifter - resten er privat.
                   </p>
                 </button>
               </form>
@@ -221,7 +221,7 @@ export default async function WizardFamiliePage({
             {isShared && (
               <p className="mt-2 text-xs text-emerald-700">
                 ✓ Jeres lønkonto fra trin 1 er nu Fælles Lønkonto. Begge
-                lønninger lander her — partner registrerer bare sin
+                lønninger lander her - partner registrerer bare sin
                 indkomst når hun joiner.
               </p>
             )}
@@ -307,7 +307,7 @@ export default async function WizardFamiliePage({
               Tilføj partner
             </h3>
             <p className="mb-2 text-xs text-neutral-500">
-              Pre-godkend din partner med deres email — når de signer op,
+              Pre-godkend din partner med deres email - når de signer op,
               kobles de automatisk til husstanden.
             </p>
             <form

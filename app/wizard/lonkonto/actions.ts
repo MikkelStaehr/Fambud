@@ -37,7 +37,7 @@ async function ensureLonCategory(
 }
 
 // Læs 1-3 paycheck-rows fra formdata. Row 0 er krævet (mindst én indkomst
-// for at appen har noget at vise). Row 1 og 2 er valgfri — kun rækker hvor
+// for at appen har noget at vise). Row 1 og 2 er valgfri - kun rækker hvor
 // både dato og beløb er udfyldt tæller. Returnerer et array af parsede
 // pairs eller error-string.
 type PaycheckSample = { date: string; amount: number };
@@ -50,7 +50,7 @@ function readPaychecks(
     const dateRaw = String(formData.get(`paycheck_${i}_date`) ?? '').trim();
     const amountRaw = String(formData.get(`paycheck_${i}_amount`) ?? '').trim();
     if (!dateRaw && !amountRaw) {
-      // Helt tom row — spring over (gælder kun row 1 og 2)
+      // Helt tom row - spring over (gælder kun row 1 og 2)
       if (i === 0) return { error: 'Mindst én lønudbetaling er krævet' };
       continue;
     }
@@ -71,7 +71,7 @@ function readPaychecks(
 
 // Trin 1 for ejer + partner i særskilt-mode. Opretter både lønkontoen og
 // 1-3 paycheck-samples (recurrence='once', income_role='primary') i samme
-// transaction. Cashflow + forecast læser samples direkte — ingen recurring
+// transaction. Cashflow + forecast læser samples direkte - ingen recurring
 // monthly behøves.
 export async function createPersonalAccountWithIncome(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
@@ -116,7 +116,7 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
   if (!fm) {
     redirect(
       '/wizard/lonkonto?error=' +
-        encodeURIComponent('Kunne ikke finde din profil — log ud og log ind igen')
+        encodeURIComponent('Kunne ikke finde din profil - log ud og log ind igen')
     );
   }
 
@@ -182,7 +182,7 @@ export async function registerSharedIncome(formData: FormData) {
   const { supabase, householdId, user } = await getHouseholdContext();
 
   // Find den fælles lønkonto. Hvis den mangler, er der noget i opsætningen
-  // der er gået galt — vi sender brugeren tilbage med en klar fejl.
+  // der er gået galt - vi sender brugeren tilbage med en klar fejl.
   const { data: shared } = await supabase
     .from('accounts')
     .select('id')
@@ -197,7 +197,7 @@ export async function registerSharedIncome(formData: FormData) {
     redirect(
       '/wizard/lonkonto?error=' +
         encodeURIComponent(
-          'Kunne ikke finde fælles lønkonto — bed ejeren tjekke opsætningen'
+          'Kunne ikke finde fælles lønkonto - bed ejeren tjekke opsætningen'
         )
     );
   }
@@ -210,7 +210,7 @@ export async function registerSharedIncome(formData: FormData) {
   if (!fm) {
     redirect(
       '/wizard/lonkonto?error=' +
-        encodeURIComponent('Kunne ikke finde din profil — log ud og log ind igen')
+        encodeURIComponent('Kunne ikke finde din profil - log ud og log ind igen')
     );
   }
 

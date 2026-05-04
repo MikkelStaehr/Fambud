@@ -5,7 +5,7 @@
 // faste udgifter.
 //
 // Det modsatte spørgsmål af "hvor meget skal jeg sætte til side for at nå
-// 3 mdr buffer på 12 mdr?" — i stedet starter brugeren fra hvad de
+// 3 mdr buffer på 12 mdr?" - i stedet starter brugeren fra hvad de
 // realistisk kan afsætte og ser så timelinen for målene. Mere ærligt: ingen
 // abstrakt "anbefalet"-tal der ikke matcher virkeligheden.
 //
@@ -46,8 +46,8 @@ export function BufferCalculator({
   const contribution = parseAmountToOere(contributionStr) ?? 0;
 
   // Beregn tid-til-mål for hver milestone. Hvis bidrag = 0 returnerer vi
-  // null (vises som —). Hvis tiden er > 50 år (600 mdr) er det praktisk
-  // talt aldrig — vis advarsel i stedet for et meningsløst tal.
+  // null (vises som -). Hvis tiden er > 50 år (600 mdr) er det praktisk
+  // talt aldrig - vis advarsel i stedet for et meningsløst tal.
   function monthsUntil(targetMonths: number): number | null {
     if (contribution <= 0) return null;
     const target = monthlyFixedExpenses * targetMonths;
@@ -118,7 +118,7 @@ export function BufferCalculator({
                   >
                     {months == null
                       ? contribution <= 0
-                        ? '—'
+                        ? '-'
                         : '> 50 år'
                       : formatDuration(months)}
                   </td>
@@ -134,7 +134,7 @@ export function BufferCalculator({
         <span className="tabnum font-mono">
           {formatAmount(monthlyFixedExpenses)}
         </span>{' '}
-        kr/md. Beregningen antager I starter fra 0 — har I allerede en buffer,
+        kr/md. Beregningen antager I starter fra 0 - har I allerede en buffer,
         skal I trække den fra målbeløbet selv.
       </p>
     </div>

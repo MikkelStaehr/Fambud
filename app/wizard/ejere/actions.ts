@@ -7,7 +7,7 @@ import { getHouseholdContext, getMyMembership } from '@/lib/dal';
 // Sætter owner_name på en konto. Bruges i ejere-trinet hvor brugeren går
 // igennem alle konti og bekræfter ejerskab. Tom streng → null = "personlig"
 // (implicit ejet af den der oprettede kontoen). Alle andre værdier gemmes
-// som-er — vi validerer ikke mod family_members navnene fordi det er
+// som-er - vi validerer ikke mod family_members navnene fordi det er
 // almindelig tekst (kunne også være "Fælles").
 export async function updateAccountOwner(formData: FormData) {
   const id = String(formData.get('id') ?? '').trim();

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0021 — investment_type subtype on accounts
+-- 0021 - investment_type subtype on accounts
 -- ----------------------------------------------------------------------------
 -- En 'investment'-konto kan være mange ting i praksis: aldersopsparing
 -- (loft 9.900 kr/år), aktiesparekonto/ASK (loft 135.900 kr i alt),
@@ -10,7 +10,7 @@
 --
 -- Vi tilføjer en valgfri 'investment_type' subtype-kolonne så brugeren kan
 -- mærke kontoen op (eller lade den stå tom). UI'et viser type'en som et
--- badge og — for typer med fast loft — en lille loft-info ved siden af
+-- badge og - for typer med fast loft - en lille loft-info ved siden af
 -- saldoen.
 --
 -- Kolonnen er kun meningsfuld når kind='investment'. Vi håndhæver det IKKE

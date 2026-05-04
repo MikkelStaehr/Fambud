@@ -1,10 +1,10 @@
 -- Migration 0031:
---   1. private-aware policies på transaction_components — så components på
+--   1. private-aware policies på transaction_components - så components på
 --      private transaktioner ikke leakes til andre husstandsmedlemmer.
 --      Tidligere "members all components ALL" lod alle læse alt.
 --   2. Datapatch: eksisterende lønkonti (kind='checking') med
 --      editable_by_all=true ændres til false. Wizarden defaulter nu til
---      private for nye konti, men gamle konti har stadig den åbne flag —
+--      private for nye konti, men gamle konti har stadig den åbne flag -
 --      så Migration 0030's privat-policy faktisk får effekt på dem.
 --
 -- Hvis et husstandsmedlem aktivt vil dele sin lønkonto kan de slå
@@ -75,7 +75,7 @@ create policy "writable delete components"
 -- 2. Datapatch: eksisterende lønkonti markeres private
 -- ----------------------------------------------------------------------------
 -- Engangs-update der bringer eksisterende konti i overensstemmelse med den
--- nye default. Påvirker kun kind='checking' (lønkontoer) — fælleskonti,
+-- nye default. Påvirker kun kind='checking' (lønkontoer) - fælleskonti,
 -- børnekonti og opsparingskonti er bevidst delte og skal ikke ændres.
 update public.accounts
 set editable_by_all = false

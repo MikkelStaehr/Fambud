@@ -1,11 +1,11 @@
-// /wizard/ejere — Trin 6 i ejer-flowet, kun for familier. Brugeren går
+// /wizard/ejere - Trin 6 i ejer-flowet, kun for familier. Brugeren går
 // igennem alle konti der er oprettet i wizarden og bekræfter/justerer
 // hvem der ejer hver. Solo-brugere har ingen tvetydighed (alt er ejerens
 // eller barnets), så vi auto-redirecter dem direkte til /done.
 //
 // Smart defaults er allerede sat under konto-oprettelse (Fælles-konti har
 // owner_name='Fælles', børnekonti har owner_name=barnets navn osv.).
-// Det her trin er en "review and adjust" — typisk klik én gang igennem.
+// Det her trin er en "review and adjust" - typisk klik én gang igennem.
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -46,7 +46,7 @@ export default async function WizardEjerePage({
   const { supabase, user, householdId } = await getHouseholdContext();
 
   // Familie-medlemmer i husstanden. Vi adskiller adults (bruger eller
-  // pre-godkendt med email) fra børn (uden begge dele) — alle bruges
+  // pre-godkendt med email) fra børn (uden begge dele) - alle bruges
   // som options i dropdownet sammen med 'Fælles'.
   const { data: familyMembers } = await supabase
     .from('family_members')
@@ -70,7 +70,7 @@ export default async function WizardEjerePage({
 
   // Vis alle konti oprettet af ejeren under wizarden. Vi springer
   // arkiverede over og sorterer så Fælles-konti samles, derefter ejer,
-  // derefter børn — det matcher den mentale model "fra fælles til personlig".
+  // derefter børn - det matcher den mentale model "fra fælles til personlig".
   const { data: accounts } = await supabase
     .from('accounts')
     .select('id, name, kind, owner_name, savings_purposes, investment_type')
@@ -103,7 +103,7 @@ export default async function WizardEjerePage({
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
         Gå igennem listen og justér hvis nogen konti skal have en anden
-        ejer. Vi har sat smart-defaults — for de fleste er det rigtigt fra
+        ejer. Vi har sat smart-defaults - for de fleste er det rigtigt fra
         start.
       </p>
 

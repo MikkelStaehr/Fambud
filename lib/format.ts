@@ -5,7 +5,7 @@ import type {
   SavingsPurpose,
 } from '@/lib/database.types';
 
-// Danish labels for the account_kind enum — single source of truth.
+// Danish labels for the account_kind enum - single source of truth.
 export const ACCOUNT_KIND_LABEL_DA: Record<AccountKind, string> = {
   checking: 'Lønkonto',
   budget: 'Budgetkonto',
@@ -18,7 +18,7 @@ export const ACCOUNT_KIND_LABEL_DA: Record<AccountKind, string> = {
 };
 
 // Subtyper når kind='investment'. Vises som badge på /konti og som loft-info
-// hvor det er relevant. Lofterne her er dem der gælder pr. 2026 — opdatér
+// hvor det er relevant. Lofterne her er dem der gælder pr. 2026 - opdatér
 // årligt hvis Skattestyrelsen ændrer satserne.
 export const INVESTMENT_TYPE_LABEL_DA: Record<InvestmentType, string> = {
   aldersopsparing: 'Aldersopsparing',
@@ -40,7 +40,7 @@ export const INVESTMENT_TYPE_CAP_DA: Record<InvestmentType, string | null> = {
 
 // Programmatisk udgave: ÅRLIGT loft i hele kroner. Bruges af forms til at
 // foreslå "del loft ud på 12 måneder"-knapper når brugeren vælger en konto
-// af denne type. Kun typer med et reelt årligt loft er listet —
+// af denne type. Kun typer med et reelt årligt loft er listet -
 // aktiesparekonto har et samlet livstidsloft (135.900) som ikke giver
 // mening at dele på 12. Pension har personlige forskelle vi ikke modellerer.
 export const INVESTMENT_TYPE_ANNUAL_CAP_KR: Partial<Record<InvestmentType, number>> = {
@@ -50,7 +50,7 @@ export const INVESTMENT_TYPE_ANNUAL_CAP_KR: Partial<Record<InvestmentType, numbe
 
 // Specialformål for opsparingskonti (kind='savings'). Hver har en beregnet
 // anbefaling baseret på brugerens egne tal (faste udgifter / nettoindkomst)
-// — det er det der gør dem "specielle" frem for almindelige savings.
+// - det er det der gør dem "specielle" frem for almindelige savings.
 export const SAVINGS_PURPOSE_LABEL_DA: Record<SavingsPurpose, string> = {
   buffer: 'Buffer Konto',
   predictable_unexpected: 'Forudsigelige uforudsete',
@@ -58,9 +58,9 @@ export const SAVINGS_PURPOSE_LABEL_DA: Record<SavingsPurpose, string> = {
 
 export const SAVINGS_PURPOSE_DESC_DA: Record<SavingsPurpose, string> = {
   buffer:
-    'Nødfond — kunne dække 3 mdr af jeres faste udgifter som minimum, 6 mdr ved godt niveau. Til jobtab, sygdom, akut reparation.',
+    'Nødfond - kunne dække 3 mdr af jeres faste udgifter som minimum, 6 mdr ved godt niveau. Til jobtab, sygdom, akut reparation.',
   predictable_unexpected:
-    'Pulje til ting du VED kommer — bilvedligehold, tandlæge, gaver, ferie. Når 1.500 kr overrasker dig hver kvartal slår budgettet kludder; med en pulje kan I bare bruge.',
+    'Pulje til ting du VED kommer - bilvedligehold, tandlæge, gaver, ferie. Når 1.500 kr overrasker dig hver kvartal slår budgettet kludder; med en pulje kan I bare bruge.',
 };
 
 export const RECURRENCE_LABEL_DA: Record<RecurrenceFreq, string> = {
@@ -89,7 +89,7 @@ export const MONTHS_DA: { value: number; label: string }[] = [
 ];
 
 // All money is stored as integer øre (1/100 DKK). Display goes via
-// formatAmount — kr-suffix tilføjes inline af kalderen så vi har ét sted
+// formatAmount - kr-suffix tilføjes inline af kalderen så vi har ét sted
 // at justere antallet af decimaler eller tusind-separator.
 
 const dkkPlainFormatter = new Intl.NumberFormat('da-DK', {
@@ -121,10 +121,10 @@ export function formatShortDateDA(iso: string): string {
 }
 
 // Parses a user-typed money input into integer øre. Accepts:
-//   '1234.56'      — period decimal (canonical)
-//   '1234,56'      — comma decimal (Danish keyboard, normalised to period)
-//   '1 234.56'     — with thousand-separator spaces (AmountInput renders these)
-//   '-209 132'     — negatives for credit balances
+//   '1234.56'      - period decimal (canonical)
+//   '1234,56'      - comma decimal (Danish keyboard, normalised to period)
+//   '1 234.56'     - with thousand-separator spaces (AmountInput renders these)
+//   '-209 132'     - negatives for credit balances
 // Returns null for empty/invalid input.
 export function parseAmountToOere(raw: string): number | null {
   const trimmed = raw.trim();
@@ -139,7 +139,7 @@ export function parseAmountToOere(raw: string): number | null {
 
 // Result-typer til de validerende parsers nedenfor. Server actions bruger
 // `{ ok: false, error }` mønstret til at returnere fejlbesked til redirect
-// uden at throw'e — så den helper-trio matcher det stilistisk.
+// uden at throw'e - så den helper-trio matcher det stilistisk.
 export type AmountParseResult =
   | { ok: true; value: number }
   | { ok: false; error: string };
@@ -186,7 +186,7 @@ export function parseOptionalAmount(
 }
 
 // Renders an øre value as the string that should appear in an AmountInput's
-// defaultValue — period-decimal, exactly two digits.
+// defaultValue - period-decimal, exactly two digits.
 export function formatOereForInput(oere: number): string {
   return (oere / 100).toFixed(2);
 }
@@ -215,7 +215,7 @@ export function monthBounds(yearMonth: string): { start: string; end: string } {
 
 export type ComponentsMode = 'additive' | 'breakdown';
 
-// "Effective" amount of an expense — what's actually withdrawn each occurrence.
+// "Effective" amount of an expense - what's actually withdrawn each occurrence.
 // Two semantics depending on components_mode:
 //   - 'additive' (default): parent is a base price, components stack on top.
 //     "Mobilabonnement 170 + tilkøb 328 = 498 kr/md"
@@ -264,12 +264,12 @@ function recurrenceStepMonths(freq: RecurrenceFreq): number {
     case 'quarterly':  return 3;
     case 'semiannual': return 6;
     case 'yearly':     return 12;
-    case 'weekly':     return 0; // step in weeks instead — handled separately
+    case 'weekly':     return 0; // step in weeks instead - handled separately
     case 'once':       return 0;
   }
 }
 
-// Given an anchor date (a known occurrence — typically the user's last
+// Given an anchor date (a known occurrence - typically the user's last
 // payment) and a recurrence, return the next date strictly after `today`.
 // If the anchor is already in the future, it IS the next occurrence.
 //
@@ -281,7 +281,7 @@ export function nextOccurrenceAfter(
 ): string {
   const [y, m, d] = anchorISO.split('-').map(Number);
   let next = new Date(y, m - 1, d);
-  // Strip time on `today` so the comparison is date-only — otherwise an
+  // Strip time on `today` so the comparison is date-only - otherwise an
   // anchor of "today" is sometimes < today by a few hours.
   const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 

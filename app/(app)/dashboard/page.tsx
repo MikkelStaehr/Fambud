@@ -28,7 +28,7 @@ import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
 import { UpcomingEvents } from './_components/UpcomingEvents';
 
-// Tidsbestemt hilsen — dansk, fire buckets der dækker normale vågne timer.
+// Tidsbestemt hilsen - dansk, fire buckets der dækker normale vågne timer.
 // "Godnat" er en farvel-frase på dansk, ikke en hilsen, så vi falder tilbage
 // til "Hej" om natten i stedet.
 function greetingFor(date: Date): string {
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
     getFamilyMembers(),
     getOtherMembersOnboardingStatus(),
   ]);
-  // Tour-state — auto-start hvis brugeren ikke har set rundturen endnu
+  // Tour-state - auto-start hvis brugeren ikke har set rundturen endnu
   // (men kun efter wizard er færdig, så vi ikke spammer dem mens de
   // stadig sætter op).
   const { membership } = await getMyMembership();
@@ -137,9 +137,9 @@ export default async function DashboardPage() {
 
       <IncomeForecastBanner />
 
-      {/* Tier 1 — det brugeren skal se lynhurtigt:
+      {/* Tier 1 - det brugeren skal se lynhurtigt:
           1. HeroStatus: "Er du på rette spor?" (netto + statustekst)
-          2. Cashflow-tjek (advarsler — kompakt, fuld bredde)
+          2. Cashflow-tjek (advarsler - kompakt, fuld bredde)
           3. To-kolonne: Næste 7 dage + Udgifter pr. gruppe */}
       <HeroStatus
         income={income}

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0009 — Merge 'A-kasse' + 'Fagforening' into 'A-kasse & Fagforening'
+-- 0009 - Merge 'A-kasse' + 'Fagforening' into 'A-kasse & Fagforening'
 -- ----------------------------------------------------------------------------
 -- The two categories are paid as one expense by most users (FOA, 3F, HK, …
 -- bundle them on a single bill), so keeping them separate makes the dropdown
@@ -25,7 +25,7 @@ on conflict (household_id, name, kind) do nothing;
 
 -- Step 2: repoint transactions from the old categories to the combined one.
 -- transactions.category_id has ON DELETE SET NULL, so we MUST repoint before
--- deleting — otherwise those transactions would lose their category.
+-- deleting - otherwise those transactions would lose their category.
 update transactions t
 set category_id = combined.id
 from categories combined

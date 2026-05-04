@@ -27,11 +27,11 @@ function previousMonthIso(iso: string): string {
 // Search-params styrer hvilket flow brugeren kommer fra:
 //   ?role=primary&recurrence=once&member=X  → "Registrer lønudbetaling"
 //     (én faktisk udbetaling der bliver brugt som forecast-sample)
-//   ?duplicate=<incomeId>                   → "Duplikér" — pre-fylder ALLE
+//   ?duplicate=<incomeId>                   → "Duplikér" - pre-fylder ALLE
 //     felter fra en eksisterende post (også netto), kun datoen shifts én
 //     måned bagud. Til når flere lønninger i træk er identiske.
 //   default                                 → almindelig "Tilføj indkomst"
-//     (uklassificeret eller biindkomst — brugeren vælger frit)
+//     (uklassificeret eller biindkomst - brugeren vælger frit)
 export default async function NyIndkomstPage({
   searchParams,
 }: {
@@ -50,14 +50,14 @@ export default async function NyIndkomstPage({
   ]);
 
   // Duplikér-flow: hvis brugeren klikkede "Duplikér" på en eksisterende post,
-  // henter vi den fulde række så vi kan pre-fylde alt — inkl. netto, brutto,
+  // henter vi den fulde række så vi kan pre-fylde alt - inkl. netto, brutto,
   // beskrivelse osv. Kun dato'en justeres (én måned bagud).
   const duplicateSource = sp.duplicate
     ? await getIncomeById(sp.duplicate).catch(() => null)
     : null;
 
   // Når vi duplikerer en primary-paycheck arver vi rolle/member/recurrence
-  // fra kilden — query-params er sekundære.
+  // fra kilden - query-params er sekundære.
   const role: IncomeRole | null = duplicateSource
     ? duplicateSource.income_role
     : sp.role === 'primary' || sp.role === 'secondary'
@@ -75,9 +75,9 @@ export default async function NyIndkomstPage({
 
   // I paycheck-flow forsøger vi at hente medlemmets seneste lønudbetaling
   // og pre-fylde brutto, pension, trækprocent, skattefradrag og konto fra
-  // den. Det er den ene ting der ændrer sig sjældent — næsten alt undtagen
+  // den. Det er den ene ting der ændrer sig sjældent - næsten alt undtagen
   // dato + netto er konstant fra måned til måned. Returnerer null hvis det
-  // er medlemmets første registrering. Springes over når vi duplikerer —
+  // er medlemmets første registrering. Springes over når vi duplikerer -
   // duplikat-kilden er en mere specifik default.
   const recentDefaults =
     !duplicateSource && isPaycheckFlow && memberId
@@ -115,7 +115,7 @@ export default async function NyIndkomstPage({
       ? 'Registrer lønudbetaling'
       : 'Ny indkomst';
   const subline = duplicateSource
-    ? 'Alle felter er pre-fyldt fra den valgte post. Tjek datoen — vi har foreslået én måned bagud — og registrér.'
+    ? 'Alle felter er pre-fyldt fra den valgte post. Tjek datoen - vi har foreslået én måned bagud - og registrér.'
     : isPaycheckFlow
       ? 'Indtast én faktisk udbetaling med dato og beløb. Når der er 3+ udbetalinger registreret, beregner vi forecast for resten af året.'
       : null;
@@ -158,7 +158,7 @@ export default async function NyIndkomstPage({
               account_id: defaultAccountId,
               recurrence: recurrenceDefault,
               income_role: role,
-              // Duplikat-kilden vinder over alt andet — hele rækken kopieres,
+              // Duplikat-kilden vinder over alt andet - hele rækken kopieres,
               // kun datoen shifts én måned bagud.
               ...(duplicateSource
                 ? {
@@ -175,7 +175,7 @@ export default async function NyIndkomstPage({
                 : {
                     description: isPaycheckFlow ? 'Lønudbetaling' : undefined,
                     // Pre-fyld lønseddel-felter fra seneste udbetaling. Brutto,
-                    // pension og trækprocent ændrer sig sjældent — kun dato +
+                    // pension og trækprocent ændrer sig sjældent - kun dato +
                     // netto behøver brugeren faktisk indtaste hver gang.
                     gross_amount: recentDefaults?.gross_amount,
                     pension_own_pct: recentDefaults?.pension_own_pct,

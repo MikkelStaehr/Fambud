@@ -89,13 +89,13 @@ export default async function BudgetOverviewPage() {
               </h2>
               <p className="mt-1 text-sm text-neutral-600">
                 En <span className="font-medium text-neutral-900">budgetkonto</span>{' '}
-                er den fælles konto hvor faste regninger trækkes — husleje,
+                er den fælles konto hvor faste regninger trækkes - husleje,
                 forsikringer, abonnementer osv. Typisk har en familie én fælles
                 budgetkonto som lønnen overføres til hver måned.
               </p>
               <p className="mt-2 text-xs text-neutral-500">
                 Har I ikke en separat budgetkonto endnu? I kan også bruge jeres
-                lønkonto direkte — opret den blot som type{' '}
+                lønkonto direkte - opret den blot som type{' '}
                 <span className="font-medium">Lønkonto</span> i stedet.
               </p>
             </div>

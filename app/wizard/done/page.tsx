@@ -1,4 +1,4 @@
-// /wizard/done — Sidste trin. Viser kort opsummering af hvad der er sat
+// /wizard/done - Sidste trin. Viser kort opsummering af hvad der er sat
 // op og giver ejeren mulighed for at generere en invitations-kode hvis de
 // har pre-godkendt partner. Invitations-trinet er flyttet hertil så det
 // føles som "send det sidste afsted og kør" frem for et separat skridt.

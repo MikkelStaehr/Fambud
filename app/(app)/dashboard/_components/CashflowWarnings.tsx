@@ -1,5 +1,5 @@
 // Kompakt advarsels-liste til dashboardets tier-1 sektion. Tidligere var
-// dette del af CashflowAdvisor som også indeholdt Sankey-grafen — men i den
+// dette del af CashflowAdvisor som også indeholdt Sankey-grafen - men i den
 // nye dashboard-struktur er warnings og graf adskilt så warnings kan stå i
 // en tæt række ved siden af "Næste 7 dage". Sankey er nu sin egen tier
 // længere nede.

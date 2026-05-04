@@ -1,6 +1,6 @@
 // Submit-knap der reagerer på form-state via React's useFormStatus.
 // Mens server-action'en kører bliver knappen disabled og labelen skifter
-// til "Gemmer…" (eller hvad caller giver via pendingLabel) — så brugeren
+// til "Gemmer…" (eller hvad caller giver via pendingLabel) - så brugeren
 // kan se at klikket er registreret og ikke spammer en ekstra submit.
 //
 // Stiles som primary-knap by default; caller kan overskrive via variant

@@ -20,7 +20,7 @@ export default async function WizardFaelleskontiPage({
     redirect('/wizard/done');
   }
 
-  // List shared accounts already created — anything with owner_name='Fælles'
+  // List shared accounts already created - anything with owner_name='Fælles'
   // we treat as a shared account for the wizard's purposes.
   const { supabase, householdId, user } = await getHouseholdContext();
   const { data: shared } = await supabase
@@ -43,13 +43,13 @@ export default async function WizardFaelleskontiPage({
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
         Opret de konti I deler. To typer er fundament i langt de fleste
-        familiebudgetter — vi anbefaler I starter med dem:
+        familiebudgetter - vi anbefaler I starter med dem:
       </p>
       <ul className="mt-3 space-y-1.5 text-xs text-neutral-600">
         <li className="flex items-start gap-2">
           <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
           <span>
-            <span className="font-medium text-neutral-900">Budgetkonto</span> —
+            <span className="font-medium text-neutral-900">Budgetkonto</span> -
             til faste regninger (husleje, forsikringer, abonnementer). Lønnen
             overføres typisk hertil hver måned.
           </span>
@@ -58,7 +58,7 @@ export default async function WizardFaelleskontiPage({
           <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
           <span>
             <span className="font-medium text-neutral-900">Husholdningskonto</span>{' '}
-            — til variable hverdagsudgifter (dagligvarer, takeaway). Et fast
+            - til variable hverdagsudgifter (dagligvarer, takeaway). Et fast
             månedligt rådighedsbeløb gør det nemt at spore om I bliver inden
             for budgettet.
           </span>

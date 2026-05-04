@@ -1,9 +1,9 @@
 -- ============================================================================
--- 0029 — savings_purpose: text → text[] så én konto kan tagges med begge
+-- 0029 - savings_purpose: text → text[] så én konto kan tagges med begge
 -- ----------------------------------------------------------------------------
 -- 0025 indførte savings_purpose som single text-værdi (buffer ELLER
 -- predictable_unexpected). Brugerfeedback: i virkeligheden har de fleste
--- danske familier ÉN "Bufferkonto" der dækker begge formål — nødfond OG
+-- danske familier ÉN "Bufferkonto" der dækker begge formål - nødfond OG
 -- forudsigelige uforudsete. Vi tvang dem til at vælge ét.
 --
 -- Ændring: kolonnen omdøbes til savings_purposes (plural) og bliver et

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0027 — tax_rate_pct (trækprocent) på transactions
+-- 0027 - tax_rate_pct (trækprocent) på transactions
 -- ----------------------------------------------------------------------------
 -- Med skattefradrag (other_deduction_amount) + trækprocent kan vi udregne
 -- den FORUDSAGTE skat og dermed netto. Det betyder at lønseddel-builderen
@@ -14,7 +14,7 @@
 --   Forudsagt netto       = brutto − pension − AM-bidrag − A-skat
 --
 -- Konsekvensen er at brugeren kan opdage hvis deres input afviger fra
--- lønsedlen — og så får et reality-check på om dit lønsystem trækker
+-- lønsedlen - og så får et reality-check på om dit lønsystem trækker
 -- noget vi har misset (ATP, kantinekøb, etc.).
 --
 -- Idempotent: add column if not exists, plus check-constraint på range

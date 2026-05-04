@@ -19,7 +19,7 @@ export function CopyInviteButton({ value, kind }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard API can fail (insecure context, no permission). Silently noop —
+      // Clipboard API can fail (insecure context, no permission). Silently noop -
       // the user will notice and can copy manually from the visible code.
     }
   }

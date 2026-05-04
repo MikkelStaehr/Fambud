@@ -1,6 +1,6 @@
 'use client';
 
-// Måneds-overblik over faktiske posteringer som hierarkisk tabel — gruppe
+// Måneds-overblik over faktiske posteringer som hierarkisk tabel - gruppe
 // (Bolig & lån, Forsyning & forsikring, …) som parent-række, posterne som
 // foldbare børn. Forskellen til /budget: her viser vi det faktiske beløb
 // der er bogført i den valgte måned (incl. årlige/kvartalvise poster med
@@ -113,7 +113,7 @@ export function PosterTable({ rows }: Props) {
       const sorted = [...items].sort(sortChildren);
       return { group, color, total, items: sorted };
     });
-    // Grupper sorteret efter total desc — størst betalt først
+    // Grupper sorteret efter total desc - størst betalt først
     groups.sort((a, b) => b.total - a.total);
     return groups;
   }, [filtered, sortKey, sortDir]);
@@ -168,7 +168,7 @@ export function PosterTable({ rows }: Props) {
 
   return (
     <div>
-      {/* Scope-tab — Fælles / Private */}
+      {/* Scope-tab - Fælles / Private */}
       <div className="mb-4 inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
         <button
           type="button"

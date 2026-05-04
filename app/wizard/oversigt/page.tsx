@@ -1,7 +1,7 @@
-// /wizard/oversigt — Trin 2 i partner-flowet. Read-only oversigt over
+// /wizard/oversigt - Trin 2 i partner-flowet. Read-only oversigt over
 // hvad ejeren har sat op (fælleskonti + familiemedlemmer). Sætter
 // kontekst inden partner skal til at oprette sine egne private opsparinger
-// — så de ved hvilken buffer/husholdningskonto der allerede findes og
+// - så de ved hvilken buffer/husholdningskonto der allerede findes og
 // undgår at gen-oprette dem.
 //
 // Trinet redirecter ejer-brugere til deres egen vej (ejeren kommer aldrig
@@ -36,14 +36,14 @@ const KIND_ICON: Partial<Record<AccountKind, LucideIcon>> = {
 export default async function WizardOversigtPage() {
   const { membership } = await getMyMembership();
   if (membership?.role === 'owner') {
-    // Ejer kommer aldrig hertil i normalt flow — vi router dem væk.
+    // Ejer kommer aldrig hertil i normalt flow - vi router dem væk.
     redirect('/wizard/faelleskonti');
   }
 
   const { supabase, householdId, user } = await getHouseholdContext();
 
   // Fælleskonti = konti hvor owner_name='Fælles'. Disse er det partneren
-  // skal være opmærksom på — det er HER de har read+write som standard.
+  // skal være opmærksom på - det er HER de har read+write som standard.
   const { data: sharedAccounts } = await supabase
     .from('accounts')
     .select('id, name, kind, savings_purposes, investment_type')
@@ -52,7 +52,7 @@ export default async function WizardOversigtPage() {
     .eq('owner_name', 'Fælles')
     .order('kind', { ascending: true });
 
-  // Familie-medlemmer (alle, inkl. partneren selv) — vi viser dem så
+  // Familie-medlemmer (alle, inkl. partneren selv) - vi viser dem så
   // partneren ved hvem der er i husstanden og har et hurtigt overblik.
   const { data: familyMembers } = await supabase
     .from('family_members')
@@ -79,7 +79,7 @@ export default async function WizardOversigtPage() {
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
         Det her er hvad {owner?.name ?? 'din partner'} allerede har sat op.
-        Du behøver ikke gen-oprette nogle af kontiene — i næste trin
+        Du behøver ikke gen-oprette nogle af kontiene - i næste trin
         opretter du kun dine egne private opsparinger.
       </p>
 
@@ -193,7 +193,7 @@ export default async function WizardOversigtPage() {
           href="/wizard/opsparing"
           className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
         >
-          Næste — opret dine private opsparinger
+          Næste - opret dine private opsparinger
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

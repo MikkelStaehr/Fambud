@@ -1,15 +1,15 @@
 -- ============================================================================
--- 0010 — transaction_components: break a recurring expense into named parts
+-- 0010 - transaction_components: break a recurring expense into named parts
 -- ----------------------------------------------------------------------------
 -- A single transaction (e.g. "Mobilabonnement (Telia) 599 kr/md") often
--- bundles distinct sub-charges — basic plan + premium license + Spotify
+-- bundles distinct sub-charges - basic plan + premium license + Spotify
 -- family + news subscription. Same withdrawal, same date, but the user
 -- wants to see what makes up the total.
 --
 -- Same pattern fits a realkredit-afdrag: hovedstol-afdrag + rente +
 -- bidragssats are all parts of one monthly payment.
 --
--- Components don't have their own cashflow — they inherit recurrence and
+-- Components don't have their own cashflow - they inherit recurrence and
 -- occurs_on from the parent transaction. They're purely informational
 -- decomposition, surfaced in the /budget right-side list under each
 -- expense.
@@ -36,7 +36,7 @@ create index transaction_components_transaction_idx
 
 alter table transaction_components enable row level security;
 
--- Household-scoped only — we don't gate on can_write_account here. If you
+-- Household-scoped only - we don't gate on can_write_account here. If you
 -- can see a transaction (member of the household), you can add/remove its
 -- components. Tightening to a per-account write check would require joining
 -- through transactions on every policy evaluation; the looser policy is

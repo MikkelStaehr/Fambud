@@ -107,7 +107,7 @@ export function LoanForm({
       setMonthsStr('');
       return;
     }
-    // Accept comma as decimal — Danish keyboards default to it.
+    // Accept comma as decimal - Danish keyboards default to it.
     const n = Number(v.replace(',', '.'));
     if (Number.isFinite(n) && n > 0) {
       setMonthsStr(String(Math.round(n * 12)));
@@ -209,7 +209,7 @@ export function LoanForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="original_principal" className={labelClass}>
-              Hovedstol <span className="text-neutral-400">(kr. — valgfrit)</span>
+              Hovedstol <span className="text-neutral-400">(kr. - valgfrit)</span>
             </label>
             <AmountInput
               id="original_principal"
@@ -270,7 +270,7 @@ export function LoanForm({
             </div>
           </div>
           <p className="mt-2 text-xs text-neutral-500">
-            Skriv i den enhed du har for hånden — det andet felt opdaterer sig automatisk.
+            Skriv i den enhed du har for hånden - det andet felt opdaterer sig automatisk.
           </p>
         </div>
       </fieldset>
@@ -310,7 +310,7 @@ export function LoanForm({
               className={fieldClass}
             />
             <p className="mt-1 text-xs text-neutral-500">
-              Den seneste ydelsesdato du kender — eller første hvis lånet er
+              Den seneste ydelsesdato du kender - eller første hvis lånet er
               nyt. Næste betalingsdato beregnes ud fra intervallet.
             </p>
           </div>
@@ -318,7 +318,7 @@ export function LoanForm({
 
         <div className="mt-4">
           <label htmlFor="payment_amount" className={labelClass}>
-            Samlet ydelse <span className="text-neutral-400">(kr. pr. interval — valgfrit)</span>
+            Samlet ydelse <span className="text-neutral-400">(kr. pr. interval - valgfrit)</span>
           </label>
           <AmountInput
             id="payment_amount"
@@ -328,7 +328,7 @@ export function LoanForm({
           />
           <p className="mt-1 text-xs text-neutral-500">
             Brug for banklån / kreditkort. For realkredit udfyld nedbrydningen
-            nedenfor — ydelsen beregnes så automatisk.
+            nedenfor - ydelsen beregnes så automatisk.
           </p>
         </div>
       </fieldset>
@@ -378,7 +378,7 @@ export function LoanForm({
           </div>
           <div>
             <label htmlFor="payment_rabat" className={labelClass}>
-              Rabat <span className="text-neutral-400">(kr. — minus for KundeKroner)</span>
+              Rabat <span className="text-neutral-400">(kr. - minus for KundeKroner)</span>
             </label>
             <AmountInput
               id="payment_rabat"
@@ -392,7 +392,7 @@ export function LoanForm({
         {/* Capture live-controlled values via hidden mirrors so the form still
             posts whatever's in the visible AmountInputs. AmountInput is
             uncontrolled, so we drive it via separate state + sync via
-            hidden inputs. Actually AmountInput emits via its own name —
+            hidden inputs. Actually AmountInput emits via its own name -
             no mirror needed. We just use the state for the live-sum below. */}
 
         {anyBreakdown && (
@@ -414,7 +414,7 @@ export function LoanForm({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="interest_rate" className={labelClass}>
-              Rente <span className="text-neutral-400">(% — valgfrit)</span>
+              Rente <span className="text-neutral-400">(% - valgfrit)</span>
             </label>
             <input
               id="interest_rate"
@@ -428,7 +428,7 @@ export function LoanForm({
           </div>
           <div>
             <label htmlFor="apr" className={labelClass}>
-              ÅOP <span className="text-neutral-400">(% — valgfrit)</span>
+              ÅOP <span className="text-neutral-400">(% - valgfrit)</span>
             </label>
             <input
               id="apr"

@@ -1,15 +1,15 @@
-// /overforsler — strukturel oversigt over hvor pengene skal hen i husstanden.
+// /overforsler - strukturel oversigt over hvor pengene skal hen i husstanden.
 //
 //   1. Header: hvor mange faste overførsler, hvor mange kr/md i alt
 //   2. Stats-kort: total, til fælles, til opsparing, antal idle-konti
 //   3. Smart insights: konkrete observationer ("X har +Y i surplus", "Z er
-//      aldrig blevet sat op", osv) — kun når relevant
+//      aldrig blevet sat op", osv) - kun når relevant
 //   4. Faste overførsler grupperet efter formål:
 //        Til fælles-økonomien · Til opsparing & investering · Til afdrag på
 //        lån · Andre
 //   5. Engangs-overførsler i den valgte måned (mindre, sekundær)
 //
-// Vi droppede den interaktive graf — tabel-grupperingen viser samme
+// Vi droppede den interaktive graf - tabel-grupperingen viser samme
 // information mere kompakt og er nemmere at scanne. Drag-to-create var
 // fancy men sjældent brugt; "Ny overførsel"-knappen + de pre-fyldte links
 // fra CashflowAdvisor er nu det primære oprettelses-flow.
@@ -70,7 +70,7 @@ const GROUP_META: Record<
   shared: {
     title: 'Til fælles-økonomien',
     description:
-      'Overførsler til budget- og husholdningskonti — det der dækker husstandens fælles forpligtelser.',
+      'Overførsler til budget- og husholdningskonti - det der dækker husstandens fælles forpligtelser.',
     icon: Home,
     tone: 'bg-emerald-50 text-emerald-800',
   },
@@ -90,7 +90,7 @@ const GROUP_META: Record<
   },
   other: {
     title: 'Andre overførsler',
-    description: 'Resterende — typisk mellem private konti.',
+    description: 'Resterende - typisk mellem private konti.',
     icon: ArrowLeftRight,
     tone: 'bg-neutral-100 text-neutral-700',
   },
@@ -117,7 +117,7 @@ export default async function OverforslerPage({
 
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
 
-  // Flatten recurring transfers — vi smider engangs ud her, de hører til
+  // Flatten recurring transfers - vi smider engangs ud her, de hører til
   // i deres egen sektion nederst.
   const recurring: EnrichedTransfer[] = graph.edges.flatMap((edge) =>
     edge.transfers
@@ -152,7 +152,7 @@ export default async function OverforslerPage({
     groups[k].sort((a, b) => b.monthly - a.monthly);
   });
 
-  // Smart insights — skal være konkrete og handlingsorienterede, ikke
+  // Smart insights - skal være konkrete og handlingsorienterede, ikke
   // generelle. Vi tjekker tre ting:
   //  1. Konti der hverken sender eller modtager overførsler men ikke er
   //     credit eller den primære lønkonto (måske glemt at sætte op)
@@ -164,7 +164,7 @@ export default async function OverforslerPage({
   const totalShared = groups.shared.reduce((s, t) => s + t.monthly, 0);
   const totalSavings = groups.savings.reduce((s, t) => s + t.monthly, 0);
 
-  // Idle-konti tæller med i en stat-card — hjælper brugeren se "har jeg
+  // Idle-konti tæller med i en stat-card - hjælper brugeren se "har jeg
   // glemt en konto?". Filtrer credit ud (de styres på /laan).
   const idleAccounts = graph.accounts.filter((a) => {
     if (a.kind === 'credit' || a.archived) return false;
@@ -183,7 +183,7 @@ export default async function OverforslerPage({
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
             {recurring.length === 0
-              ? 'Ingen faste overførsler endnu — opret din første via knappen til højre'
+              ? 'Ingen faste overførsler endnu - opret din første via knappen til højre'
               : `${recurring.length} faste · ${formatAmount(totalMonthly)} kr/md i alt`}
           </p>
         </div>
@@ -230,7 +230,7 @@ export default async function OverforslerPage({
       )}
 
       {/* Grupperet liste over faste overførsler. Sektioner uden indhold
-          renderes ikke — siden bliver så aldrig længere end nødvendigt. */}
+          renderes ikke - siden bliver så aldrig længere end nødvendigt. */}
       {(['shared', 'savings', 'credit', 'other'] as GroupKey[]).map((key) => {
         const items = groups[key];
         if (items.length === 0) return null;
@@ -240,7 +240,7 @@ export default async function OverforslerPage({
       {recurring.length === 0 && (
         <section className="mt-8 rounded-md border border-dashed border-neutral-300 bg-white px-6 py-12 text-center">
           <p className="text-sm text-neutral-500">
-            Ingen faste overførsler endnu. De er rygraden i jeres økonomi —
+            Ingen faste overførsler endnu. De er rygraden i jeres økonomi -
             de fortæller hvor lønnen skal hen hver måned.
           </p>
           <p className="mt-2 text-xs text-neutral-400">
@@ -283,9 +283,9 @@ export default async function OverforslerPage({
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-900">
-                        <span className="font-medium">{t.from_account?.name ?? '—'}</span>
+                        <span className="font-medium">{t.from_account?.name ?? '-'}</span>
                         <ArrowRight className="h-3 w-3 text-neutral-400" />
-                        <span className="font-medium">{t.to_account?.name ?? '—'}</span>
+                        <span className="font-medium">{t.to_account?.name ?? '-'}</span>
                       </div>
                       {t.description && (
                         <div className="mt-0.5 text-xs text-neutral-500">{t.description}</div>
@@ -399,7 +399,7 @@ function RecurringRow({ t }: { t: EnrichedTransfer }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-neutral-900">
-            {t.fromAccount?.name ?? '—'}
+            {t.fromAccount?.name ?? '-'}
           </span>
           {!isFromShared && t.fromAccount?.owner_name && (
             <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
@@ -408,7 +408,7 @@ function RecurringRow({ t }: { t: EnrichedTransfer }) {
           )}
           <ArrowRight className="h-3 w-3 text-neutral-400" />
           <span className="font-medium text-neutral-900">
-            {t.toAccount?.name ?? '—'}
+            {t.toAccount?.name ?? '-'}
           </span>
           <span className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
             <Repeat className="h-2.5 w-2.5" />
@@ -493,7 +493,7 @@ function computeInsights(
       kind: 'no-incoming-savings',
       message: `${a.name} har ingen månedlig overførsel ind`,
       detail:
-        'Hvis I sparer op her hver måned, så sæt en fast overførsel op — så lægger pengene sig selv til side.',
+        'Hvis I sparer op her hver måned, så sæt en fast overførsel op - så lægger pengene sig selv til side.',
     });
   }
 

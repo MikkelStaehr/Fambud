@@ -51,7 +51,7 @@ export default async function JoinByCodePage({
   }
 
   // If the visitor is already logged in we can't sign them up again. Offer to
-  // log out and come back to the same code rather than silently redirecting —
+  // log out and come back to the same code rather than silently redirecting -
   // they need to know what's blocking them.
   const {
     data: { user },

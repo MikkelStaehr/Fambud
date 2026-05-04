@@ -27,14 +27,14 @@ import { deleteIncome, setPrimaryIncomeSource } from './actions';
 
 // /indkomst er nu delt i tre konceptuelle sektioner:
 //
-//   1. Hovedindkomst — én card pr. familiemedlem. Viser primary_income_source
+//   1. Hovedindkomst - én card pr. familiemedlem. Viser primary_income_source
 //      (løn / understøttelse), forecast baseret på de 3 seneste lønudbetalinger,
 //      og en liste over registrerede udbetalinger.
 //
-//   2. Biindkomst — alle income-transaktioner med income_role='secondary'
+//   2. Biindkomst - alle income-transaktioner med income_role='secondary'
 //      (freelance, B-skat, udbytte osv.). Simpel flad liste.
 //
-//   3. Uklassificeret — gamle income-poster fra før migration 0026 hvor
+//   3. Uklassificeret - gamle income-poster fra før migration 0026 hvor
 //      income_role er null. Brugeren bedes klassificere eller slette dem.
 export default async function IndkomstPage({
   searchParams,
@@ -48,7 +48,7 @@ export default async function IndkomstPage({
   ]);
 
   // Børn (begge user_id og email er null) har pr. definition ingen
-  // hovedindkomst — de tjener ikke. Børneopsparingsindbetalinger gemmes
+  // hovedindkomst - de tjener ikke. Børneopsparingsindbetalinger gemmes
   // som transfers, ikke som income, så de hører ikke til her.
   // Vi viser kun voksne (logged-in eller pre-godkendt med email) i
   // Hovedindkomst-sektionen.
@@ -71,7 +71,7 @@ export default async function IndkomstPage({
   const unclassifiedIncomes = incomes.filter((i) => i.income_role == null);
 
   // Sum til header. Primary-paychecks bruger recurrence='once' så
-  // monthlyEquivalent giver 0 — vi falder tilbage til forecast-summen
+  // monthlyEquivalent giver 0 - vi falder tilbage til forecast-summen
   // for dem og monthlyEquivalent for resten (sekundære recurrencer + biindkomst).
   const forecastSum = forecasts.reduce(
     (sum, f) => sum + (f.forecast.status === 'ready' ? f.forecast.monthlyNet : 0),
@@ -103,7 +103,7 @@ export default async function IndkomstPage({
         </div>
       )}
 
-      {/* Hovedindkomst — én card pr. familiemedlem */}
+      {/* Hovedindkomst - én card pr. familiemedlem */}
       <section className="mt-6">
         <h2 className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           <Sparkles className="h-3 w-3" />
@@ -135,7 +135,7 @@ export default async function IndkomstPage({
         )}
       </section>
 
-      {/* Biindkomster — flad liste */}
+      {/* Biindkomster - flad liste */}
       <section className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -168,7 +168,7 @@ export default async function IndkomstPage({
         )}
       </section>
 
-      {/* Uklassificerede poster — kun synlig hvis nogen */}
+      {/* Uklassificerede poster - kun synlig hvis nogen */}
       {unclassifiedIncomes.length > 0 && (
         <section className="mt-8">
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
@@ -183,7 +183,7 @@ export default async function IndkomstPage({
                 </h2>
                 <p className="mt-0.5 text-sm text-amber-800">
                   Disse poster er fra før vi indførte hovedindkomst/biindkomst-
-                  skellet. Rediger dem og marker dem som primær (hovedindkomst —
+                  skellet. Rediger dem og marker dem som primær (hovedindkomst -
                   løn/understøttelse) eller sekundær (biindkomst). Alternativt slet dem
                   hvis de er forældede.
                 </p>
@@ -237,7 +237,7 @@ function HovedindkomstCard({
             </span>
           )}
         </div>
-        {/* Inline kilde-vælger. Submit ved change er bevidst — sparer en
+        {/* Inline kilde-vælger. Submit ved change er bevidst - sparer en
             ekstra "Gem"-klik. Det er én select med klare valg. */}
         <form action={setPrimaryIncomeSource} className="flex items-center gap-2">
           <input type="hidden" name="family_member_id" value={member.id} />
@@ -250,7 +250,7 @@ function HovedindkomstCard({
             defaultValue={member.primary_income_source ?? ''}
             className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
           >
-            <option value="">— Vælg —</option>
+            <option value="">- Vælg -</option>
             <option value="salary">Løn</option>
             <option value="benefits">Understøttelse</option>
           </select>
@@ -266,12 +266,12 @@ function HovedindkomstCard({
       {/* Tilstand 1: kilde ikke valgt */}
       {!member.primary_income_source && (
         <p className="mt-3 text-sm text-neutral-500">
-          Vælg om {member.name} primært modtager løn eller understøttelse —
+          Vælg om {member.name} primært modtager løn eller understøttelse -
           så kan vi vise det rigtige flow til at registrere udbetalinger.
         </p>
       )}
 
-      {/* Tilstand 2: understøttelse — kommer senere */}
+      {/* Tilstand 2: understøttelse - kommer senere */}
       {member.primary_income_source === 'benefits' && (
         <div className="mt-3 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2.5 text-xs text-neutral-500">
           Understøttelses-flow er endnu ikke bygget. Indtil videre kan du
@@ -280,7 +280,7 @@ function HovedindkomstCard({
         </div>
       )}
 
-      {/* Tilstand 3: løn — vis forecast + samples */}
+      {/* Tilstand 3: løn - vis forecast + samples */}
       {member.primary_income_source === 'salary' && forecast && (
         <SalaryForecastView
           memberId={member.id}

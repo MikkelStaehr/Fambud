@@ -1,6 +1,6 @@
 // Post-wizard checkliste der viser brugeren hvilke fundamentale trin der
 // mangler for at komme godt i gang. Erstatter den enkelt-CTA "Lad os fylde
-// budgettet op" der kun spørgte om faste udgifter — efter wizard har
+// budgettet op" der kun spørgte om faste udgifter - efter wizard har
 // brugeren mere end én ting at gøre, og ingen vej til at se hele billedet.
 //
 // Komponenten skjules helt når alle tre fundamentale trin er færdige. Det
@@ -31,7 +31,7 @@ export function OnboardingChecklist({ progress }: Props) {
       done: progress.hasRecurringExpenses,
       label: 'Tilføj jeres faste udgifter',
       description:
-        'Husleje, abonnementer, forsikringer — alle de regninger der kommer hver måned.',
+        'Husleje, abonnementer, forsikringer - alle de regninger der kommer hver måned.',
       cta: progress.hasRecurringExpenses ? 'Se faste udgifter' : 'Kom i gang',
       href: '/faste-udgifter',
     },
@@ -71,7 +71,7 @@ export function OnboardingChecklist({ progress }: Props) {
           Kom godt i gang
           <InfoTooltip>
             Post-wizard checkliste over de fundamentale trin. Skjuler sig
-            selv når alle tre er færdige — og kommer ikke tilbage. Det er
+            selv når alle tre er færdige - og kommer ikke tilbage. Det er
             en engangs-rejse, ikke permanent dashboard-støj.
           </InfoTooltip>
         </h2>

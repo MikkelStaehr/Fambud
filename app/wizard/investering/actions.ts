@@ -53,7 +53,7 @@ export async function createInvestment(formData: FormData) {
   revalidatePath('/wizard/investering');
 }
 
-// Børneopsparing pr. barn — én ét-kliks knap pr. barn der opretter en
+// Børneopsparing pr. barn - én ét-kliks knap pr. barn der opretter en
 // investment-konto med owner_name=barnets navn og investment_type=
 // 'boerneopsparing'. Det giver skattefordel-loftet (6.000/år/barn) en
 // konkret konto som /konti og /opsparinger genkender.

@@ -50,7 +50,7 @@ function formatDisplay(raw: string): string {
   const dotIdx = unsigned.indexOf('.');
   const intPart = dotIdx === -1 ? unsigned : unsigned.slice(0, dotIdx);
   const decPart = dotIdx === -1 ? '' : unsigned.slice(dotIdx);
-  // \B(?=(\d{3})+(?!\d)) — match positions inside the number where a group of
+  // \B(?=(\d{3})+(?!\d)) - match positions inside the number where a group of
   // three digits ends without another digit after. Standard thousand-grouping.
   const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   return sign + grouped + decPart;

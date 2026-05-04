@@ -1,4 +1,4 @@
-// Transactions — generic CRUD reads + helpers for the /poster og /budget
+// Transactions - generic CRUD reads + helpers for the /poster og /budget
 // sider. Income- og loan-specifikke queries hører til hhv. income.ts og
 // loans.ts.
 
@@ -108,7 +108,7 @@ export async function getRecurringExpensesForAccount(
     }));
 }
 
-// Distinct group_label values for the household — used to populate the
+// Distinct group_label values for the household - used to populate the
 // HTML datalist so users see existing groups (Popermo, TopDanmark, …) when
 // adding/editing an expense, reducing typo-driven group splits.
 export async function getDistinctExpenseGroups(): Promise<string[]> {

@@ -198,7 +198,7 @@ export function ExpenseForm({
           )}
         </>
       ) : (
-        // For non-monthly we don't ask for a precise day — just the month
+        // For non-monthly we don't ask for a precise day - just the month
         // when the first payment is due. The action stamps the 1st of that
         // month as occurs_on (this year if future, else next year).
         <div>

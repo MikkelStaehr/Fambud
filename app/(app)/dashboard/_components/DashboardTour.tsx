@@ -43,7 +43,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
       content: (
         <>
           <p>
-            Her ser du de 3 vigtigste ting at sætte op nu — faste udgifter,
+            Her ser du de 3 vigtigste ting at sætte op nu - faste udgifter,
             månedlige overførsler og bufferkonto.
           </p>
           <p className="mt-2">
@@ -65,7 +65,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
           </p>
           <p className="mt-2">
             Hvis tallet er rødt, kan det være fordi en partner mangler at
-            registrere sin løn — vi siger til.
+            registrere sin løn - vi siger til.
           </p>
         </>
       ),
@@ -77,7 +77,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
         <>
           <p>
             Hvis nogen af jeres fælles-konti ikke har nok overførsler hver
-            måned, fanger agenten det her — sammen med en knap der opretter
+            måned, fanger agenten det her - sammen med en knap der opretter
             den manglende overførsel for dig.
           </p>
         </>
@@ -93,7 +93,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
             fælles regninger og opsparing.
           </p>
           <p className="mt-2">
-            Bredden af hvert bånd er proportional med beløbet — så du
+            Bredden af hvert bånd er proportional med beløbet - så du
             hurtigt ser hvor pengene faktisk hen.
           </p>
         </>
@@ -109,7 +109,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
             udgifter, planlægger dagligvarer og sætter opsparingsmål.
           </p>
           <p className="mt-2">
-            Begynd med dem der står på checklisten — så bygger appen sig
+            Begynd med dem der står på checklisten - så bygger appen sig
             selv op rundt om jeres tal.
           </p>
         </>

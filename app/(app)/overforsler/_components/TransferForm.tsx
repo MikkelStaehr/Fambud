@@ -60,13 +60,13 @@ export function TransferForm({
   error,
 }: Props) {
   const dv = defaultValues;
-  // Same approach as TransactionForm — keep an archived account in the dropdown
+  // Same approach as TransactionForm - keep an archived account in the dropdown
   // when it's already the row's selected value, so editing doesn't lose it.
   const visibleAccounts = (selectedId?: string) =>
     accounts.filter((a) => !a.archived || a.id === selectedId);
 
   // Date er controlled så "Sidste bankdag"-knappen kan udfylde feltet.
-  // Reglen: sidste hverdag i måneden (ingen helligdage modelleret) — samme
+  // Reglen: sidste hverdag i måneden (ingen helligdage modelleret) - samme
   // definition overalt i appen, importeret fra banking-days.ts.
   const [occursOn, setOccursOn] = useState(dv.occurs_on ?? todayISO());
 
@@ -89,7 +89,7 @@ export function TransferForm({
     selectedTo?.investment_type
       ? INVESTMENT_TYPE_ANNUAL_CAP_KR[selectedTo.investment_type]
       : undefined;
-  // Hele kroner pr. måned — vi runder ned så vi aldrig foreslår over loftet
+  // Hele kroner pr. måned - vi runder ned så vi aldrig foreslår over loftet
   // (ved 9.900 kr/år giver det 825 kr/md som er præcis 9.900 totalt). For
   // 6.000 kr/år bliver det 500 kr/md, også eksakt.
   const monthlyCapOere =

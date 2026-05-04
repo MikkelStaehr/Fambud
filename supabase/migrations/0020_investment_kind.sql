@@ -1,8 +1,8 @@
 -- ============================================================================
--- 0020 — add 'investment' to account_kind enum
+-- 0020 - add 'investment' to account_kind enum
 -- ----------------------------------------------------------------------------
 -- Aktiedepot, pensionsdepot, ASK osv. behandles i dag som 'savings', men de
--- er konceptuelt forskellige — de har volatil saldo (markedsværdi), forskelle
+-- er konceptuelt forskellige - de har volatil saldo (markedsværdi), forskelle
 -- i skattebehandling og vises typisk separat fra alm. opsparing.
 --
 -- Tilføj 'investment' som ny enum-værdi så /konti kan gruppere dem under

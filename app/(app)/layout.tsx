@@ -23,7 +23,7 @@ export default async function AppLayout({
   if (!user) redirect('/login');
 
   // Wizard gate. We don't go through the full DAL here because the (app)
-  // layout runs on every page load — keep this query minimal.
+  // layout runs on every page load - keep this query minimal.
   const { data: membership } = await supabase
     .from('family_members')
     .select('setup_completed_at')
@@ -33,7 +33,7 @@ export default async function AppLayout({
 
   return (
     // App-shell med fast viewport-højde. Sidebar holder samme størrelse
-    // uanset hvor langt indholdet er — det er kun <main> der scroller. Det
+    // uanset hvor langt indholdet er - det er kun <main> der scroller. Det
     // giver et stabilt navigations-anker og undgår at sidebaren strækker
     // sig på lange sider som /budget eller /opsparinger.
     <div className="flex h-screen">
@@ -43,7 +43,7 @@ export default async function AppLayout({
         </div>
 
         {/* Nav-området kan scrolle internt hvis det nogensinde bliver længere
-            end viewporten (mange værktøjer eller smal højde) — sign-out
+            end viewporten (mange værktøjer eller smal højde) - sign-out
             forbliver klistret til bunden via mt-auto på det næste blok. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           <SidebarNav />

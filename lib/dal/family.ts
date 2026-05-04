@@ -1,4 +1,4 @@
-// Family members + household-settings — alle (auth-brugere, pre-godkendte
+// Family members + household-settings - alle (auth-brugere, pre-godkendte
 // med email, og børn uden begge) er rækker i `family_members`. Migration
 // 0015 unifierede tidligere `household_members`-tabellen ind i denne, så
 // `is_household_member()` (RLS-grundsten) læser direkte herfra.
@@ -106,7 +106,7 @@ export async function getHouseholdEconomyType(): Promise<
 
 // Onboarding-status pr. voksent familiemedlem. Bruges af dashboardets
 // "Familie-status"-sektion til at vise om de andre i husstanden også
-// har sat deres del op — lønkonto, indkomst, overførsler. Den indloggede
+// har sat deres del op - lønkonto, indkomst, overførsler. Den indloggede
 // bruger har sin egen OnboardingChecklist længere oppe så vi ekskluderer
 // dem fra listen.
 export type MemberOnboardingStatus = {
@@ -128,7 +128,7 @@ export async function getOtherMembersOnboardingStatus(): Promise<
     .select('id, name, user_id, email')
     .eq('household_id', householdId)
     .neq('user_id', user.id);
-  // Kun voksne (har email eller er logget ind) — børn ekskluderes.
+  // Kun voksne (har email eller er logget ind) - børn ekskluderes.
   const adults = (members ?? []).filter(
     (m) => m.user_id != null || m.email != null
   );
@@ -194,7 +194,7 @@ export async function getOtherMembersOnboardingStatus(): Promise<
   }));
 }
 
-// Fornavn på den indloggede bruger — bruges til at personliggøre headings
+// Fornavn på den indloggede bruger - bruges til at personliggøre headings
 // ("Godmorgen, Mikkel"). Returnerer null hvis brugeren ikke har navn sat.
 export async function getCurrentMemberFirstName(): Promise<string | null> {
   const { supabase, user } = await getHouseholdContext();

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, getMyMembership } from '@/lib/dal';
 import type { HouseholdEconomyType } from '@/lib/database.types';
 
-// Sætter familie-økonomi-modellen og — hvis 'shared' — opdaterer den
+// Sætter familie-økonomi-modellen og - hvis 'shared' - opdaterer den
 // eksisterende lønkonto til at være Fælles. Indkomst fra trin 1 forbliver
 // uændret; det er bare kontoen der nu er pooled. Partner's wizard
 // detekterer 'shared' og springer lønkonto-oprettelse over til fordel
@@ -13,7 +13,7 @@ import type { HouseholdEconomyType } from '@/lib/database.types';
 //
 // Hvis brugeren skifter mellem 'separate' og 'shared' frem og tilbage i
 // samme wizard-session, opdaterer vi lønkontoens owner_name tilsvarende
-// — det matcher den valgte model når brugeren går videre til næste trin.
+// - det matcher den valgte model når brugeren går videre til næste trin.
 export async function setEconomyType(formData: FormData) {
   const typeRaw = String(formData.get('economy_type') ?? '');
   if (typeRaw !== 'separate' && typeRaw !== 'shared') {

@@ -1,7 +1,7 @@
 // Dashboard- og husstands-totals: tynde aggregeringer på toppen af
 // getCashflowGraph. Begge funktioner er bevidst forecast-aware
 // (monthlyEquivalent + 'once' paycheck-snit) frem for "denne måneds
-// faktiske bogførsel" — appens hele filosofi er steady-state cashflow.
+// faktiske bogførsel" - appens hele filosofi er steady-state cashflow.
 
 import type { Account, RecurrenceFreq } from '@/lib/database.types';
 import {
@@ -27,7 +27,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const { supabase, householdId } = await getHouseholdContext();
   const yearMonth = currentYearMonth();
 
-  // Slim konto-liste til dashboardet. Vi læser kun navne/typer — ikke
+  // Slim konto-liste til dashboardet. Vi læser kun navne/typer - ikke
   // opening_balance, fordi dashboardet handler om flow, ikke beholdning.
   const { data: accounts, error: accErr } = await supabase
     .from('accounts')
@@ -60,13 +60,13 @@ export async function getDashboardData(): Promise<DashboardData> {
 }
 
 // ----------------------------------------------------------------------------
-// Husstandens samlede økonomiske billede — bruges til at beregne anbefalede
+// Husstandens samlede økonomiske billede - bruges til at beregne anbefalede
 // målbeløb (fx "buffer = 3 mdr af faste udgifter", "forudsigelige uforudsete
 // = 15% af nettoindkomst")
 // ----------------------------------------------------------------------------
 export type HouseholdFinancialSummary = {
   // Sum af monthlyEquivalent for alle recurring income-transactions i husstanden.
-  // Det er hvad faktisk lander på konti — nettoløn, ikke bruttoløn.
+  // Det er hvad faktisk lander på konti - nettoløn, ikke bruttoløn.
   monthlyNetIncome: number;
   // Sum af monthlyEquivalent for alle recurring expense-transactions, inkl.
   // effective amount (additive components stack på top af parent).

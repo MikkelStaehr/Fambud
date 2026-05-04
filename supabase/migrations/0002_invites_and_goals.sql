@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0002 — Invite codes + savings goals
+-- 0002 - Invite codes + savings goals
 -- ----------------------------------------------------------------------------
 -- Two independent changes packaged together because we ship them in one turn:
 --   1. accounts gain optional goal_amount/goal_date/goal_label so any account
@@ -22,7 +22,7 @@ alter table accounts
 -- generate_invite_code()
 -- ----------------------------------------------------------------------------
 -- 8-char codes from a 31-char alphabet (no 0/O/1/I/L/letter-confusables) →
--- ~27 billion combinations. We don't retry on collision — at solo-dev volumes
+-- ~27 billion combinations. We don't retry on collision - at solo-dev volumes
 -- we will never see one. Defined before household_invites so the table can
 -- use it as a column default.
 create or replace function public.generate_invite_code()
@@ -53,7 +53,7 @@ create table household_invites (
   expires_at timestamptz,
   used_at timestamptz,
   used_by uuid references auth.users(id) on delete set null,
-  -- used_by has no meaning without used_at — keep them in lockstep.
+  -- used_by has no meaning without used_at - keep them in lockstep.
   check ((used_at is null) = (used_by is null))
 );
 
@@ -131,12 +131,12 @@ $$;
 grant execute on function public.get_household_members(uuid) to authenticated;
 
 -- ----------------------------------------------------------------------------
--- Auth trigger — replace function (the trigger from 0001 keeps pointing here)
+-- Auth trigger - replace function (the trigger from 0001 keeps pointing here)
 -- ----------------------------------------------------------------------------
 -- Behaviour:
 --  - If raw_user_meta_data.invite_code is set: validate the code, add the new
 --    user as 'member' to the invited household, mark the code used.
---  - Otherwise: legacy 0001 behaviour — create a new household and add as
+--  - Otherwise: legacy 0001 behaviour - create a new household and add as
 --    'owner'.
 -- An invalid invite code raises an exception, which propagates back through
 -- supabase.auth.signUp() so the signup action can surface the failure.

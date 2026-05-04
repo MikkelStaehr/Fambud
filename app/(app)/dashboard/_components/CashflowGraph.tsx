@@ -7,14 +7,14 @@
 // Louise har sin, får de hver deres pengestrøms-historie.
 //
 // Bandene farves efter destination's "type":
-//   • Privat (rød)     — udgifter direkte fra lønkontoen + transfers til
+//   • Privat (rød)     - udgifter direkte fra lønkontoen + transfers til
 //                         egne ikke-fælles konti
-//   • Fælles (amber)   — transfers til fælles-konti (budget, husholdning)
-//   • Opsparing (grå)  — transfers til savings/investment
+//   • Fælles (amber)   - transfers til fælles-konti (budget, husholdning)
+//   • Opsparing (grå)  - transfers til savings/investment
 //
 // I modsætning til en strikt Sankey kan summen af outflows godt være større
 // end income (saldoen falder). Vi skalerer alt efter det største af de to
-// så banderne tegnes korrekt — og viser net som et lille badge øverst.
+// så banderne tegnes korrekt - og viser net som et lille badge øverst.
 
 import type { Account } from '@/lib/database.types';
 import type { CashflowGraphData } from '@/lib/dal';
@@ -29,13 +29,13 @@ type Props = {
 type OutflowType = 'private' | 'shared' | 'savings';
 
 const TYPE_FILL: Record<OutflowType, string> = {
-  private: '#fca5a5',     // red-300 — bands
+  private: '#fca5a5',     // red-300 - bands
   shared: '#fcd34d',      // amber-300
   savings: '#a3a3a3',     // neutral-400
 };
 
 const TYPE_STROKE: Record<OutflowType, string> = {
-  private: '#b91c1c',     // red-700 — destination border
+  private: '#b91c1c',     // red-700 - destination border
   shared: '#b45309',      // amber-700
   savings: '#525252',     // neutral-600
 };
@@ -65,10 +65,10 @@ const SOURCE_X = PADDING_X;
 const DEST_W = 5;            // tynd lodret bar pr. destination
 
 // Tre kolonner fortæller historien:
-//   1) Private udgifter — TÆT på Lønkonto: "betalt først"
-//   2) Fælles overførsler — i midten: "her sender du til husstandens fælles
+//   1) Private udgifter - TÆT på Lønkonto: "betalt først"
+//   2) Fælles overførsler - i midten: "her sender du til husstandens fælles
 //      forpligtelser efter du har dækket dit eget"
-//   3) Opsparing — LÆNGST til højre: "det der bliver lagt til side til sidst"
+//   3) Opsparing - LÆNGST til højre: "det der bliver lagt til side til sidst"
 //
 // Den vandrette afstand er bevidst ujævn: privat tæt på kilden, fælles i
 // midten, opsparing helt yderst. Det giver en intuitiv "tidslinje" hvor
@@ -87,7 +87,7 @@ const DEST_GAP = 3;          // luft mellem destinationer
 const BAR_BASELINE = 140;    // flow-højde-skala
 // Minimumshøjde pr. destinationsbånd. Sættes så hvert bånd har plads til
 // sit eget label (label ~22px lodret), og fanges UDELUKKENDE på destination-
-// siden — kildebåndene beholder den korrekte proportionalitet (ægte
+// siden - kildebåndene beholder den korrekte proportionalitet (ægte
 // flow-størrelser). Det giver den klassiske "fan-out" hvor små destinationer
 // ser ud til at vokse fra et tyndt kildebånd til et læsbart destinations-
 // rektangel. Tidligere var værdien 4px, hvilket gjorde flere små opsparinger
@@ -184,7 +184,7 @@ function LonkontoSankey({
     outflows.push({ label: dest.name, type, amount: edge.monthly });
   }
 
-  // Sortér outflows: privat først (rød), fælles, opsparing — og inden for
+  // Sortér outflows: privat først (rød), fælles, opsparing - og inden for
   // hver gruppe efter beløb desc. Det gør visuelt sprog konsistent (rød
   // øverst, opsparing nederst).
   const TYPE_ORDER: Record<OutflowType, number> = {
@@ -270,7 +270,7 @@ function LonkontoSankey({
 
   // Per-kolonne label-spacing pass: når flere bånd er meget tynde (små
   // beløb), ligger deres midte næsten oven i hinanden og labels overlapper.
-  // Vi tvinger min. lodret afstand mellem label-midter pr. kolonne — selve
+  // Vi tvinger min. lodret afstand mellem label-midter pr. kolonne - selve
   // bånd-rektanglerne flyttes ikke, kun teksten. Hvert label optager
   // navn (11px) + undertekst (9px) ≈ 22px lodret plads.
   const MIN_LABEL_SPACING = 22;
@@ -286,7 +286,7 @@ function LonkontoSankey({
   adjustLabelsForType('savings');
 
   // Canvas-højde skal rumme det laveste label (undertekst sidder ~12px
-  // under midten) — ikke kun selve bånd-geometrien.
+  // under midten) - ikke kun selve bånd-geometrien.
   const labelBottomMax = bands.reduce(
     (m, b) => Math.max(m, b.destLabelMid + 12),
     0
@@ -313,7 +313,7 @@ function LonkontoSankey({
         ? LABEL_SHARED_X
         : LABEL_SAVINGS_X;
 
-  // Tjek om vi har bands i hver af de to kolonner — bruges til at
+  // Tjek om vi har bands i hver af de to kolonner - bruges til at
   // beslutte om kolonne-headerne skal vises.
   const hasPrivateBands = bands.some((b) => b.type === 'private');
   const hasSharedBands = bands.some((b) => b.type === 'shared');
@@ -380,7 +380,7 @@ function LonkontoSankey({
             );
           })}
 
-          {/* Kolonne-headers — placeret over destinations-bjælkerne. Vi
+          {/* Kolonne-headers - placeret over destinations-bjælkerne. Vi
               viser kun en header hvis dens kolonne har destinationer.
               "PRIVATE / FÆLLES / OPSPARING" fortæller historien: betal dig
               selv først, så fælles forpligtelser, så opsparing. */}
@@ -421,7 +421,7 @@ function LonkontoSankey({
             </text>
           )}
 
-          {/* Source-rectangle (Lønkonto) — overskud (hvis der er) i lys grøn,
+          {/* Source-rectangle (Lønkonto) - overskud (hvis der er) i lys grøn,
               flow-del i mørkere neutral. */}
           {surplusHeight > 0 && (
             <rect
@@ -485,7 +485,7 @@ function LonkontoSankey({
             </text>
           )}
 
-          {/* Destination rectangles + labels — X afhænger af type så
+          {/* Destination rectangles + labels - X afhænger af type så
               private-destinationer sidder i kolonne 1 (tæt på Lønkonto)
               og overførsler i kolonne 2 (længere væk). */}
           {bands.map((b, i) => {
@@ -504,7 +504,7 @@ function LonkontoSankey({
                   rx={1}
                 />
                 {/* Forbindelseslinje fra rektangel til label når label er
-                    skubbet pga. spacing — så det er tydeligt hvilket bånd
+                    skubbet pga. spacing - så det er tydeligt hvilket bånd
                     label tilhører. Skjult når label sidder naturligt. */}
                 {labelOffset > 3 && (
                   <line

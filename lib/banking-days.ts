@@ -2,7 +2,7 @@
 //
 // Scope: WEEKEND-only adjustment. We do NOT account for Danish public holidays
 // (helligdage). If you get paid on the 1st and that's both Saturday and a
-// holiday, real life shifts you to Friday for the weekend reason — same end
+// holiday, real life shifts you to Friday for the weekend reason - same end
 // result, but if the 1st is a Tuesday holiday, real life shifts to the
 // previous banking day (Monday). We don't model that yet. Add a holiday list
 // here when forecast accuracy requires it.
@@ -72,7 +72,7 @@ export function toISODate(d: Date): string {
 // First day of the chosen month (1-12). If that month has already passed in
 // the current calendar year, roll to next year. Used when the user only
 // picks a "first payment month" for quarterly/semiannual/yearly recurrences
-// — we don't ask for a specific day, just the month.
+// - we don't ask for a specific day, just the month.
 export function nextMonthOccurrence(
   monthOneIndexed: number,
   today: Date = new Date()

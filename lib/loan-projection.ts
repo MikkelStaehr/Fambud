@@ -3,7 +3,7 @@
 // Assumes an annuitetslån: total ydelse pr. periode holder sig konstant.
 // Rente og bidrag falder over tid efterhånden som restgælden betales af, og
 // afdraget vokser tilsvarende. Rabat (KundeKroner) holdes konstant pr.
-// betaling — i praksis varierer det med restgælden, men den nuance er for
+// betaling - i praksis varierer det med restgælden, men den nuance er for
 // fin til formålet her.
 //
 // Derived rates: vi tager den NUVÆRENDE rente og bidrag som % af nuværende
@@ -78,7 +78,7 @@ export function projectAmortisation(input: ProjectionInput): ProjectionResult {
 
   const renteRate = rentePerPeriod / remainingPrincipal;
   const bidragRate = bidragPerPeriod / remainingPrincipal;
-  // Total ydelse pr. periode — holdes konstant (annuitetslån-antagelse).
+  // Total ydelse pr. periode - holdes konstant (annuitetslån-antagelse).
   const totalPayment =
     rentePerPeriod + afdragPerPeriod + bidragPerPeriod + rabatPerPeriod;
 
@@ -88,7 +88,7 @@ export function projectAmortisation(input: ProjectionInput): ProjectionResult {
   let totalBidrag = 0;
   let crossoverPeriod: number | null = null;
 
-  // Cap at 50 years — anything beyond that is unrealistic/atypical and we
+  // Cap at 50 years - anything beyond that is unrealistic/atypical and we
   // bail rather than loop endlessly.
   const maxPeriods = periodsPerYear * 50;
 
@@ -103,7 +103,7 @@ export function projectAmortisation(input: ProjectionInput): ProjectionResult {
       return {
         ok: false,
         reason:
-          'Ydelsen er ikke konsistent med en annuitetsstruktur — kan ikke projicere',
+          'Ydelsen er ikke konsistent med en annuitetsstruktur - kan ikke projicere',
       };
     }
 
@@ -139,7 +139,7 @@ export function projectAmortisation(input: ProjectionInput): ProjectionResult {
     return {
       ok: false,
       reason:
-        'Lånet bliver ikke betalt af inden for 50 år med nuværende ydelse — tjek input',
+        'Lånet bliver ikke betalt af inden for 50 år med nuværende ydelse - tjek input',
     };
   }
 

@@ -1,19 +1,19 @@
-// Cashflow-graph — pengestrømmen mellem konti.
+// Cashflow-graph - pengestrømmen mellem konti.
 //
 // Detaljeret cashflow-data til Sankey-graf-visualiseringen på dashboardet.
 // Forskellen fra getAccountFlows() (i accounts.ts) er at vi separerer
 // income/expense (eksterne kanter til/fra synthetic "Indtægter"/"Udgifter"-
 // noder) fra transfers (kanter mellem konti). Den aggregerede in/out i
-// flows gjorde det umuligt at tegne grafen korrekt — hvis vi blot tegnede
+// flows gjorde det umuligt at tegne grafen korrekt - hvis vi blot tegnede
 // in→Udgifter ville en transfer til en opsparingskonto fejlagtigt blive
 // vist som en udgift.
 //
 // Andre cashflow-aggregater (dashboard-totals, advisor-context, kategori-
 // fordeling, top-N, upcoming events) er splittet ud i deres egne moduler:
-//   - dashboard.ts          — getDashboardData, getHouseholdFinancialSummary
-//   - advisor.ts            — getAdvisorContext + per-bidragyder-splits
-//   - expenses-by-category.ts — getMonthlyExpensesByCategory/Group/Top
-//   - upcoming-events.ts    — getUpcomingEvents
+//   - dashboard.ts          - getDashboardData, getHouseholdFinancialSummary
+//   - advisor.ts            - getAdvisorContext + per-bidragyder-splits
+//   - expenses-by-category.ts - getMonthlyExpensesByCategory/Group/Top
+//   - upcoming-events.ts    - getUpcomingEvents
 // Alle importerer getCashflowGraph herfra hvis de skal bruge cashflow-data.
 
 import { cache } from 'react';
@@ -46,10 +46,10 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   const { supabase, householdId } = await getHouseholdContext();
 
   // Vi henter tre datasæt parallelt:
-  //   1. Recurring (ikke-once) transaktioner — almindelig income/expense
+  //   1. Recurring (ikke-once) transaktioner - almindelig income/expense
   //      hvor monthlyEquivalent giver mening
-  //   2. Recurring transfers — transfers mellem konti (også monthlyEquivalent)
-  //   3. Primary-once paychecks — individuelle lønudbetalinger som er gemt
+  //   2. Recurring transfers - transfers mellem konti (også monthlyEquivalent)
+  //   3. Primary-once paychecks - individuelle lønudbetalinger som er gemt
   //      med recurrence='once'. De har ikke en "monthly recurrence" men vi
   //      bruger gennemsnit af de seneste 3 som forecast pr. konto, så
   //      lønindkomst dukker op i grafen lige som den tidligere
@@ -116,7 +116,7 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   // Forecast fra primary-once paychecks: gruppér efter (account, member),
   // tag de seneste 3 og brug gennemsnit som månedlig income. Det matcher
   // PrimaryIncomeForecast-logikken i income.ts. Hvis der er færre end 3
-  // paychecks, bruger vi gennemsnittet af det vi har — bedre end ingenting,
+  // paychecks, bruger vi gennemsnittet af det vi har - bedre end ingenting,
   // selvom forecastet er mindre præcist.
   const paycheckGroups = new Map<string, number[]>();
   for (const p of paychecksRes.data ?? []) {
@@ -139,7 +139,7 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   // Dette er bevidst forskelligt fra den tidligere adfærd hvor (from, to)
   // blev summeret. Når brugeren har én Bufferkonto der modtager BÅDE en
   // buffer-overførsel og en forudsigelige-uforudsete-overførsel, skal de
-  // to pengestrømme stå som to separate bånd i Sankey'en — ikke som én
+  // to pengestrømme stå som to separate bånd i Sankey'en - ikke som én
   // klumpet linje.
   const transferEdges: CashflowEdge[] = [];
   for (const tr of transfersRes.data ?? []) {

@@ -1,6 +1,6 @@
 // Authentication + household-context bootstrap. Hver DAL-funktion starter
 // med getHouseholdContext() for at håndhæve household-scoping i kode (RLS
-// dækker også, men dette gør queries simplere — vi behøver ikke tjekke
+// dækker også, men dette gør queries simplere - vi behøver ikke tjekke
 // permission på hver række).
 //
 // Wizard/onboarding-paths bruger getMyMembership / isSetupComplete til at
@@ -36,7 +36,7 @@ export async function getHouseholdContext() {
   return { supabase, householdId: data.household_id, user };
 }
 
-// Wizard / onboarding helpers — used by the (app) layout to gate access and
+// Wizard / onboarding helpers - used by the (app) layout to gate access and
 // by the wizard pages to read user-specific state.
 
 export async function getMyMembership() {
@@ -68,7 +68,7 @@ export async function markTourCompleted() {
   if (error) throw error;
 }
 
-// Resetter tour-flag'et — brugeren vil se rundturen igen.
+// Resetter tour-flag'et - brugeren vil se rundturen igen.
 export async function resetTour() {
   const { supabase, user } = await requireUser();
   const { error } = await supabase

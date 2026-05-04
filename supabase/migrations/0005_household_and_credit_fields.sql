@@ -1,13 +1,13 @@
 -- ============================================================================
--- 0005 — 'household' account kind + credit-account metadata
+-- 0005 - 'household' account kind + credit-account metadata
 -- ----------------------------------------------------------------------------
 -- Two changes:
---   1. New enum value 'household' for "husholdningskonto" — the daily-spend
+--   1. New enum value 'household' for "husholdningskonto" - the daily-spend
 --      account, distinct from a budgetkonto (which holds money earmarked for
 --      fixed recurring bills). Most households have both: budget pays rent
 --      and utilities; household pays groceries and ad-hoc.
 --   2. accounts gain interest_rate and apr columns. Both are nullable and
---      only meaningful for kind='credit'. Stored as float4 (real) — precision
+--      only meaningful for kind='credit'. Stored as float4 (real) - precision
 --      below 2 decimals isn't a concern for percentage rates, and real comes
 --      back as number from supabase-js (numeric returns as string).
 -- ============================================================================

@@ -1,4 +1,4 @@
-// Loans — credit accounts with the loan-metadata fields populated.
+// Loans - credit accounts with the loan-metadata fields populated.
 // /laan surfaces every kind='credit' account regardless of whether the
 // loan-specific fields (loan_type, original_principal, term_months, lender,
 // payment_amount) are set, since the wizard creates them empty and the

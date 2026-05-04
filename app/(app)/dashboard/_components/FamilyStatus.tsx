@@ -1,10 +1,10 @@
-// "Familie-status"-sektion på dashboardet — viser om de andre voksne i
+// "Familie-status"-sektion på dashboardet - viser om de andre voksne i
 // husstanden har sat deres del op (lønkonto, indkomst, overførsler).
 // Den indloggede bruger har sin egen OnboardingChecklist længere oppe så
 // vi ekskluderer dem fra listen.
 //
 // Komponenten skjuler sig selv når der enten ikke er nogen andre voksne,
-// eller når alle de andre er fuldt sat op — så er den irrelevant og
+// eller når alle de andre er fuldt sat op - så er den irrelevant og
 // dashboardet skal bruge pladsen til andet.
 
 import Link from 'next/link';
@@ -63,7 +63,7 @@ function statusFor(m: MemberOnboardingStatus): Status {
 
 export function FamilyStatus({ members }: Props) {
   if (members.length === 0) return null;
-  // Skjul hele sektionen hvis alle de andre er klar — så er der intet at
+  // Skjul hele sektionen hvis alle de andre er klar - så er der intet at
   // handle på.
   if (members.every((m) => statusFor(m).tone === 'done')) return null;
 

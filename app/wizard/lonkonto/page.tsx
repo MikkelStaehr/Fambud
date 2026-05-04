@@ -1,4 +1,4 @@
-// Trin 1 i wizarden — kombinerer lønkonto-oprettelse og første lønudbetaling
+// Trin 1 i wizarden - kombinerer lønkonto-oprettelse og første lønudbetaling
 // fordi de hører naturligt sammen. Uden et lønbeløb har resten af appen
 // intet at vise (cashflow, forecast, dashboardet osv.), så vi gør begge
 // ting i samme transaktion frem for to skærme i træk hvor anden trin
@@ -6,7 +6,7 @@
 //
 // For partneren udvider vi velkomst-panelet med en sammenfatning af
 // hvad ejeren har sat op (fælleskonti, buffer, familie). Det sætter
-// kontekst på 5 sekunder — partneren ved straks de joiner en eksisterende
+// kontekst på 5 sekunder - partneren ved straks de joiner en eksisterende
 // husstand, ikke starter fra nul.
 
 import { redirect } from 'next/navigation';
@@ -41,7 +41,7 @@ export default async function WizardLonkontoPage({
 
   // Fællesøkonomi-detektion: hvis husstanden er sat til 'shared', så er
   // den fælles lønkonto allerede oprettet af ejer. Partner skal IKKE
-  // oprette endnu en — de skal kun registrere deres indkomst på den.
+  // oprette endnu en - de skal kun registrere deres indkomst på den.
   const economyType = await getHouseholdEconomyType();
   const isPartnerInSharedMode = !isOwner && economyType === 'shared';
 
@@ -137,7 +137,7 @@ export default async function WizardLonkontoPage({
 
   return (
     <div>
-      {/* Velkomst-intro som sektion (ikke separat skærm) — sætter mental
+      {/* Velkomst-intro som sektion (ikke separat skærm) - sætter mental
           model uden at koste en klik. Kort og handlingsorienteret. */}
       {isOwner ? (
         <div className="mb-6 rounded-md border border-emerald-200 bg-emerald-50/60 p-4">
@@ -146,7 +146,7 @@ export default async function WizardLonkontoPage({
           </h2>
           <p className="mt-1 text-xs text-emerald-900/80">
             Vi guider dig igennem opsætningen af jeres familiebudget. Det
-            tager 5–10 minutter — vi springer udgifter, lån og overførsler
+            tager 5–10 minutter - vi springer udgifter, lån og overførsler
             over og tager dem efter wizarden i stedet.
           </p>
         </div>
@@ -190,7 +190,7 @@ export default async function WizardLonkontoPage({
                 summary.familyMembers <= 1 && (
                   <li className="flex items-start gap-1.5 text-emerald-900/70">
                     <Check className="mt-0.5 h-3 w-3 shrink-0" />
-                    <span>Husstanden er klar — du er det første medlem.</span>
+                    <span>Husstanden er klar - du er det første medlem.</span>
                   </li>
                 )}
             </ul>
@@ -210,7 +210,7 @@ export default async function WizardLonkontoPage({
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
         {isPartnerInSharedMode
-          ? 'I jeres husstand pooles indkomsten — din løn lander på den fælles lønkonto. Vi skal bare bruge dit beløb til at beregne det samlede billede.'
+          ? 'I jeres husstand pooles indkomsten - din løn lander på den fælles lønkonto. Vi skal bare bruge dit beløb til at beregne det samlede billede.'
           : 'Opret den konto hvor du modtager løn, og fortæl os hvor meget der kommer ind hver måned.'}
       </p>
 
@@ -243,15 +243,15 @@ export default async function WizardLonkontoPage({
           Hvorfor 3 lønudbetalinger?
         </summary>
         <p className="mt-2">
-          Næsten ingen lønudbetalinger er præcis ens — overtid, sygedage,
+          Næsten ingen lønudbetalinger er præcis ens - overtid, sygedage,
           ferietillæg, bonus og pension-justeringer giver små udsving fra
           måned til måned. Vi tager gennemsnittet af de seneste 3 udbetalinger
           som forecast for resten af året, så HeroStatus, cashflow-grafen og
-          rådighedsbeløb regner ud fra hvad du faktisk får — ikke en
+          rådighedsbeløb regner ud fra hvad du faktisk får - ikke en
           idealiseret basislønsedlen.
         </p>
         <p className="mt-2">
-          Du behøver ikke alle 3 nu — én er nok til at komme i gang. Hvis du
+          Du behøver ikke alle 3 nu - én er nok til at komme i gang. Hvis du
           har dine seneste 2 lønsedler ved hånden kan du klikke{' '}
           <span className="text-neutral-700">"Tilføj endnu en"</span> ovenfor.
           Ellers registrerer du dem senere på{' '}

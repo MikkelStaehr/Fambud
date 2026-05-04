@@ -24,7 +24,7 @@ type Props = {
 
 export function AmortisationProjection({ loan }: Props) {
   // Need a non-zero debt and at least rente + afdrag to project anything.
-  // opening_balance is stored negative for debt — convert to positive principal.
+  // opening_balance is stored negative for debt - convert to positive principal.
   const remainingPrincipal =
     loan.opening_balance < 0 ? -loan.opening_balance : 0;
   if (

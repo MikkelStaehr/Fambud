@@ -1,7 +1,7 @@
 // Anbefalet "Buffer Konto"-kort på /opsparinger. Beregner 3-mdr-mål baseret
 // på husstandens faste udgifter og viser timeline for hvor langt brugeren
 // er. Hele værktøjet (full kalkulator med 1/3/6/12-mdr-tabel) bor på
-// detail-siden /opsparinger/buffer — kortet her er kun et summary med CTA.
+// detail-siden /opsparinger/buffer - kortet her er kun et summary med CTA.
 
 import Link from 'next/link';
 import { ArrowRight, Shield } from 'lucide-react';
@@ -19,7 +19,7 @@ export function BufferCard({ account, monthlyFixedExpenses }: Props) {
   const purpose: SavingsPurpose = 'buffer';
   const hasData = monthlyFixedExpenses > 0;
   const currentInflow = account?.monthlyInflow ?? 0;
-  // 3-mdr-mål er den "minimum"-tærskel vi viser på oversigten — det er
+  // 3-mdr-mål er den "minimum"-tærskel vi viser på oversigten - det er
   // tommelfingerreglens første milepæl. Detail-siden har den fulde tabel
   // med 1/3/6/12 mdr.
   const target3mdr = monthlyFixedExpenses * 3;
@@ -52,7 +52,7 @@ export function BufferCard({ account, monthlyFixedExpenses }: Props) {
           </div>
         ) : (
           <p className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-3 text-[11px] text-neutral-600">
-            Vi kan ikke beregne målene endnu — tilføj jeres faste udgifter
+            Vi kan ikke beregne målene endnu - tilføj jeres faste udgifter
             på Faste udgifter først.
           </p>
         )}

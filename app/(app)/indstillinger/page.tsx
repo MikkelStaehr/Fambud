@@ -70,7 +70,7 @@ export default async function IndstillingerPage({
         </h1>
       </header>
 
-      {/* Min profil — den indloggede brugers egne felter (navn, adresser).
+      {/* Min profil - den indloggede brugers egne felter (navn, adresser).
           Workplace-adressen vil senere drive befordringsfradrag-beregning;
           home-adressen indtastes typisk ved signup men kan rettes her. */}
       {me && (
@@ -123,7 +123,7 @@ export default async function IndstillingerPage({
             </button>
           </form>
 
-          {/* Genstart rundtur — nuller tour_completed_at og redirecter til
+          {/* Genstart rundtur - nuller tour_completed_at og redirecter til
               /dashboard hvor Tour-komponenten auto-starter. */}
           <form action={restartTour} className="mt-3">
             <button
@@ -155,7 +155,7 @@ export default async function IndstillingerPage({
           Familie
         </h2>
         <p className="mb-3 text-xs text-neutral-500">
-          Alle i familien — voksne med login og børn uden. Tilføj en email på
+          Alle i familien - voksne med login og børn uden. Tilføj en email på
           en voksen for at pre-godkende dem: når de signer up med præcis den
           email, bliver de automatisk tilknyttet husstanden.
         </p>
@@ -211,7 +211,7 @@ export default async function IndstillingerPage({
         <div className="mt-4 overflow-hidden rounded-md border border-neutral-200 bg-white">
           {familyMembers.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-neutral-500">
-              Ingen familiemedlemmer endnu — tilføj dig selv og resten af familien ovenfor.
+              Ingen familiemedlemmer endnu - tilføj dig selv og resten af familien ovenfor.
             </div>
           ) : (
             <table className="w-full">
@@ -308,7 +308,7 @@ export default async function IndstillingerPage({
               type="number"
               min={0}
               defaultValue={7}
-              placeholder="7 — tom for aldrig"
+              placeholder="7 - tom for aldrig"
               className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
             />
             <p className="mt-1 text-xs text-neutral-500">
@@ -454,7 +454,7 @@ export default async function IndstillingerPage({
             <div className="px-4 py-8 text-center text-sm text-neutral-500">
               {showArchivedCategories
                 ? 'Ingen kategorier'
-                : 'Ingen aktive kategorier — tilføj én ovenfor.'}
+                : 'Ingen aktive kategorier - tilføj én ovenfor.'}
             </div>
           ) : (
             <table className="w-full">

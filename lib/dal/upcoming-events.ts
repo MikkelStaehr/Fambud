@@ -1,13 +1,13 @@
-// Næste 7 dages begivenheder — kommende regninger og overførsler.
+// Næste 7 dages begivenheder - kommende regninger og overførsler.
 //
 // Dashboard-modulet "Næste begivenheder" viser hvad der sker økonomisk i den
 // nære fremtid. Vi beregner det forlæns:
 //   - For recurring transaktioner: rul deres anchor-dato frem til næste
-//     forekomst efter today via nextOccurrenceAfter() — hvis dato er
+//     forekomst efter today via nextOccurrenceAfter() - hvis dato er
 //     inden for vinduet, inkluderes posten
 //   - For 'once'-transaktioner: inkluderes hvis deres occurs_on er i
 //     fremtiden inden for vinduet (fx en planlagt enkelt-betaling)
-// Income-paychecks med income_role='primary' inkluderes ikke — de er
+// Income-paychecks med income_role='primary' inkluderes ikke - de er
 // historiske registreringer, ikke fremtidige forekomster (vi kender kun
 // gennemsnit, ikke næste konkrete dato).
 //
@@ -26,7 +26,7 @@ export type UpcomingEvent = {
   id: string;
   kind: 'expense' | 'transfer';
   scope: EventScope;
-  date: string;          // ISO YYYY-MM-DD — den fremtidige forekomst
+  date: string;          // ISO YYYY-MM-DD - den fremtidige forekomst
   description: string;
   amount: number;        // positivt øre, fortegnet håndteres af kind
   account: { id: string; name: string } | null;

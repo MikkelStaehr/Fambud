@@ -1,7 +1,7 @@
 'use client';
 
 // Soft onboarding-affordance: et lille ?-ikon der viser en kort forklaring
-// ved hover (desktop) eller tap (mobile/touch). Ikke-tvungent — nye brugere
+// ved hover (desktop) eller tap (mobile/touch). Ikke-tvungent - nye brugere
 // kan klikke for forklaring, erfarne ignorerer ikonet helt.
 //
 // Brug:

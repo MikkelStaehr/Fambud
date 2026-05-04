@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatMonthYearDA } from '@/lib/format';
 
-// Server component — just renders prev/next links to ?month=YYYY-MM. Pass
+// Server component - just renders prev/next links to ?month=YYYY-MM. Pass
 // `basePath` so the same component can drive /poster, /overforsler etc.
 type Props = {
   yearMonth: string;

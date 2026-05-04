@@ -131,7 +131,7 @@ export async function removeExpense(formData: FormData) {
 }
 
 // Components: break a single recurring expense into named parts. The parent
-// transaction's amount stays whatever the user set — we don't enforce that
+// transaction's amount stays whatever the user set - we don't enforce that
 // components sum to the parent. Real life: users often track only the
 // "interesting" parts (rente + bidrag) and skip the trivial ones (afdrag).
 export async function addComponent(formData: FormData) {
@@ -143,7 +143,7 @@ export async function addComponent(formData: FormData) {
   if (!transactionId) bounceWithError(accountId, 'Manglende transaktion');
   if (!label) bounceWithError(accountId, 'Indtast et navn');
 
-  // Negative amounts are allowed (e.g. rabat / KundeKroner) — se migration
+  // Negative amounts are allowed (e.g. rabat / KundeKroner) - se migration
   // 0019 der droppede >= 0-check'et. Zero accepteres også.
   const amountRes = parseRequiredAmount(
     String(formData.get('amount') ?? ''),
@@ -156,7 +156,7 @@ export async function addComponent(formData: FormData) {
   const { supabase, householdId } = await getHouseholdContext();
 
   // Append to the end of the existing component list. We don't bother with
-  // gap-numbering or reordering — sequence works fine here.
+  // gap-numbering or reordering - sequence works fine here.
   const { data: last } = await supabase
     .from('transaction_components')
     .select('position')
@@ -215,7 +215,7 @@ export async function updateComponent(
   const label = String(formData.get('label') ?? '').trim();
   if (!label) return { ok: false, error: 'Navn er påkrævet' };
 
-  // Negative amounts allowed (rabat) — se migration 0019.
+  // Negative amounts allowed (rabat) - se migration 0019.
   const amountRes = parseRequiredAmount(
     String(formData.get('amount') ?? ''),
     'Beløb',
@@ -241,7 +241,7 @@ export async function updateComponent(
 }
 
 // ----------------------------------------------------------------------------
-// Edit modal — designed to be driven by useActionState on the client
+// Edit modal - designed to be driven by useActionState on the client
 // ----------------------------------------------------------------------------
 // Returns a discriminated UpdateState rather than redirecting, so the modal
 // can stay on /faste-udgifter/[accountId] and close itself after a successful save.

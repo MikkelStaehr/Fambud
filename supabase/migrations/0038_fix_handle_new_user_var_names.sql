@@ -2,7 +2,7 @@
 --
 -- Migration 0037 omdøbte de lokale variable til v_home_addr/v_home_zip/
 -- v_home_city for at undgå navne-kollision med kolonnerne på UPDATE i
--- Path 2. Men replace_all fangede ikke INSERT-listen i Path 3 — den
+-- Path 2. Men replace_all fangede ikke INSERT-listen i Path 3 - den
 -- refererer stadig til de gamle navne, som ikke længere er erklæret.
 -- PL/pgSQL parser funktionen lazy, så fejlen først opdages når en
 -- brand new household-signup rammer Path 3 (= ny bruger uden invite-kode).

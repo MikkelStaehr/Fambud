@@ -1,6 +1,6 @@
 // Lille "AI hjælper" på dashboardet: analysér pr.-konto cashflow og find
 // strukturelle problemer som brugeren bør løse manuelt. Det er IKKE en ML-
-// model — bare en samling af pragmatiske regler om "hvis X er sandt, så er
+// model - bare en samling af pragmatiske regler om "hvis X er sandt, så er
 // kontoen sandsynligvis sat forkert op". Reglerne lever her samlet så
 // dashboardet og fremtidige steder (fx wizard-completion-tjek) kan dele dem.
 
@@ -88,7 +88,7 @@ export function findSuggestedSource(
 //
 // Hvis `ctx` er sat OG kontoen er fælles, fordeles underskuddet på antallet
 // af bidragsydere. Den indloggede brugers eksisterende bidrag (transfers fra
-// konti han/hun har oprettet til denne konto) trækkes fra forslaget — så
+// konti han/hun har oprettet til denne konto) trækkes fra forslaget - så
 // rådgiveren ikke nagger Mikkel videre når han har lagt sin halvdel ind.
 //
 // Returnerer null hvis ingen kandidat-kilde findes, eller hvis den indloggede
@@ -123,7 +123,7 @@ export function buildFixFor(
   // Shared: udregn forventet andel og indloggede brugers eksisterende bidrag.
   // Forventet andel = TOTAL outflow på kontoen / antal bidragsydere. Vi
   // bruger total outflow (ikke deficit) så formlen holder uanset hvad der
-  // allerede er overført — så Mikkel der har lagt sin halvdel ind ser
+  // allerede er overført - så Mikkel der har lagt sin halvdel ind ser
   // missing=0, ikke missing=halvdelen-af-resterende-deficit.
   const detail = perAccount.get(issue.account.id);
   const totalOutflow = (detail?.expense ?? 0) + (detail?.transfersOut ?? 0);
@@ -140,7 +140,7 @@ export function buildFixFor(
     .reduce((sum, t) => sum + t.monthly, 0);
 
   const missingShare = Math.max(0, expectedShare - existingFromUser);
-  // Cap suggested ved deficit — hvis fælles-kontoen næsten er dækket fordi
+  // Cap suggested ved deficit - hvis fælles-kontoen næsten er dækket fordi
   // partneren har overdækket, behøver brugeren ikke betale sin fulde andel.
   const suggested = Math.min(missingShare, totalDeficit);
 
@@ -160,7 +160,7 @@ export function buildFixFor(
 
 // Regnet ud fra detalje-flow så vi separerer transfers fra
 // expenses/income. En konto kan have transfersOut > income og stadig være
-// "fin" — det er bare en sluse til opsparing. Underdækning kræver at de
+// "fin" - det er bare en sluse til opsparing. Underdækning kræver at de
 // FAKTISKE udgifter overstiger de FAKTISKE indtægter (inkl. transfers ind).
 export function detectCashflowIssues(
   accounts: Account[],
@@ -169,7 +169,7 @@ export function detectCashflowIssues(
   const issues: CashflowIssue[] = [];
   for (const account of accounts) {
     if (account.archived) continue;
-    // Lån håndteres på /laan — irrelevant for cashflow-tjekket her.
+    // Lån håndteres på /laan - irrelevant for cashflow-tjekket her.
     if (account.kind === 'credit') continue;
     // Opsparing/investering modtager pr. design; en udgift derfra er en
     // bevidst hævning, ikke et symptom på underdækning.
@@ -201,7 +201,7 @@ export function detectCashflowIssues(
         deficit,
         inflow,
         outflow,
-        message: `${account.name} er underdækket med ${formatAmount(deficit)} kr./md — der går mere ud (${formatAmount(outflow)}) end der kommer ind (${formatAmount(inflow)}).`,
+        message: `${account.name} er underdækket med ${formatAmount(deficit)} kr./md - der går mere ud (${formatAmount(outflow)}) end der kommer ind (${formatAmount(inflow)}).`,
         suggestion:
           'Forhøj den månedlige overførsel hertil, eller skær udgifter ned på kontoen.',
       });

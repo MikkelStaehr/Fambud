@@ -33,6 +33,26 @@ export type BudgetRow = {
 type SortKey = 'monthly' | 'name' | 'recurrence' | 'account';
 type SortDir = 'asc' | 'desc';
 type ScopeTab = 'shared' | 'private';
+type ViewPeriod = 'monthly' | 'quarterly' | 'yearly';
+
+// Multipliers fra månedligt grundtal (BudgetRow.monthly er altid
+// monthlyEquivalent) til den valgte visnings-periode. Brugeren kan toggle
+// mellem md/kvr/år uden at vi skal genberegne data fra serveren.
+const PERIOD_MULTIPLIER: Record<ViewPeriod, number> = {
+  monthly: 1,
+  quarterly: 3,
+  yearly: 12,
+};
+const PERIOD_SHORT: Record<ViewPeriod, string> = {
+  monthly: 'md',
+  quarterly: 'kvr',
+  yearly: 'år',
+};
+const PERIOD_LABEL: Record<ViewPeriod, string> = {
+  monthly: 'Måned',
+  quarterly: 'Kvartal',
+  yearly: 'År',
+};
 
 type Props = {
   rows: BudgetRow[];
@@ -43,6 +63,7 @@ export function BudgetTable({ rows }: Props) {
   // CategoryGroupChart + UpcomingEvents. Default 'shared' så folk lander
   // på fælles-økonomien som er den oftest interessante for husstanden.
   const [scope, setScope] = useState<ScopeTab>('shared');
+  const [period, setPeriod] = useState<ViewPeriod>('monthly');
   const [accountFilter, setAccountFilter] = useState<string>('all');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [recurrenceFilter, setRecurrenceFilter] = useState<string>('all');
@@ -203,38 +224,73 @@ export function BudgetTable({ rows }: Props) {
     [rows]
   );
 
+  const mult = PERIOD_MULTIPLIER[period];
+  const periodShort = PERIOD_SHORT[period];
+
+  // Andels-procenter regnes ud fra HELE scopets total (ikke det filtrerede),
+  // så fx "Forsikring 8%" forbliver det samme uanset om brugeren har skåret
+  // tabellen ned med søgning eller dropdown-filtre. Det giver et stabilt
+  // billede af hvordan ens budget er fordelt.
+  const scopeTotal = scope === 'shared' ? sharedTotal : privateTotal;
+  const sharePct = (val: number): string => {
+    if (scopeTotal <= 0) return '—';
+    const pct = (val * 100) / scopeTotal;
+    if (pct > 0 && pct < 1) return '<1%';
+    return `${Math.round(pct)}%`;
+  };
+
   return (
     <div>
-      {/* Scope-tab - Fælles / Private. Matcher dashboardets toggle. */}
-      <div className="mb-4 inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
-        <button
-          type="button"
-          onClick={() => switchScope('shared')}
-          className={`rounded px-3 py-1.5 font-medium transition ${
-            scope === 'shared'
-              ? 'bg-neutral-900 text-white'
-              : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          Fælles{' '}
-          <span className="tabnum ml-1 font-mono opacity-70">
-            {formatAmount(sharedTotal)} kr/md
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => switchScope('private')}
-          className={`rounded px-3 py-1.5 font-medium transition ${
-            scope === 'private'
-              ? 'bg-neutral-900 text-white'
-              : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          Private{' '}
-          <span className="tabnum ml-1 font-mono opacity-70">
-            {formatAmount(privateTotal)} kr/md
-          </span>
-        </button>
+      {/* Scope-tab + periode-toggle. Begge er pill-style for visuel konsistens.
+          Scope er primær (hvis økonomi), periode er sekundær (hvor langt sigte). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => switchScope('shared')}
+            className={`rounded px-3 py-1.5 font-medium transition ${
+              scope === 'shared'
+                ? 'bg-neutral-900 text-white'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            Fælles{' '}
+            <span className="tabnum ml-1 font-mono opacity-70">
+              {formatAmount(sharedTotal * mult)} kr/{periodShort}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => switchScope('private')}
+            className={`rounded px-3 py-1.5 font-medium transition ${
+              scope === 'private'
+                ? 'bg-neutral-900 text-white'
+                : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            Private{' '}
+            <span className="tabnum ml-1 font-mono opacity-70">
+              {formatAmount(privateTotal * mult)} kr/{periodShort}
+            </span>
+          </button>
+        </div>
+
+        <div className="inline-flex rounded-md border border-neutral-200 p-0.5 text-xs">
+          {(['monthly', 'quarterly', 'yearly'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={`rounded px-3 py-1.5 font-medium transition ${
+                period === p
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              {PERIOD_LABEL[p]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filter-bar */}
@@ -340,14 +396,19 @@ export function BudgetTable({ rows }: Props) {
                   indicator={sortIndicator('monthly')}
                   align="right"
                 >
-                  Beløb / md
+                  Beløb / {periodShort}
                 </Th>
+                <th scope="col" className="px-4 py-2.5 text-right">
+                  <span className="font-medium uppercase tracking-wider text-neutral-500">
+                    Andel
+                  </span>
+                </th>
               </tr>
             </thead>
             {grouped.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-neutral-500">
                     Ingen udgifter matcher filteret.
                   </td>
                 </tr>
@@ -393,7 +454,12 @@ export function BudgetTable({ rows }: Props) {
                       <td className="px-4 py-2.5" />
                       <td className="px-4 py-2.5 text-right">
                         <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
-                          {formatAmount(g.total)} kr
+                          {formatAmount(g.total * mult)} kr
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="tabnum font-mono text-xs font-medium text-neutral-500">
+                          {sharePct(g.total)}
                         </div>
                       </td>
                     </tr>
@@ -421,13 +487,18 @@ export function BudgetTable({ rows }: Props) {
                           </td>
                           <td className="px-4 py-2 text-right">
                             <div className="tabnum font-mono text-sm font-medium text-neutral-900">
-                              {formatAmount(r.monthly)} kr
+                              {formatAmount(r.monthly * mult)} kr
                             </div>
-                            {r.recurrence !== 'monthly' && (
+                            {r.recurrence !== period && (
                               <div className="tabnum font-mono text-[11px] text-neutral-500">
                                 {formatAmount(r.effective)} kr/{RECURRENCE_LABEL_DA[r.recurrence].slice(0, 3)}
                               </div>
                             )}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <div className="tabnum font-mono text-xs text-neutral-500">
+                              {sharePct(r.monthly)}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -443,7 +514,12 @@ export function BudgetTable({ rows }: Props) {
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
-                      {formatAmount(totalMonthly)} kr/md
+                      {formatAmount(totalMonthly * mult)} kr/{periodShort}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="tabnum font-mono text-xs font-medium text-neutral-500">
+                      {sharePct(totalMonthly)}
                     </div>
                   </td>
                 </tr>

@@ -41,8 +41,10 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname === '/login' || pathname === '/signup';
+  // Root '/' er nu landing page - offentlig. Selve page-komponenten
+  // bouncer loggede brugere videre til /dashboard, så vi behøver ikke
+  // gate'e den her.
   const isProtected =
-    pathname === '/' ||
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/konti') ||
     pathname.startsWith('/poster') ||

@@ -1451,3 +1451,161 @@ migrations. Ændrer min tidligere stil-præference fra forrige session.
   paycheck og getCashflowGraph ikke kan beregne et meningsfuldt
   gennemsnit. Den nuværende fallback bruger gennemsnittet af det vi har —
   bedre end ingenting, men ikke pålideligt.
+
+---
+
+# Devlog — 4. maj 2026 (eftermiddag)
+
+Eftermiddag dedikeret til budget-finpudsning + en hel offentlig side-stak:
+landing page på `/` og en grundig privatlivs-side på `/privatliv`. Plus
+to mindre forbedringer på `/budget`-tabellen (periode-toggle og andels-
+kolonne).
+
+---
+
+## 1. Budget-tabel: periode-toggle (Måned/Kvartal/År)
+
+[BudgetTable.tsx](app/(app)/budget/_components/BudgetTable.tsx) fik en
+tre-vejs pill-toggle ved siden af Fælles/Private-tabben:
+
+- **Måned** (default) - viser monthlyEquivalent uændret
+- **Kvartal** - alle beløb × 3
+- **År** - alle beløb × 12
+
+Multipliers ligger i en lille `PERIOD_MULTIPLIER`-record. Fælles/Private-
+tab-totalerne, gruppe-totalerne, child-rækkernes beløb, kolonne-headeren
+("Beløb / md" → "/ kvr" / "/ år") og footeren skifter alle med toggle'n.
+
+Sub-amount-linjen (effective i recurrence-naturlig periode) vises nu kun
+når `r.recurrence !== period` - så en månedlig udgift står ren i Måneds-
+view, men får sub-linjen "9.000 kr/md" når man skifter til År-view; en
+årlig udgift omvendt.
+
+## 2. Budget-tabel: andels-kolonne
+
+Ny "Andel"-kolonne placeret yderst til højre (efter Beløb), efter
+brugerens feedback om at den skulle ud mod beløbet.
+
+Procentsatsen regnes ud fra **scopets total** (sharedTotal eller
+privateTotal) - ikke det filtrerede subset. Det betyder at "Forsikring
+8%" forbliver det samme uanset om brugeren har skåret tabellen ned med
+søgning eller dropdown-filtre. Stabilt billede af budget-fordelingen.
+
+`sharePct()`-helper håndterer to kant-tilfælde: scopeTotal=0 → "—",
+0 < pct < 1 → "<1%". Resten rundes til heltal.
+
+---
+
+## 3. Landing page på `/`
+
+Helt ny offentlig side bygget på [app/page.tsx](app/page.tsx) - erstatter
+den gamle redirect-til-dashboard. Loggede brugere bouncer stadig videre
+til /dashboard via en `redirect()` i selve page-komponenten, så samme URL
+virker for begge tilfælde.
+
+[proxy.ts](proxy.ts) opdateret: `/` er ikke længere i `isProtected`-listen.
+Selve siden gater authn'en.
+
+### Sektioner
+
+- **Sticky top-nav** med wordmark + Log ind / Kom i gang
+- **Hero**: pille-badge + tagline i ZT Nature Bold + 2 CTAs + 4-item
+  trust-strip (19 kr/md fast pris · Lavet i Danmark · Ingen bank-adgang ·
+  GDPR-compliant). Til højre: faux-screenshot af `HeroStatus` med ægte
+  styling og et flydende Cashflow-tjek-card
+- **Features**: 6 differentierings-blokke (Familie-økonomi, Forecast fra
+  lønsedler, Strategisk opsparing, Cashflow-rådgiver, Privatliv som
+  standard, Lån+pension forstået)
+- **Demo-strip**: stiliseret "Udgifter pr. gruppe"-card med ægte gruppe-
+  farver (Bolig & lån purple, Forsyning cyan...)
+- **Sådan kommer du i gang**: 4-trin (Opret konto → Tilføj løn → Faste
+  udgifter → Få overblik)
+- **FAQ**: 5 spørgsmål via native `<details>/<summary>` (no JS)
+- **Final CTA**: emerald-800 fuldbredde-strip
+- **Footer** med wordmark + link til /privatliv + © + "En del af Stærhs"-
+  link til [stæhrs.dk](https://www.stæhrs.dk)
+
+### Pris-positionering
+
+Endelig pris er **19 kr/md, fast, uden tier-systemer**. Synlig to steder
+på landing:
+
+- I trust-stripen lige under hero-CTAs som første item
+- Som lille subline under final CTA-knap: *"Senere 19 kr/md - fast pris,
+  aldrig dyrere"*
+
+YNAB-niveau (~150 kr/md) er for dyrt og signalerer "for finance nerds".
+50 kr/md ville være et tier-system uden grund - 19 kr/md dækker driften
+med god margin og holder appen tilgængelig.
+
+### Sproglig retning
+
+To FAQ-iterationer cementerede tonen:
+
+1. **"Hvad gør Fambud anderledes?"** (var: "Hvad er forskellen til YNAB
+   eller Spirii?"). Pivottet fra konkurrent-knock til værdi-statement -
+   100% uafhængighed (ingen banker, rådgivere, tredjeparter), Fambud som
+   guide der "ikke dømmer valg, men hjælper dig træffe dem mere bevidst".
+
+2. **"Hvem er Fambud til?"** (var: "Kan jeg bruge det alene, uden
+   familie?"). Det gamle spørgsmål antog at Fambud var en familie-app
+   med solo som halv-feature. Nu inkluderende: solo, par, familier,
+   studerende, karriere-folk, pensionerede - appen tilpasser sig.
+
+---
+
+## 4. Privatlivs-side på `/privatliv`
+
+Helt ny side ([app/privatliv/page.tsx](app/privatliv/page.tsx)) - offentlig,
+ingen auth, fuldt scrollbar læseoplevelse i Fambud-stil. Bygget om brugerens
+reelle bekymringer ved at indtaste økonomi i en ukendt app.
+
+### Strukturen (10 sektioner)
+
+1. **Vores løfte** (emerald-accent box) - fire klare "aldrig"-statements
+2. **Hvad gemmer vi om dig** - konkret liste: login (krypteret hash, vi kan
+   ikke se kodeordet), profil, familie, økonomi-data, indstillinger.
+   Eksplicit *"Vi opretter ikke tracking-profiler"*
+3. **Hvem kan se hvad** (emerald-accent - vigtigste afsnit) - fire
+   subsektioner: dig selv, familiemedlemmer (kun Fælles), os hos Fambud
+   (vi *kan* teknisk men *gør det ikke*), tredjeparter (ingen)
+4. **Hvor ligger dine data** - Frankfurt EU, Supabase, TLS 1.3 i transit,
+   AES-256 i hvile, daglige backups med 7 dages historik
+5. **Cookies** - tabel med kun to cookies: `sb-*` (Supabase auth) og
+   `fambud_session_only` (det vi byggede med "Husk mig"-flag). Eksplicit
+   *ingen Google Analytics, ingen Facebook Pixel, intet ad-netværk*
+6. **Dine rettigheder** - GDPR (indsigt, rettelse, sletning, portabilitet,
+   indsigelse) i plain dansk
+7. **Hvad vi aldrig gør** (emerald-accent) - 6 punkter med rød ✕
+8. **Underleverandører** - ærlig liste: Supabase, Vercel, DAWA - hvad hver
+   ser
+9. **Spørgsmål** - `privatliv@stæhrs.dk` + link til Datatilsynet
+10. **"Sidst opdateret"-stempel** så folk ved teksten er aktiv
+
+### FAQ-spørgsmålet om data udvidet
+
+"Mine data - hvor ligger de?" gik fra 3 sætninger til en fyldestgørende
+reassurance der nævner TLS 1.3 + AES-256 + Row Level Security konkret,
+plus link til den fulde dataerklæring. `FaqItem`-komponenten er udvidet
+til at acceptere `React.ReactNode` som svar (tidligere kun `string`) så
+inline `<Link>`/`<strong>` virker.
+
+---
+
+## Åbne tråde
+
+- **Skattefradrag-side**: vi har workplace-adresse til at beregne
+  befordringsfradrag, men der er ingen UI for det endnu. Næste skridt
+  hvis vi vil leve op til "skattefradrag som førsteklasses koncept" i
+  Features-blokken.
+- **Eksport-funktion**: nævnt i privatlivs-siden under "Dine rettigheder"
+  som JSON-eksport med 30 dages svartid - men selve eksport-knappen
+  findes ikke endnu. Skal bygges som server-action i /indstillinger.
+- **Cookie-banner**: vi har bevidst ikke et cookie-banner siden vi kun
+  bruger nødvendige cookies. Hvis vi nogensinde tilføjer analytics
+  (selv anonyme) skal banneret tilbage før relevante cookies sættes.
+- **`privatliv@stæhrs.dk`**-mailbox: er nævnt på siden men skal også
+  oprettes hos email-hostingen.
+- **Pricing-page**: 19 kr/md står i FAQ + landing trust-strip + final CTA-
+  subline, men der er ingen dedikeret /priser-side. Hvis pricing bliver
+  mere kompleks senere (gruppe-rabatter, årlig pris) skal det flyttes ud.

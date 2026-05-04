@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { BetaNotice } from './_components/BetaNotice';
 import { FambudMark } from './_components/FambudMark';
 import { SidebarNav } from './_components/SidebarNav';
 import { Toast } from './_components/Toast';
@@ -72,6 +73,8 @@ export default async function AppLayout({
       <Suspense fallback={null}>
         <Toast />
       </Suspense>
+
+      <BetaNotice />
     </div>
   );
 }

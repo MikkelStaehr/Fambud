@@ -532,6 +532,19 @@ export type Database = {
         Args: Record<string, never>;
         Returns: void;
       };
+      rate_limit_check: {
+        Args: {
+          p_key: string;
+          p_route: string;
+          p_max_hits: number;
+          p_window_seconds: number;
+        };
+        Returns: boolean;
+      };
+      rate_limit_cleanup: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
     };
     Enums: {
       account_kind: AccountKind;

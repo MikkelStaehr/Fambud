@@ -2,13 +2,21 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { getHouseholdContext } from '@/lib/dal';
 import { sendEmail } from '@/lib/email/resend';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { SESSION_ONLY_COOKIE } from '@/lib/supabase/session-flag';
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  // L1: Ryd "husk mig"-flag så næste login på samme device starter
+  // friskt. Uden det her arvede en eventuel ny bruger på samme
+  // computer den forrige brugers session-only-præference.
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_ONLY_COOKIE);
   revalidatePath('/', 'layout');
   redirect('/login');
 }
@@ -32,6 +40,18 @@ export async function submitFeedback(formData: FormData): Promise<FeedbackResult
   }
 
   const { supabase, householdId, user } = await getHouseholdContext();
+
+  // SECURITY: Rate limit per user. Uden dette kunne en logget-ind
+  // bruger loope submitFeedback 10000 gange og oversvømme DB +
+  // admin's indbakke (10000 Resend-mails der drainer quota og
+  // potentielt fryser sending-domænet pga. abuse-detection).
+  const limitOk = await checkRateLimit(`user:${user.id}`, 'feedback');
+  if (!limitOk) {
+    return {
+      ok: false,
+      error: 'For mange beskeder på kort tid. Prøv igen om en time.',
+    };
+  }
 
   // Hent navn fra family_members så admin-mailen kan vise hvem der skrev
   // uden at skulle slå op manuelt. Single query, vi accepterer at den

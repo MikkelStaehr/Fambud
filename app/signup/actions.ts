@@ -3,15 +3,20 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 // Map a few common Supabase / Postgres error messages to Danish copy.
 // Anything we don't recognise falls through verbatim.
+//
+// SECURITY: Vi mapper IKKE 'User already registered' til en specifik
+// dansk besked længere - den lækkede info om at en email var
+// registreret (user enumeration). Vi falder igennem til check-email-
+// skærmen som om signup gik godt; i praksis re-sender Supabase også
+// confirmation-mailen til den eksisterende konto. Angriberen kan
+// ikke skelne ny vs eksisterende email fra response'en.
 function localiseError(message: string): string {
   if (message.includes('Invalid or expired invite code')) {
     return 'Invitationen er udløbet eller findes ikke';
-  }
-  if (message.includes('User already registered')) {
-    return 'Der findes allerede en konto med den email';
   }
   return message;
 }
@@ -37,6 +42,19 @@ export async function signup(formData: FormData) {
     redirect(`${errorBase}?error=` + encodeURIComponent('Adgangskode skal være mindst 6 tegn'));
   }
 
+  // SECURITY: Rate limit per IP. Forhindrer mass-account-creation
+  // (DB-bloat + auth.users-spam + Resend-quota-DoS via confirmation-
+  // mails). 5/time er rigeligt til en familie der opretter et par
+  // konti, og blokerer scripts.
+  const ip = await getClientIp();
+  const ipOk = await checkRateLimit(`ip:${ip}`, 'signup');
+  if (!ipOk) {
+    redirect(
+      `${errorBase}?error=` +
+        encodeURIComponent('For mange forsøg. Prøv igen om en time.')
+    );
+  }
+
   const supabase = await createClient();
 
   // raw_user_meta_data håndteres af handle_new_user-triggeren (migration
@@ -56,6 +74,15 @@ export async function signup(formData: FormData) {
     password,
     options: Object.keys(metaData).length > 0 ? { data: metaData } : undefined,
   });
+
+  // SECURITY: 'User already registered' afsløres som check-email-
+  // skærmen, ikke som en specifik fejl. En angriber kan ikke skelne
+  // mellem ny og eksisterende email - begge fører til "vi har sendt
+  // en mail" (Supabase re-sender også selv mailen til den eksisterende
+  // konto, så der er ingen reel handlings-forskel).
+  if (error?.message.includes('User already registered')) {
+    redirect('/signup?step=check-email&email=' + encodeURIComponent(email));
+  }
 
   if (error || !data.user) {
     const msg = localiseError(error?.message ?? 'Kunne ikke oprette bruger');

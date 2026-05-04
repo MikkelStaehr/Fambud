@@ -72,7 +72,7 @@ export default async function DashboardPage() {
   const { membership } = await getMyMembership();
   const shouldAutoStartTour =
     membership?.setup_completed_at != null &&
-    membership?.tour_completed_at == null;
+    !(membership?.tours_completed && 'dashboard' in membership.tours_completed);
 
   // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
   // primary_income_source men endnu ikke har én eneste paycheck registreret.

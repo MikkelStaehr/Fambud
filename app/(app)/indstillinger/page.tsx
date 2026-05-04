@@ -123,14 +123,15 @@ export default async function IndstillingerPage({
             </button>
           </form>
 
-          {/* Genstart rundtur - nuller tour_completed_at og redirecter til
-              /dashboard hvor Tour-komponenten auto-starter. */}
+          {/* Genstart alle rundture - nuller tours_completed jsonb og
+              redirecter til /dashboard. Hver side med onboarding viser
+              sin tour igen næste gang du besøger den. */}
           <form action={restartTour} className="mt-3">
             <button
               type="submit"
               className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
             >
-              Genstart rundtur på dashboard →
+              Genstart rundture i appen →
             </button>
           </form>
         </section>

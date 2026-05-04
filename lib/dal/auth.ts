@@ -43,7 +43,7 @@ export async function getMyMembership() {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('family_members')
-    .select('household_id, role, setup_completed_at, joined_at, tour_completed_at')
+    .select('household_id, role, setup_completed_at, joined_at, tours_completed')
     .eq('user_id', user.id)
     .maybeSingle();
   if (error) throw error;
@@ -55,25 +55,42 @@ export async function isSetupComplete(): Promise<boolean> {
   return membership?.setup_completed_at != null;
 }
 
-// Brugeren afsluttede (eller sprang over) dashboard-touren. Vi sætter
-// timestamp så auto-start-logikken ved næste besøg ved at vi har vist
-// turen. /indstillinger har en "Genstart rundtur"-knap der nuller det
-// tilbage til null.
-export async function markTourCompleted() {
+// Per-page tour-state. tours_completed er et jsonb-objekt med
+// {tourKey: ISO-timestamp}. hasCompletedTour returnerer true hvis brugeren
+// har gennemført den specifikke tour.
+export async function hasCompletedTour(tourKey: string): Promise<boolean> {
+  const { membership } = await getMyMembership();
+  const completed = membership?.tours_completed ?? {};
+  return tourKey in completed;
+}
+
+// Markér en tour som gennemført. Læser eksisterende objekt, tilføjer
+// timestamp for tourKey, og skriver tilbage. Vi accepterer race-vinduet
+// hvor to faner markerer forskellige nøgler samtidig (last-write-wins).
+export async function markTourCompleted(tourKey: string) {
   const { supabase, user } = await requireUser();
+  const { data: existing } = await supabase
+    .from('family_members')
+    .select('tours_completed')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const current: Record<string, string> = existing?.tours_completed ?? {};
+  current[tourKey] = new Date().toISOString();
   const { error } = await supabase
     .from('family_members')
-    .update({ tour_completed_at: new Date().toISOString() })
+    .update({ tours_completed: current })
     .eq('user_id', user.id);
   if (error) throw error;
 }
 
-// Resetter tour-flag'et - brugeren vil se rundturen igen.
-export async function resetTour() {
+// Nuller hele tour-state - brugeren ser alle rundture igen næste gang de
+// besøger de respektive sider. Bruges af "Genstart rundture"-knap i
+// indstillinger.
+export async function resetAllTours() {
   const { supabase, user } = await requireUser();
   const { error } = await supabase
     .from('family_members')
-    .update({ tour_completed_at: null })
+    .update({ tours_completed: {} })
     .eq('user_id', user.id);
   if (error) throw error;
 }

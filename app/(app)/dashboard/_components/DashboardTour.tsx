@@ -1,22 +1,19 @@
 'use client';
 
-// Definerer dashboard-tour'ens steps og håndterer auto-start + completion.
-// Auto-starter første gang brugeren rammer dashboardet efter wizard
-// (tour_completed_at IS NULL). Brugeren kan altid genstarte fra
-// /indstillinger.
+// Definerer dashboard-tour'ens steps. Selve auto-start- og persistence-
+// logikken bor i den generiske PageTour-komponent som tager tourKey +
+// steps + autoStart-flag.
 //
 // Steps refererer til [data-tour="..."]-attributter på dashboard-elementer.
-// Hvis et element ikke er på siden lige nu (fx OnboardingChecklist forsvinder
-// når alle trin er færdige), springer Tour'en til modal-fallback for det
-// step.
+// Hvis et element ikke er på siden lige nu (fx OnboardingChecklist
+// forsvinder når alle trin er færdige), falder Tour tilbage til en
+// centreret modal med samme indhold.
 
-import { useState, useTransition } from 'react';
-import { Tour, type TourStep } from './Tour';
-import { completeTour } from './tour-actions';
+import { PageTour } from '@/app/(app)/_components/PageTour';
+import type { TourStep } from '@/app/(app)/_components/Tour';
 
 type Props = {
   ownerName: string | null;
-  // Hvis true → start automatisk ved mount (post-wizard)
   autoStart: boolean;
 };
 
@@ -124,7 +121,7 @@ function buildSteps(ownerName: string | null): TourStep[] {
           </p>
           <p className="mt-3 text-xs text-neutral-500">
             Hvis du vil se rundturen igen, kan du genstarte den fra
-            Indstillinger → Min profil.
+            Indstillinger - Min profil.
           </p>
         </>
       ),
@@ -133,19 +130,8 @@ function buildSteps(ownerName: string | null): TourStep[] {
 }
 
 export function DashboardTour({ ownerName, autoStart }: Props) {
-  const [running, setRunning] = useState(autoStart);
-  const [, startTransition] = useTransition();
-
-  if (!running) return null;
-
   const steps = buildSteps(ownerName);
-
-  function handleComplete() {
-    setRunning(false);
-    startTransition(async () => {
-      await completeTour();
-    });
-  }
-
-  return <Tour steps={steps} onComplete={handleComplete} />;
+  return (
+    <PageTour tourKey="dashboard" steps={steps} autoStart={autoStart} />
+  );
 }

@@ -2,14 +2,14 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext, resetTour } from '@/lib/dal';
+import { getHouseholdContext, resetAllTours } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
 // rundtur"-knappen i Min profil-sektionen.
 export async function restartTour() {
-  await resetTour();
+  await resetAllTours();
   redirect('/dashboard');
 }
 

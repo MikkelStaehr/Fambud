@@ -201,6 +201,19 @@ export async function restoreCategory(formData: FormData) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function createFamilyMember(formData: FormData) {
+  // SECURITY: Kun owner må tilføje familiemedlemmer. Tidligere kunne
+  // ethvert husstand-medlem oprette rækker - kombineret med Path 2 i
+  // handle_new_user (nu fjernet, migration 0043) gav det en
+  // account-hijacking-vej. Selv uden Path 2 er begrænsningen
+  // fornuftig, så ikke-ejere ikke roder familielisten.
+  const { membership } = await getMyMembership();
+  if (membership?.role !== 'owner') {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Kun ejeren kan tilføje familiemedlemmer')
+    );
+  }
+
   const name = String(formData.get('name') ?? '').trim();
   if (!name) {
     redirect('/indstillinger?error=' + encodeURIComponent('Navn er påkrævet'));
@@ -241,10 +254,12 @@ export async function createFamilyMember(formData: FormData) {
     position: nextPos,
   });
   if (error) {
-    // Friendlier copy for the unique-email collision (handle_new_user uses
-    // this index to claim signups, so duplicates are a real risk).
-    const msg = error.message.includes('family_members_email_unique')
-      ? 'Den email er allerede brugt på et familiemedlem'
+    // Per-household unique-index på (household_id, email) - ramler
+    // hvis samme email allerede ER tilknyttet et medlem i denne
+    // husstand. Tidligere var indekset globalt for at understøtte
+    // Path 2 i handle_new_user, men det er fjernet (migration 0043).
+    const msg = error.message.includes('family_members_email')
+      ? 'Den email er allerede brugt på et familiemedlem i jeres husstand'
       : error.message;
     redirect('/indstillinger?error=' + encodeURIComponent(msg));
   }

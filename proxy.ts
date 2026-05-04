@@ -40,28 +40,27 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  // Auth-sider redirecter loggede brugere videre til /dashboard - de
-  // har ingen grund til at se login/signup/glemt-kodeord når de
-  // allerede er på.
+
+  // Public routes - alt andet kræver auth (deny-by-default).
+  // Vi whitelister eksplicit i stedet for at blackliste, så fremtidige
+  // routes (fx /laan, /indkomst, /opsparinger osv.) automatisk er
+  // beskyttet. Tidligere version glemte at tilføje flere af de nye
+  // (app)-routes til isProtected-listen, hvilket gav et defense-in-depth
+  // hul: de var kun beskyttet af layout.tsx.
+  const isLandingPage = pathname === '/';
   const isAuthPage =
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname === '/glemt-kodeord';
-  // Root '/' er nu landing page - offentlig. Selve page-komponenten
-  // bouncer loggede brugere videre til /dashboard, så vi behøver ikke
-  // gate'e den her.
-  // /nyt-kodeord og /auth/callback er bevidst hverken auth- eller
-  // protected: recovery-flowet skal kunne lande dér med en frisk
-  // session uden bounce.
-  const isProtected =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/konti') ||
-    pathname.startsWith('/poster') ||
-    pathname.startsWith('/overforsler') ||
-    pathname.startsWith('/indstillinger') ||
-    pathname.startsWith('/wizard');
+  const isPublic =
+    isLandingPage ||
+    isAuthPage ||
+    pathname === '/nyt-kodeord' ||
+    pathname === '/privatliv' ||
+    pathname.startsWith('/join') ||
+    pathname.startsWith('/auth/');
 
-  if (!user && isProtected) {
+  if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
   if (user && isAuthPage) {

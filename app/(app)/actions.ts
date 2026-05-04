@@ -83,6 +83,21 @@ export async function submitFeedback(formData: FormData): Promise<FeedbackResult
   return { ok: true };
 }
 
+// Alle felter er user-controlled (fullName fra family_members.name,
+// email fra auth.users, pageUrl fra klienten). Hvis vi ikke escaper
+// dem kan en bruger sætte sit display-navn til '<a href="evil">klik
+// her</a>' og phishe admin via dennes mail-klient. Subject-feltet
+// indeholder også fullName - Resend's HTTP-API blokerer CRLF i
+// headers, men vi escaper alligevel for defense-in-depth.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildAdminNotificationHtml(params: {
   fullName: string | null;
   email: string | null;
@@ -90,18 +105,17 @@ function buildAdminNotificationHtml(params: {
   pageUrl: string | null;
 }): string {
   const { fullName, email, message, pageUrl } = params;
-  const escapedMessage = message
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>');
+  const escapedMessage = escapeHtml(message).replace(/\n/g, '<br>');
+  const safeFullName = fullName ? escapeHtml(fullName) : '-';
+  const safeEmail = email ? escapeHtml(email) : '-';
+  const safePageUrl = pageUrl ? escapeHtml(pageUrl) : '-';
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#171717;">
       <h2 style="margin:0 0 16px;font-size:18px;">Ny feedback fra Fambud</h2>
       <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
-        <tr><td style="padding:4px 0;color:#737373;width:80px;">Fra:</td><td>${fullName ?? '-'}</td></tr>
-        <tr><td style="padding:4px 0;color:#737373;">Email:</td><td>${email ?? '-'}</td></tr>
-        <tr><td style="padding:4px 0;color:#737373;">Side:</td><td>${pageUrl ?? '-'}</td></tr>
+        <tr><td style="padding:4px 0;color:#737373;width:80px;">Fra:</td><td>${safeFullName}</td></tr>
+        <tr><td style="padding:4px 0;color:#737373;">Email:</td><td>${safeEmail}</td></tr>
+        <tr><td style="padding:4px 0;color:#737373;">Side:</td><td>${safePageUrl}</td></tr>
       </table>
       <div style="border-left:3px solid #065f46;padding:12px 16px;background:#f5f5f4;border-radius:4px;font-size:14px;line-height:1.6;">
         ${escapedMessage}

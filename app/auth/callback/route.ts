@@ -6,10 +6,30 @@ import { createClient } from '@/lib/supabase/server';
 // Vi bytter koden til en session og redirecter til `next` (default
 // /dashboard). Bruges pt. kun af "glemt kodeord"-flowet, der peger på
 // /auth/callback?next=/nyt-kodeord.
+// Validér at `next` er en same-origin relativ path. Uden dette tjek kan
+// en angriber sende `?next=//evil.com` eller `?next=@evil.com/login` -
+// browseren parser `https://fambud.dk@evil.com/login` som host=evil.com
+// og redirecter væk fra Fambud-domænet. Hvert recovery/confirm-link i
+// vores mails ville så være phishbart.
+function safeNextPath(raw: string | null): string {
+  if (!raw) return '/dashboard';
+  // Skal starte med præcis ét '/' (afviser '//x', '/\x' og '/@x' der i
+  // praksis bliver til protocol-relative eller userinfo-tricks).
+  if (
+    !raw.startsWith('/') ||
+    raw.startsWith('//') ||
+    raw.startsWith('/\\') ||
+    raw.startsWith('/@')
+  ) {
+    return '/dashboard';
+  }
+  return raw;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = safeNextPath(searchParams.get('next'));
 
   if (code) {
     const supabase = await createClient();

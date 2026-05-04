@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext, resetAllTours } from '@/lib/dal';
+import { getHouseholdContext, getMyMembership, resetAllTours } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
@@ -259,7 +259,55 @@ export async function deleteFamilyMember(formData: FormData) {
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  // SECURITY: Kun owner må slette family_members. Uden denne tjek kunne
+  // et almindeligt medlem POST'e en forged request og slette ejerens
+  // egen family_member-række - det ville låse ejeren ude permanent
+  // (auth.users-rækken består, så signup fejler "User already
+  // registered", og handle_new_user-triggeren fyrer ikke igen).
+  // RLS tillader sletningen pga. "members manage family"-policy'en
+  // - så role-tjekket SKAL ske her i action'en.
+  const { membership } = await getMyMembership();
+  if (membership?.role !== 'owner') {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Kun ejeren kan fjerne familiemedlemmer')
+    );
+  }
+
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  // Læs target-rækken først for at afvise to specifikke scenarier:
+  // 1. owner forsøger at slette sin egen profil (lockout)
+  // 2. target har user_id sat (er en aktiv bruger) - sletning ville
+  //    låse den person ude. Kun pre-godkendte / ikke-claimet rækker
+  //    (user_id IS NULL) eller børn må slettes via denne flow.
+  const { data: target } = await supabase
+    .from('family_members')
+    .select('user_id')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .maybeSingle();
+  if (!target) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Familiemedlemmet findes ikke')
+    );
+  }
+  if (target.user_id === user.id) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Du kan ikke fjerne dig selv')
+    );
+  }
+  if (target.user_id != null) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent(
+          'Aktive familiemedlemmer kan ikke fjernes herfra - kontakt support'
+        )
+    );
+  }
+
   // ON DELETE SET NULL on the FK columns means existing transactions and
   // components keep working - they just lose their tag.
   const { error } = await supabase

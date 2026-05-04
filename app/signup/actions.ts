@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 
 // Map a few common Supabase / Postgres error messages to Danish copy.
 // Anything we don't recognise falls through verbatim.
@@ -22,14 +23,20 @@ function localiseError(message: string): string {
 }
 
 export async function signup(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim();
+  // SECURITY: Cap længden på alle fri-tekst-felter for at undgå
+  // MB-store strenge der DoS'er DB / triggers.
+  const email = capLength(String(formData.get('email') ?? '').trim(), TEXT_LIMITS.mediumName);
   const password = String(formData.get('password') ?? '');
-  const householdName = String(formData.get('household_name') ?? '').trim();
-  const fullName = String(formData.get('full_name') ?? '').trim();
-  const homeAddress = String(formData.get('home_address') ?? '').trim();
-  const homeZipCode = String(formData.get('home_zip_code') ?? '').trim();
-  const homeCity = String(formData.get('home_city') ?? '').trim();
-  const inviteCode = String(formData.get('invite_code') ?? '').trim().toUpperCase();
+  const householdName = capLength(String(formData.get('household_name') ?? '').trim(), TEXT_LIMITS.mediumName);
+  const fullName = capLength(String(formData.get('full_name') ?? '').trim(), TEXT_LIMITS.shortName);
+  const homeAddress = capLength(String(formData.get('home_address') ?? '').trim(), TEXT_LIMITS.mediumName);
+  const homeZipCode = capLength(String(formData.get('home_zip_code') ?? '').trim(), 20);
+  const homeCity = capLength(String(formData.get('home_city') ?? '').trim(), TEXT_LIMITS.shortName);
+  const inviteCode = capLength(String(formData.get('invite_code') ?? '').trim().toUpperCase(), 20);
+
+  if (password.length > 200) {
+    redirect('/signup?error=' + encodeURIComponent('Adgangskode for lang'));
+  }
 
   // When an invite code is in play, errors should land back on /join/[code]
   // - that's the page the visitor is actually looking at.

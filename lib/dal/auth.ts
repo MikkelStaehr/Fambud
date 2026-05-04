@@ -27,11 +27,15 @@ export async function getHouseholdContext() {
     .maybeSingle();
   if (error) throw error;
   if (!data?.household_id) {
-    // The auth trigger should have created one; if it didn't, the user is in
-    // a broken state and re-login won't help. Surface loudly.
-    throw new Error(
-      'No household found for user. The on_auth_user_created trigger may not have fired.'
+    // SECURITY: Internt logger vi den specifikke fejl (trigger-name
+    // for nem debug). Til brugeren kaster vi en generisk fejl der
+    // ikke afslører backend-topologi.
+    console.error(
+      'getHouseholdContext: no household for user',
+      user.id,
+      '- on_auth_user_created trigger may not have fired'
     );
+    throw new Error('Internal error');
   }
   return { supabase, householdId: data.household_id, user };
 }
@@ -53,6 +57,28 @@ export async function getMyMembership() {
 export async function isSetupComplete(): Promise<boolean> {
   const { membership } = await getMyMembership();
   return membership?.setup_completed_at != null;
+}
+
+// SECURITY: Allowlist over kendte tour-keys. completeTour er en
+// 'use server'-action - en authenticated angriber kunne ellers POST'e
+// arbitrary keys og bloate sin egen jsonb-kolonne med fx Mb-store
+// strenge. Self-inflicted, men trivielt at undgå.
+export const KNOWN_TOUR_KEYS = [
+  'dashboard',
+  'konti',
+  'laan',
+  'indkomst',
+  'budget',
+  'poster',
+  'overforsler',
+  'faste-udgifter',
+  'husholdning',
+  'opsparinger',
+] as const;
+type TourKey = (typeof KNOWN_TOUR_KEYS)[number];
+
+function isValidTourKey(key: string): key is TourKey {
+  return (KNOWN_TOUR_KEYS as readonly string[]).includes(key);
 }
 
 // Per-page tour-state. tours_completed er et jsonb-objekt med
@@ -79,13 +105,22 @@ export async function shouldShowTour(tourKey: string): Promise<boolean> {
 // timestamp for tourKey, og skriver tilbage. Vi accepterer race-vinduet
 // hvor to faner markerer forskellige nøgler samtidig (last-write-wins).
 export async function markTourCompleted(tourKey: string) {
+  if (!isValidTourKey(tourKey)) {
+    // Stille no-op på ukendte keys - vi vil ikke kaste mod en angriber
+    // der prøver at probe gyldige keys, men heller ikke skrive garbage.
+    return;
+  }
   const { supabase, user } = await requireUser();
   const { data: existing } = await supabase
     .from('family_members')
     .select('tours_completed')
     .eq('user_id', user.id)
     .maybeSingle();
-  const current: Record<string, string> = existing?.tours_completed ?? {};
+  const raw = existing?.tours_completed;
+  const current: Record<string, string> =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, string>)
+      : {};
   current[tourKey] = new Date().toISOString();
   const { error } = await supabase
     .from('family_members')

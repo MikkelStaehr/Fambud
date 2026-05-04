@@ -97,6 +97,29 @@ const dkkPlainFormatter = new Intl.NumberFormat('da-DK', {
   maximumFractionDigits: 2,
 });
 
+// SECURITY: Cap'er fri-tekst-input fra brugeren. Postgres text-kolonner
+// har ingen indbygget grænse, så uden et cap kunne en bruger indsætte
+// MB-store strenge og DoS'e read-queries der senere streamer dataen
+// ud i UI'et.
+//
+// Anvend til alle action-felter der ender i text-kolonner: navne,
+// beskrivelser, adresser, brugerleverede labels.
+export function capLength(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max);
+}
+
+// Standardgrænser - matcher fornuftige UX-værdier (et navn er aldrig
+// 200 tegn; en beskrivelse sjældent over 1000).
+export const TEXT_LIMITS = {
+  shortName: 100,        // navne, account-names, family-member-names
+  mediumName: 200,       // adresser, household-names
+  description: 1000,     // beskrivelser, notes
+  longText: 5000,        // feedback, store fritekst-felter
+  url: 500,              // page_url, urls
+  userAgent: 500,        // user-agent strings
+} as const;
+
 export function formatAmount(oere: number): string {
   return dkkPlainFormatter.format(oere / 100);
 }
@@ -126,6 +149,13 @@ export function formatShortDateDA(iso: string): string {
 //   '1 234.56'     - with thousand-separator spaces (AmountInput renders these)
 //   '-209 132'     - negatives for credit balances
 // Returns null for empty/invalid input.
+// SECURITY: Vi clampe input til ±10 mia. kr (1e10). Realistisk
+// husstandsøkonomi er langt under det. Uden cap kunne en bruger
+// indsætte n=1e15 som ville overflow'e Number.MAX_SAFE_INTEGER (2^53)
+// efter et par summeringer i cashflow-aggregations - dashboards ville
+// vise garbage uden noget tydeligt symptom.
+const MAX_AMOUNT_OERE = 1_000_000_000_000; // 10 mia. kr i øre
+
 export function parseAmountToOere(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -134,7 +164,9 @@ export function parseAmountToOere(raw: string): number | null {
   const n = Number(normalised);
   if (!Number.isFinite(n)) return null;
   // Math.round avoids float drift like 12.34 * 100 = 1233.9999999998.
-  return Math.round(n * 100);
+  const oere = Math.round(n * 100);
+  if (Math.abs(oere) > MAX_AMOUNT_OERE) return null;
+  return oere;
 }
 
 // Result-typer til de validerende parsers nedenfor. Server actions bruger

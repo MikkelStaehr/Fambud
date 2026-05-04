@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, getMyMembership, resetAllTours } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
@@ -18,13 +19,13 @@ export async function restartTour() {
 export async function updateMyProfile(formData: FormData) {
   const { supabase, user } = await getHouseholdContext();
 
-  const name = String(formData.get('name') ?? '').trim();
-  const homeAddress = String(formData.get('home_address') ?? '').trim();
-  const homeZipCode = String(formData.get('home_zip_code') ?? '').trim();
-  const homeCity = String(formData.get('home_city') ?? '').trim();
-  const workplaceAddress = String(formData.get('workplace_address') ?? '').trim();
-  const workplaceZipCode = String(formData.get('workplace_zip_code') ?? '').trim();
-  const workplaceCity = String(formData.get('workplace_city') ?? '').trim();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
+  const homeAddress = capLength(String(formData.get('home_address') ?? '').trim(), TEXT_LIMITS.mediumName);
+  const homeZipCode = capLength(String(formData.get('home_zip_code') ?? '').trim(), 20);
+  const homeCity = capLength(String(formData.get('home_city') ?? '').trim(), TEXT_LIMITS.shortName);
+  const workplaceAddress = capLength(String(formData.get('workplace_address') ?? '').trim(), TEXT_LIMITS.mediumName);
+  const workplaceZipCode = capLength(String(formData.get('workplace_zip_code') ?? '').trim(), 20);
+  const workplaceCity = capLength(String(formData.get('workplace_city') ?? '').trim(), TEXT_LIMITS.shortName);
 
   const { error } = await supabase
     .from('family_members')
@@ -40,7 +41,13 @@ export async function updateMyProfile(formData: FormData) {
     .eq('user_id', user.id);
 
   if (error) {
-    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+    // SECURITY: Læk ikke raw DB-fejl ind i URL'en (kan indeholde
+    // schema-/constraint-navne der hjælper en angriber).
+    console.error('updateMyProfile failed:', error.message);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Profilen kunne ikke gemmes. Prøv igen.')
+    );
   }
 
   revalidatePath('/indstillinger');
@@ -214,7 +221,7 @@ export async function createFamilyMember(formData: FormData) {
     );
   }
 
-  const name = String(formData.get('name') ?? '').trim();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) {
     redirect('/indstillinger?error=' + encodeURIComponent('Navn er påkrævet'));
   }
@@ -224,7 +231,7 @@ export async function createFamilyMember(formData: FormData) {
     ? birthdateRaw
     : null;
 
-  const emailRaw = String(formData.get('email') ?? '').trim().toLowerCase();
+  const emailRaw = capLength(String(formData.get('email') ?? '').trim().toLowerCase(), TEXT_LIMITS.mediumName);
   let email: string | null = null;
   if (emailRaw) {
     if (!EMAIL_RE.test(emailRaw)) {

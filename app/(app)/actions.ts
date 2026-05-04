@@ -8,6 +8,7 @@ import { getHouseholdContext } from '@/lib/dal';
 import { sendEmail } from '@/lib/email/resend';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { SESSION_ONLY_COOKIE } from '@/lib/supabase/session-flag';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 
 export async function signOut() {
   const supabase = await createClient();
@@ -28,9 +29,15 @@ export type FeedbackResult = { ok: true } | { ok: false; error: string };
 // success/error inline. DB-insert er kilden - hvis Resend fejler, lader
 // vi feedback'en stå og logger fejlen, så vi ikke mister beskeden.
 export async function submitFeedback(formData: FormData): Promise<FeedbackResult> {
-  const message = String(formData.get('message') ?? '').trim();
-  const pageUrl = String(formData.get('page_url') ?? '').trim() || null;
-  const userAgent = String(formData.get('user_agent') ?? '').trim() || null;
+  const message = capLength(String(formData.get('message') ?? '').trim(), TEXT_LIMITS.longText);
+  const pageUrlRaw = capLength(String(formData.get('page_url') ?? '').trim(), TEXT_LIMITS.url);
+  const userAgentRaw = capLength(String(formData.get('user_agent') ?? '').trim(), TEXT_LIMITS.userAgent);
+  // SECURITY: page_url må kun være en relativ path (ellers kan en
+  // angriber sende en fuld attacker-URL der renderes i admin-mailen).
+  const pageUrl = pageUrlRaw.startsWith('/') && !pageUrlRaw.startsWith('//')
+    ? pageUrlRaw
+    : null;
+  const userAgent = userAgentRaw || null;
 
   if (!message) {
     return { ok: false, error: 'Skriv en besked først' };

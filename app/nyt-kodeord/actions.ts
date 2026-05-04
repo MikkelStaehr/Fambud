@@ -40,7 +40,18 @@ export async function setNewPassword(formData: FormData) {
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {
-    redirect('/nyt-kodeord?error=' + encodeURIComponent(error.message));
+    // SECURITY: Vi viser ikke raw Supabase-fejlen - den kan lække
+    // intern info (validation-rules, JWT-claim-issues osv.) der hjælper
+    // en angriber. Specielle kendte cases mappes til danske beskeder;
+    // resten falder til en generisk fejl.
+    let msg = 'Adgangskoden kunne ikke opdateres. Prøv igen.';
+    if (error.message.includes('should be different')) {
+      msg = 'Den nye adgangskode skal være forskellig fra den gamle';
+    } else if (error.message.includes('Password')) {
+      msg = 'Adgangskoden opfylder ikke kravene';
+    }
+    console.error('updateUser failed:', error.message);
+    redirect('/nyt-kodeord?error=' + encodeURIComponent(msg));
   }
 
   revalidatePath('/', 'layout');

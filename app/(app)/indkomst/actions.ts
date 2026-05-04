@@ -3,10 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import {
-  parseOptionalAmount,
-  parseRequiredAmount,
-} from '@/lib/format';
+import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import type {
   IncomeRole,
@@ -86,7 +83,7 @@ function readIncomeForm(formData: FormData):
   const untilRaw = String(formData.get('recurrence_until') ?? '').trim();
   const recurrence_until = recurrence === 'once' ? null : untilRaw || null;
 
-  const descRaw = String(formData.get('description') ?? '').trim();
+  const descRaw = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   const description = descRaw || null;
 
   // Optional gross + pension. Empty strings parse to null; non-empty must be
@@ -125,7 +122,7 @@ function readIncomeForm(formData: FormData):
 
   // Label is only meaningful when there's an amount. Strip a label that sits
   // alone so we don't accumulate orphan strings.
-  const labelRaw = String(formData.get('other_deduction_label') ?? '').trim();
+  const labelRaw = capLength(String(formData.get('other_deduction_label') ?? '').trim(), TEXT_LIMITS.shortName);
   const other_deduction_label = deductionRes.value != null && labelRaw ? labelRaw : null;
 
   // income_role: hovedindkomst eller biindkomst. Tom værdi → null (uklassificeret).
@@ -208,7 +205,7 @@ export async function createIncome(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/indkomst/ny?error=' + encodeURIComponent(error.message));
+    redirect('/indkomst/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/indkomst');
@@ -280,7 +277,7 @@ export async function setPrimaryIncomeSource(formData: FormData) {
     .eq('id', familyMemberId)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/indkomst?error=' + encodeURIComponent(error.message));
+    redirect('/indkomst?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/indkomst');

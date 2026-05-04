@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseRequiredAmount } from '@/lib/format';
+import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
@@ -59,7 +59,7 @@ function readTransactionForm(formData: FormData):
   const untilRaw = String(formData.get('recurrence_until') ?? '').trim();
   const recurrence_until = recurrence === 'once' ? null : untilRaw || null;
 
-  const descRaw = String(formData.get('description') ?? '').trim();
+  const descRaw = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   const description = descRaw || null;
 
   return {
@@ -79,7 +79,7 @@ export async function createTransaction(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/poster/ny?error=' + encodeURIComponent(error.message));
+    redirect('/poster/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/poster');

@@ -3,11 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import {
-  parseAmountToOere,
-  parseOptionalAmount,
-  nextOccurrenceAfter,
-} from '@/lib/format';
+import { parseAmountToOere, parseOptionalAmount, nextOccurrenceAfter, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
 
@@ -55,7 +51,7 @@ type ParsedLoan = {
 function readLoanForm(formData: FormData):
   | { error: string }
   | { data: ParsedLoan } {
-  const name = String(formData.get('name') ?? '').trim();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) return { error: 'Navn er påkrævet' };
 
   const ownership = String(formData.get('ownership') ?? 'personal');
@@ -66,7 +62,7 @@ function readLoanForm(formData: FormData):
     ? (loanTypeRaw as LoanType)
     : null;
 
-  const lenderRaw = String(formData.get('lender') ?? '').trim();
+  const lenderRaw = capLength(String(formData.get('lender') ?? '').trim(), TEXT_LIMITS.shortName);
   const lender = lenderRaw || null;
 
   // opening_balance on a loan account is restgæld stored as a negative number
@@ -184,7 +180,7 @@ export async function createLoan(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/laan/ny?error=' + encodeURIComponent(error.message));
+    redirect('/laan/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/laan');

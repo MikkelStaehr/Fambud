@@ -111,7 +111,7 @@ const VALID_KINDS: readonly CategoryKind[] = ['income', 'expense'];
 function readCategoryForm(formData: FormData):
   | { error: string }
   | { data: { name: string; kind: CategoryKind; color: string } } {
-  const name = String(formData.get('name') ?? '').trim();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) return { error: 'Navn er påkrævet' };
 
   const kindRaw = String(formData.get('kind') ?? '');
@@ -120,7 +120,7 @@ function readCategoryForm(formData: FormData):
   }
 
   // Hex colour: '#' + 3 or 6 hex digits. Falls back to a neutral grey.
-  let color = String(formData.get('color') ?? '').trim();
+  let color = capLength(String(formData.get('color') ?? '').trim(), 20);
   if (!/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color)) {
     color = '#94a3b8';
   }

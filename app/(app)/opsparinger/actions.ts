@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseRequiredAmount } from '@/lib/format';
+import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 
 // Default-kategorier der seedes ind i tabellen når brugeren trykker "Brug
 // forslag"-knappen. Tallene er konservative midt-i-spectrum-estimater for
@@ -19,7 +19,7 @@ const DEFAULT_ESTIMATES_OERE: { label: string; yearly_amount: number }[] = [
 ];
 
 export async function addPredictableEstimate(formData: FormData) {
-  const label = String(formData.get('label') ?? '').trim();
+  const label = capLength(String(formData.get('label') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!label) {
     redirect('/opsparinger?error=' + encodeURIComponent('Indtast en kategori'));
   }
@@ -53,7 +53,7 @@ export async function addPredictableEstimate(formData: FormData) {
     position: nextPos,
   });
   if (error) {
-    redirect('/opsparinger?error=' + encodeURIComponent(error.message));
+    redirect('/opsparinger?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/opsparinger');
@@ -63,7 +63,7 @@ export async function updatePredictableEstimate(
   id: string,
   formData: FormData
 ) {
-  const label = String(formData.get('label') ?? '').trim();
+  const label = capLength(String(formData.get('label') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!label) {
     redirect('/opsparinger?error=' + encodeURIComponent('Indtast en kategori'));
   }
@@ -84,7 +84,7 @@ export async function updatePredictableEstimate(
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/opsparinger?error=' + encodeURIComponent(error.message));
+    redirect('/opsparinger?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/opsparinger');
@@ -118,7 +118,7 @@ export async function seedDefaultEstimates() {
   }));
   const { error } = await supabase.from('predictable_estimates').insert(rows);
   if (error) {
-    redirect('/opsparinger?error=' + encodeURIComponent(error.message));
+    redirect('/opsparinger?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
   revalidatePath('/opsparinger');
 }

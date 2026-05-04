@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseAmountToOere } from '@/lib/format';
+import { parseAmountToOere, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import type {
   AccountKind,
@@ -51,7 +51,7 @@ function readAccountForm(formData: FormData):
         editable_by_all: boolean;
       };
     } {
-  const name = String(formData.get('name') ?? '').trim();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) return { error: 'Navn er påkrævet' };
 
   const kindRaw = String(formData.get('kind') ?? 'checking');
@@ -93,7 +93,7 @@ function readAccountForm(formData: FormData):
   const openingRaw = String(formData.get('opening_balance') ?? '0');
   const opening_balance = parseAmountToOere(openingRaw) ?? 0;
 
-  const ownerRaw = String(formData.get('owner_name') ?? '').trim();
+  const ownerRaw = capLength(String(formData.get('owner_name') ?? '').trim(), TEXT_LIMITS.shortName);
   const owner_name = ownerRaw || null;
 
   // Checkbox: present in formData ('on') means checked, absent means unchecked.
@@ -119,7 +119,7 @@ export async function createAccount(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/konti/ny?error=' + encodeURIComponent(error.message));
+    redirect('/konti/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/konti');

@@ -59,6 +59,16 @@ export async function isSetupComplete(): Promise<boolean> {
   return membership?.setup_completed_at != null;
 }
 
+// Guard til wizard-actions: hvis brugeren er færdig med setup,
+// redirect til dashboard. Forhindrer at man kan kalde wizard-actions
+// (med side-effekter på household state) post-setup via direkte POST.
+// Undlad at kalde fra completeSetup-action selv (den ER overgangen).
+export async function guardWizardOpen() {
+  if (await isSetupComplete()) {
+    redirect('/dashboard');
+  }
+}
+
 // SECURITY: Allowlist over kendte tour-keys. completeTour er en
 // 'use server'-action - en authenticated angriber kunne ellers POST'e
 // arbitrary keys og bloate sin egen jsonb-kolonne med fx Mb-store

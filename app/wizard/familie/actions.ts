@@ -1,8 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext, getMyMembership } from '@/lib/dal';
+import { getHouseholdContext, getMyMembership, guardWizardOpen } from '@/lib/dal';
 import type { HouseholdEconomyType } from '@/lib/database.types';
 
 // Sætter familie-økonomi-modellen og - hvis 'shared' - opdaterer den
@@ -15,6 +16,7 @@ import type { HouseholdEconomyType } from '@/lib/database.types';
 // samme wizard-session, opdaterer vi lønkontoens owner_name tilsvarende
 // - det matcher den valgte model når brugeren går videre til næste trin.
 export async function setEconomyType(formData: FormData) {
+  await guardWizardOpen();
   const typeRaw = String(formData.get('economy_type') ?? '');
   if (typeRaw !== 'separate' && typeRaw !== 'shared') {
     redirect('/wizard/familie?error=' + encodeURIComponent('Ugyldigt valg'));
@@ -93,8 +95,9 @@ export async function setEconomyType(formData: FormData) {
 // Når partneren senere bruger invitations-koden vil /join koble user_id +
 // joined_at + role='member' på den eksisterende række via email-match.
 export async function addPartner(formData: FormData) {
-  const name = String(formData.get('name') ?? '').trim();
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  await guardWizardOpen();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
+  const email = capLength(String(formData.get('email') ?? '').trim().toLowerCase(), TEXT_LIMITS.mediumName);
   if (!name) {
     redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Navn er påkrævet'));
   }
@@ -135,7 +138,8 @@ export async function addPartner(formData: FormData) {
 // ejer på børneforbrugskonti og børneopsparing senere i wizarden.
 // role=null markerer "dependent" (ingen login).
 export async function addChild(formData: FormData) {
-  const name = String(formData.get('name') ?? '').trim();
+  await guardWizardOpen();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) {
     redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Navn er påkrævet'));
   }
@@ -167,6 +171,7 @@ export async function addChild(formData: FormData) {
 // selv (deres family_member-række er knyttet til auth.users og må aldrig
 // nukes via wizard).
 export async function removeFamilyMember(formData: FormData) {
+  await guardWizardOpen();
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 

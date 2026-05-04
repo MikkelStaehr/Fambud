@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseOptionalAmount, parseRequiredAmount } from '@/lib/format';
+import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 
 // /husholdning er et forbrugsspor pr. husholdningskonto. Hvert "køb" er en
 // almindelig transaction med recurrence='once' på den valgte dato. Vi
@@ -46,7 +46,7 @@ export async function addHouseholdPurchase(
 ) {
   if (!accountId) redirect('/husholdning');
 
-  const description = String(formData.get('description') ?? '').trim();
+  const description = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   if (!description) {
     redirect(
       '/husholdning?error=' + encodeURIComponent('Indtast en beskrivelse')
@@ -82,7 +82,7 @@ export async function addHouseholdPurchase(
     recurrence: 'once',
   });
   if (error) {
-    redirect('/husholdning?error=' + encodeURIComponent(error.message));
+    redirect('/husholdning?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/husholdning');
@@ -117,7 +117,7 @@ export async function setMonthlyBudget(
     .eq('id', accountId)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/husholdning?error=' + encodeURIComponent(error.message));
+    redirect('/husholdning?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/husholdning');

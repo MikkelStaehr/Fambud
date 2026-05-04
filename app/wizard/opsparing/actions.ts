@@ -1,13 +1,15 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, guardWizardOpen } from '@/lib/dal';
 
 // Generel privat opsparing - kind=savings, intet specifikt formål-tag.
 // Forbliver på siden efter success så brugeren kan tilføje flere.
 export async function createPrivateSavings(formData: FormData) {
-  const name = String(formData.get('name') ?? '').trim();
+  await guardWizardOpen();
+  const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) {
     redirect(
       '/wizard/opsparing?error=' + encodeURIComponent('Navn er påkrævet')
@@ -26,7 +28,7 @@ export async function createPrivateSavings(formData: FormData) {
     created_by: user.id,
   });
   if (error) {
-    redirect('/wizard/opsparing?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/opsparing?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/opsparing');
@@ -36,6 +38,7 @@ export async function createPrivateSavings(formData: FormData) {
 // kontoen med savings_purposes=['buffer'] så dashboardet og /opsparinger
 // genkender den som "fundamentet" og ikke spørger igen.
 export async function createBufferSavings() {
+  await guardWizardOpen();
   const { supabase, householdId, user } = await getHouseholdContext();
   const { error } = await supabase.from('accounts').insert({
     household_id: householdId,
@@ -47,7 +50,7 @@ export async function createBufferSavings() {
     created_by: user.id,
   });
   if (error) {
-    redirect('/wizard/opsparing?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/opsparing?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
   revalidatePath('/wizard/opsparing');
 }
@@ -57,6 +60,7 @@ export async function createBufferSavings() {
 // /opsparinger og cashflow-tjekket kan vise hvor meget der overføres pr. md
 // til hvert barn. Skal kun tilbydes hvis barn-rækken faktisk eksisterer.
 export async function createChildSpendingAccount(formData: FormData) {
+  await guardWizardOpen();
   const childId = String(formData.get('child_id') ?? '').trim();
   if (!childId) {
     redirect('/wizard/opsparing?error=' + encodeURIComponent('Manglende barn-id'));
@@ -89,7 +93,7 @@ export async function createChildSpendingAccount(formData: FormData) {
     created_by: user.id,
   });
   if (error) {
-    redirect('/wizard/opsparing?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/opsparing?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/opsparing');
@@ -98,6 +102,7 @@ export async function createChildSpendingAccount(formData: FormData) {
 // Slet en opsparingskonto oprettet i wizarden. Hard-delete er sikker
 // her fordi der endnu ikke er transaktioner på kontoen.
 export async function removePrivateSavings(formData: FormData) {
+  await guardWizardOpen();
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
@@ -108,7 +113,7 @@ export async function removePrivateSavings(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/wizard/opsparing?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/opsparing?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/opsparing');

@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseRequiredAmount } from '@/lib/format';
+import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import {
   nextFixedDayOccurrence,
   nextLastBankingDay,
@@ -29,7 +29,7 @@ export async function addExpense(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim();
   if (!accountId) redirect('/faste-udgifter');
 
-  const description = String(formData.get('description') ?? '').trim();
+  const description = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   if (!description) bounceWithError(accountId, 'Navn er påkrævet');
 
   const amountRes = parseRequiredAmount(
@@ -76,7 +76,7 @@ export async function addExpense(formData: FormData) {
 
   // Optional grouping tag (e.g. "Popermo") that clusters expenses under a
   // common name within a category in the /faste-udgifter overview. Empty → null.
-  const groupLabelRaw = String(formData.get('group_label') ?? '').trim();
+  const groupLabelRaw = capLength(String(formData.get('group_label') ?? '').trim(), TEXT_LIMITS.shortName);
   const group_label = groupLabelRaw || null;
 
   // Components mode: when the breakdown checkbox is checked, components are
@@ -137,7 +137,7 @@ export async function removeExpense(formData: FormData) {
 export async function addComponent(formData: FormData) {
   const transactionId = String(formData.get('transaction_id') ?? '').trim();
   const accountId = String(formData.get('account_id') ?? '').trim();
-  const label = String(formData.get('label') ?? '').trim();
+  const label = capLength(String(formData.get('label') ?? '').trim(), TEXT_LIMITS.shortName);
 
   if (!accountId) redirect('/faste-udgifter');
   if (!transactionId) bounceWithError(accountId, 'Manglende transaktion');
@@ -212,7 +212,7 @@ export async function updateComponent(
   _prevState: UpdateComponentState,
   formData: FormData
 ): Promise<UpdateComponentState> {
-  const label = String(formData.get('label') ?? '').trim();
+  const label = capLength(String(formData.get('label') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!label) return { ok: false, error: 'Navn er påkrævet' };
 
   // Negative amounts allowed (rabat) - se migration 0019.
@@ -255,7 +255,7 @@ export async function updateBudgetExpense(
   _prevState: UpdateState,
   formData: FormData
 ): Promise<UpdateState> {
-  const description = String(formData.get('description') ?? '').trim();
+  const description = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   if (!description) return { ok: false, error: 'Navn er påkrævet' };
 
   const amountRes = parseRequiredAmount(
@@ -279,7 +279,7 @@ export async function updateBudgetExpense(
     return { ok: false, error: 'Vælg en gyldig dato' };
   }
 
-  const groupLabelRaw = String(formData.get('group_label') ?? '').trim();
+  const groupLabelRaw = capLength(String(formData.get('group_label') ?? '').trim(), TEXT_LIMITS.shortName);
   const group_label = groupLabelRaw || null;
 
   const components_mode: 'additive' | 'breakdown' =

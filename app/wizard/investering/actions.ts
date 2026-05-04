@@ -1,8 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, guardWizardOpen } from '@/lib/dal';
 import type { InvestmentType } from '@/lib/database.types';
 
 const VALID_TYPES: readonly InvestmentType[] = [
@@ -25,6 +26,7 @@ const DEFAULT_NAME: Record<InvestmentType, string> = {
 // foreslår default-navn baseret på typen. owner_name efterlades null;
 // den kan justeres i ejere-trinet bagefter.
 export async function createInvestment(formData: FormData) {
+  await guardWizardOpen();
   const typeRaw = String(formData.get('investment_type') ?? '').trim();
   if (!VALID_TYPES.includes(typeRaw as InvestmentType)) {
     redirect(
@@ -34,7 +36,7 @@ export async function createInvestment(formData: FormData) {
   const investment_type = typeRaw as InvestmentType;
 
   const name =
-    String(formData.get('name') ?? '').trim() || DEFAULT_NAME[investment_type];
+    capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName) || DEFAULT_NAME[investment_type];
 
   const { supabase, householdId, user } = await getHouseholdContext();
   const { error } = await supabase.from('accounts').insert({
@@ -47,7 +49,7 @@ export async function createInvestment(formData: FormData) {
     created_by: user.id,
   });
   if (error) {
-    redirect('/wizard/investering?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/investering?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/investering');
@@ -58,6 +60,7 @@ export async function createInvestment(formData: FormData) {
 // 'boerneopsparing'. Det giver skattefordel-loftet (6.000/år/barn) en
 // konkret konto som /konti og /opsparinger genkender.
 export async function createChildSavings(formData: FormData) {
+  await guardWizardOpen();
   const childId = String(formData.get('child_id') ?? '').trim();
   if (!childId) {
     redirect(
@@ -88,13 +91,14 @@ export async function createChildSavings(formData: FormData) {
     created_by: user.id,
   });
   if (error) {
-    redirect('/wizard/investering?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/investering?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/investering');
 }
 
 export async function removeInvestment(formData: FormData) {
+  await guardWizardOpen();
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
@@ -105,7 +109,7 @@ export async function removeInvestment(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/wizard/investering?error=' + encodeURIComponent(error.message));
+    redirect('/wizard/investering?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/investering');

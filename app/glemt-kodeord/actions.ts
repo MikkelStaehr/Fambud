@@ -1,12 +1,13 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { resolveSiteOrigin } from '@/lib/site-url';
 
 export async function requestPasswordReset(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim();
+  const email = capLength(String(formData.get('email') ?? '').trim(), TEXT_LIMITS.mediumName);
 
   if (!email) {
     redirect('/glemt-kodeord?error=' + encodeURIComponent('Indtast din email'));

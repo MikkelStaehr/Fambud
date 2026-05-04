@@ -72,13 +72,13 @@ function buildSteps(ownerName: string | null): TourStep[] {
     },
     {
       target: '[data-tour="cashflow-warnings"]',
-      title: 'Vi advarer hvis noget er underdækket',
+      title: 'Agenten advarer hvis noget ikke er dækket',
       content: (
         <>
           <p>
             Hvis nogen af jeres fælles-konti ikke har nok overførsler hver
-            måned, ser du det her — sammen med en knap der opretter den
-            manglende overførsel for dig.
+            måned, fanger agenten det her — sammen med en knap der opretter
+            den manglende overførsel for dig.
           </p>
         </>
       ),

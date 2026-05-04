@@ -226,16 +226,33 @@ export function Tour({ steps, onComplete }: Props) {
 
 type Placement = 'top' | 'bottom' | 'left' | 'right';
 
+// Antal pixels vi forventer tooltip optager — generøst estimat så vi
+// ikke vælger en placement der ikke kan rumme den fulde tooltip.
+const TIP_W_EST = 320;
+const TIP_H_EST = 320;
+
 function decidePlacement(rect: DOMRect): Placement {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const spaceBelow = vh - rect.bottom;
-  const spaceAbove = rect.top;
-  // Foretræk under, hvis der er plads. Ellers over. Fall back til siden.
-  if (spaceBelow > 240) return 'bottom';
-  if (spaceAbove > 240) return 'top';
-  if (vw - rect.right > 320) return 'right';
-  return 'left';
+  const margin = 16;
+  const spaceBelow = vh - rect.bottom - margin;
+  const spaceAbove = rect.top - margin;
+  const spaceLeft = rect.left - margin;
+  const spaceRight = vw - rect.right - margin;
+
+  // Foretræk vertikal placering (under, så over). Skift til siden kun
+  // hvis tooltip ALDRIG kan fitte vertikalt — så vi undgår at tooltip
+  // overlapper det vi prøver at highlighte.
+  if (spaceBelow >= TIP_H_EST) return 'bottom';
+  if (spaceAbove >= TIP_H_EST) return 'top';
+  if (spaceRight >= TIP_W_EST) return 'right';
+  if (spaceLeft >= TIP_W_EST) return 'left';
+
+  // Ingen placement kan rumme den fulde tooltip — vælg den med mest plads
+  // og lad clamping i TourTooltipBox sørge for at den ikke går ud over
+  // skærmen (kan resultere i at tooltip overlapper target lidt — accepteret
+  // som sidste udvej).
+  return spaceBelow > spaceAbove ? 'bottom' : 'top';
 }
 
 function TourTooltipBox({
@@ -274,6 +291,7 @@ function TourTooltipBox({
   }, [step.title, step.content]);
 
   const vw = window.innerWidth;
+  const vh = window.innerHeight;
   // Beregn position
   let top = 0;
   let left = 0;
@@ -295,10 +313,14 @@ function TourTooltipBox({
       left = rect.left - tipSize.w - TOOLTIP_OFFSET - PADDING;
       break;
   }
-  // Klamp horisontalt så tooltip ikke går ud over skærmen
+  // Klamp både horisontalt og vertikalt så tooltip ikke går ud over
+  // viewport. Vertikal clamping er især vigtigt for sidebar-targets
+  // hvor tooltip centreres på et højt element.
   const margin = 12;
   if (left < margin) left = margin;
   if (left + tipSize.w > vw - margin) left = vw - margin - tipSize.w;
+  if (top < margin) top = margin;
+  if (top + tipSize.h > vh - margin) top = vh - margin - tipSize.h;
 
   return (
     <div

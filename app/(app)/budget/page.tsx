@@ -12,7 +12,9 @@ import { Plus } from 'lucide-react';
 import {
   getBudgetAccounts,
   getRecurringExpensesForAccount,
+  shouldShowTour,
 } from '@/lib/dal';
+import { BudgetTour } from './_components/BudgetTour';
 import {
   CATEGORY_GROUP_COLOR,
   categoryGroupFor,
@@ -25,7 +27,10 @@ import {
 import { BudgetTable, type BudgetRow } from './_components/BudgetTable';
 
 export default async function BudgetOverviewPage() {
-  const accounts = await getBudgetAccounts();
+  const [accounts, autoStartTour] = await Promise.all([
+    getBudgetAccounts(),
+    shouldShowTour('budget'),
+  ]);
 
   // Hent udgifter pr. konto parallelt og flatten til én liste hvor hver række
   // indeholder den joined konto-info. Det er samme læse-mønster som
@@ -89,6 +94,7 @@ export default async function BudgetOverviewPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <BudgetTour autoStart={autoStartTour} />
       <header className="border-b border-neutral-200 pb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
@@ -113,7 +119,7 @@ export default async function BudgetOverviewPage() {
         </div>
       </header>
 
-      <section className="mt-6">
+      <section data-tour="budget-table" className="mt-6">
         <BudgetTable rows={rows} />
       </section>
     </div>

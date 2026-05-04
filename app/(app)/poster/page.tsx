@@ -9,7 +9,8 @@
 
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { getTransactionsForMonth } from '@/lib/dal';
+import { getTransactionsForMonth, shouldShowTour } from '@/lib/dal';
+import { PosterTour } from './_components/PosterTour';
 import {
   CATEGORY_GROUP_COLOR,
   categoryGroupFor,
@@ -36,7 +37,10 @@ export default async function PosterPage({
 }) {
   const sp = await searchParams;
   const month = normaliseYearMonth(sp.month);
-  const transactions = await getTransactionsForMonth(month);
+  const [transactions, autoStartTour] = await Promise.all([
+    getTransactionsForMonth(month),
+    shouldShowTour('poster'),
+  ]);
 
   // Månedssammendrag på tværs af både indkomst og udgifter.
   const totals = transactions.reduce(
@@ -78,6 +82,7 @@ export default async function PosterPage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <PosterTour autoStart={autoStartTour} />
       <header className="flex flex-col gap-3 border-b border-neutral-200 pb-6 sm:flex-row sm:items-baseline sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
@@ -92,6 +97,7 @@ export default async function PosterPage({
           <MonthFilter yearMonth={month} basePath="/poster" />
           <Link
             href="/poster/ny"
+            data-tour="poster-add"
             className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             <Plus className="h-4 w-4" />
@@ -134,7 +140,7 @@ export default async function PosterPage({
       </section>
 
       {/* Hierarkisk udgifts-tabel med Fælles/Private-tab */}
-      <section className="mt-8">
+      <section data-tour="poster-filters" className="mt-8">
         <PosterTable rows={rows} />
       </section>
     </div>

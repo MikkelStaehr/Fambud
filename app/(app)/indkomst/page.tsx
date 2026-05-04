@@ -13,10 +13,12 @@ import {
   getFamilyMembers,
   getIncomeTransactions,
   getPrimaryIncomeForecast,
+  shouldShowTour,
   type FamilyMemberRow,
   type IncomeRow,
   type PrimaryIncomeForecast,
 } from '@/lib/dal';
+import { IndkomstTour } from './_components/IndkomstTour';
 import {
   RECURRENCE_LABEL_DA,
   formatAmount,
@@ -42,9 +44,10 @@ export default async function IndkomstPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const sp = await searchParams;
-  const [allFamilyMembers, incomes] = await Promise.all([
+  const [allFamilyMembers, incomes, autoStartTour] = await Promise.all([
     getFamilyMembers(),
     getIncomeTransactions(),
+    shouldShowTour('indkomst'),
   ]);
 
   // Børn (begge user_id og email er null) har pr. definition ingen
@@ -84,6 +87,7 @@ export default async function IndkomstPage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <IndkomstTour autoStart={autoStartTour} />
       <header className="flex flex-col gap-3 border-b border-neutral-200 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -104,7 +108,7 @@ export default async function IndkomstPage({
       )}
 
       {/* Hovedindkomst - én card pr. familiemedlem */}
-      <section className="mt-6">
+      <section data-tour="indkomst-hovedindkomst" className="mt-6">
         <h2 className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
           <Sparkles className="h-3 w-3" />
           Hovedindkomst
@@ -136,7 +140,7 @@ export default async function IndkomstPage({
       </section>
 
       {/* Biindkomster - flad liste */}
-      <section className="mt-8">
+      <section data-tour="indkomst-biindkomst" className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
             <Coins className="h-3 w-3" />

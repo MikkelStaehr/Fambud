@@ -32,7 +32,8 @@ import {
   Sparkles,
   AlertCircle,
 } from 'lucide-react';
-import { getTransferGraph, getTransfersForMonth } from '@/lib/dal';
+import { getTransferGraph, getTransfersForMonth, shouldShowTour } from '@/lib/dal';
+import { OverforslerTour } from './_components/OverforslerTour';
 import {
   RECURRENCE_LABEL_DA,
   currentYearMonth,
@@ -110,9 +111,10 @@ export default async function OverforslerPage({
 }) {
   const sp = await searchParams;
   const month = normaliseYearMonth(sp.month);
-  const [graph, transfersInMonth] = await Promise.all([
+  const [graph, transfersInMonth, autoStartTour] = await Promise.all([
     getTransferGraph(),
     getTransfersForMonth(month),
+    shouldShowTour('overforsler'),
   ]);
 
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
@@ -176,6 +178,7 @@ export default async function OverforslerPage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <OverforslerTour autoStart={autoStartTour} />
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-6">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -189,6 +192,7 @@ export default async function OverforslerPage({
         </div>
         <Link
           href="/overforsler/ny"
+          data-tour="overforsler-add"
           className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" />
@@ -231,11 +235,13 @@ export default async function OverforslerPage({
 
       {/* Grupperet liste over faste overførsler. Sektioner uden indhold
           renderes ikke - siden bliver så aldrig længere end nødvendigt. */}
-      {(['shared', 'savings', 'credit', 'other'] as GroupKey[]).map((key) => {
-        const items = groups[key];
-        if (items.length === 0) return null;
-        return <RecurringGroup key={key} groupKey={key} items={items} />;
-      })}
+      <div data-tour="overforsler-list">
+        {(['shared', 'savings', 'credit', 'other'] as GroupKey[]).map((key) => {
+          const items = groups[key];
+          if (items.length === 0) return null;
+          return <RecurringGroup key={key} groupKey={key} items={items} />;
+        })}
+      </div>
 
       {recurring.length === 0 && (
         <section className="mt-8 rounded-md border border-dashed border-neutral-300 bg-white px-6 py-12 text-center">

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Plus, Pencil, Archive, ArchiveRestore } from 'lucide-react';
-import { getAccounts, getAccountFlows, type AccountFlow } from '@/lib/dal';
+import { getAccounts, getAccountFlows, shouldShowTour, type AccountFlow } from '@/lib/dal';
+import { KontiTour } from './_components/KontiTour';
 import {
   ACCOUNT_KIND_LABEL_DA,
   INVESTMENT_TYPE_LABEL_DA,
@@ -46,9 +47,10 @@ export default async function KontiPage({
 }) {
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const [accounts, flows] = await Promise.all([
+  const [accounts, flows, autoStartTour] = await Promise.all([
     getAccounts({ includeArchived: showArchived }),
     getAccountFlows(),
+    shouldShowTour('konti'),
   ]);
 
   // Lån filtreres ud af sektionerne - de bor på /laan. Vi tæller dem alligevel
@@ -63,6 +65,7 @@ export default async function KontiPage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <KontiTour autoStart={autoStartTour} />
       <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -87,6 +90,7 @@ export default async function KontiPage({
           </Link>
           <Link
             href="/konti/ny"
+            data-tour="konti-new"
             className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
           >
             <Plus className="h-4 w-4" />
@@ -95,7 +99,7 @@ export default async function KontiPage({
         </div>
       </header>
 
-      <div className="mt-6 space-y-6">
+      <div data-tour="konti-sections" className="mt-6 space-y-6">
         {SECTION_GROUPS.map((g) => {
           const inGroup = activeAccounts.filter((a) => g.kinds.includes(a.kind));
           return (

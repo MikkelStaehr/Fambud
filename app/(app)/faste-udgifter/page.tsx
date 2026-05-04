@@ -8,7 +8,9 @@ import {
   ensureStandardExpenseCategories,
   getBudgetAccounts,
   getRecurringExpensesForAccount,
+  shouldShowTour,
 } from '@/lib/dal';
+import { FasteUdgifterTour } from './_components/FasteUdgifterTour';
 import {
   ACCOUNT_KIND_LABEL_DA,
   effectiveAmount,
@@ -38,7 +40,10 @@ export default async function BudgetOverviewPage() {
   // here also have the standard categories ready.
   await ensureStandardExpenseCategories();
 
-  const accounts = await getBudgetAccounts();
+  const [accounts, autoStartTour] = await Promise.all([
+    getBudgetAccounts(),
+    shouldShowTour('faste-udgifter'),
+  ]);
 
   // Pull recurring expenses for each account in parallel and roll up to a
   // single monthly figure per account. The /faste-udgifter/[id] page does
@@ -122,6 +127,7 @@ export default async function BudgetOverviewPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <FasteUdgifterTour autoStart={autoStartTour} />
       <header className="border-b border-neutral-200 pb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
@@ -151,7 +157,7 @@ export default async function BudgetOverviewPage() {
           Konti hvor faste regninger trækkes. Klik for at se og redigere
           udgifterne pr. konto.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div data-tour="faste-udgifter-cards" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {stats.map((s) => (
             <Link
               key={s.id}

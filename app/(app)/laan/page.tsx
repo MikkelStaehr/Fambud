@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Plus, Pencil, Trash2, Calendar } from 'lucide-react';
-import { getLoans } from '@/lib/dal';
+import { getLoans, shouldShowTour } from '@/lib/dal';
+import { LaanTour } from './_components/LaanTour';
 import {
   formatAmount,
   formatShortDateDA,
@@ -20,7 +21,10 @@ const LOAN_TYPE_LABEL_DA: Record<LoanType, string> = {
 };
 
 export default async function LaanPage() {
-  const loans = await getLoans();
+  const [loans, autoStartTour] = await Promise.all([
+    getLoans(),
+    shouldShowTour('laan'),
+  ]);
 
   // Sum gæld and monthly burden - gives a single-glance picture of the
   // household's debt situation. abs() so positive-saved rows still count.
@@ -40,6 +44,7 @@ export default async function LaanPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <LaanTour autoStart={autoStartTour} />
       <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -53,6 +58,7 @@ export default async function LaanPage() {
         </div>
         <Link
           href="/laan/ny"
+          data-tour="laan-new"
           className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" />
@@ -76,7 +82,7 @@ export default async function LaanPage() {
           </Link>
         </div>
       ) : (
-        <div className="mt-6 grid gap-3">
+        <div data-tour="laan-list" className="mt-6 grid gap-3">
           {loans.map((l) => {
             // abs() keeps the display sane regardless of which sign convention
             // the row was saved with - older rows or manual SQL edits may have

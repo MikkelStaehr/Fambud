@@ -64,6 +64,17 @@ export async function hasCompletedTour(tourKey: string): Promise<boolean> {
   return tourKey in completed;
 }
 
+// Hjælper til side-komponenter: skal vi auto-starte denne tour? True hvis
+// wizard er færdig OG brugeren ikke har set tour'en før. Single helper så
+// hver side kan bare kalde `await shouldShowTour('konti')` uden at gentage
+// boilerplate.
+export async function shouldShowTour(tourKey: string): Promise<boolean> {
+  const { membership } = await getMyMembership();
+  if (!membership?.setup_completed_at) return false;
+  const completed = membership.tours_completed ?? {};
+  return !(tourKey in completed);
+}
+
 // Markér en tour som gennemført. Læser eksisterende objekt, tilføjer
 // timestamp for tourKey, og skriver tilbage. Vi accepterer race-vinduet
 // hvor to faner markerer forskellige nøgler samtidig (last-write-wins).

@@ -6,11 +6,11 @@ import {
   getDashboardData,
   getFamilyMembers,
   getMonthlyExpensesByGroup,
-  getMyMembership,
   getOnboardingProgress,
   getOtherMembersOnboardingStatus,
   getPrimaryIncomeForecast,
   getUpcomingEvents,
+  shouldShowTour,
 } from '@/lib/dal';
 import {
   formatLongDateDA,
@@ -54,6 +54,7 @@ export default async function DashboardPage() {
     upcomingEvents,
     familyMembers,
     otherMembersStatus,
+    shouldAutoStartTour,
   ] = await Promise.all([
     getDashboardData(),
     getOnboardingProgress(),
@@ -65,14 +66,8 @@ export default async function DashboardPage() {
     getUpcomingEvents(),
     getFamilyMembers(),
     getOtherMembersOnboardingStatus(),
+    shouldShowTour('dashboard'),
   ]);
-  // Tour-state - auto-start hvis brugeren ikke har set rundturen endnu
-  // (men kun efter wizard er færdig, så vi ikke spammer dem mens de
-  // stadig sætter op).
-  const { membership } = await getMyMembership();
-  const shouldAutoStartTour =
-    membership?.setup_completed_at != null &&
-    !(membership?.tours_completed && 'dashboard' in membership.tours_completed);
 
   // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
   // primary_income_source men endnu ikke har én eneste paycheck registreret.

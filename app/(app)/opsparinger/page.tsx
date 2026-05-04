@@ -23,17 +23,20 @@ import {
   getHouseholdFinancialSummary,
   getPredictableEstimates,
   getSavingsAccountsWithFlow,
+  shouldShowTour,
 } from '@/lib/dal';
+import { OpsparingerTour } from './_components/OpsparingerTour';
 import { formatAmount } from '@/lib/format';
 import { BufferCard } from './_components/BufferCard';
 import { PredictableCard } from './_components/PredictableCard';
 import { SavingsCard } from './_components/SavingsCard';
 
 export default async function OpsparingerPage() {
-  const [savings, summary, predictableEstimates] = await Promise.all([
+  const [savings, summary, predictableEstimates, autoStartTour] = await Promise.all([
     getSavingsAccountsWithFlow(),
     getHouseholdFinancialSummary(),
     getPredictableEstimates(),
+    shouldShowTour('opsparinger'),
   ]);
 
   const totalInflow = savings.reduce((s, a) => s + a.monthlyInflow, 0);
@@ -50,6 +53,7 @@ export default async function OpsparingerPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <OpsparingerTour autoStart={autoStartTour} />
       <header className="border-b border-neutral-200 pb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
@@ -74,7 +78,7 @@ export default async function OpsparingerPage() {
 
       {/* Anbefalede konti - det vigtige er at brugeren VED de bør have
           disse. Vi viser dem altid, uanset om brugeren har dem eller ej. */}
-      <section className="mt-8">
+      <section data-tour="opsparinger-recommended" className="mt-8">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Anbefalede opsparinger
         </h2>
@@ -96,7 +100,7 @@ export default async function OpsparingerPage() {
       </section>
 
       {/* Alle opsparinger */}
-      <section className="mt-10">
+      <section data-tour="opsparinger-all" className="mt-10">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Alle opsparingskonti
         </h2>

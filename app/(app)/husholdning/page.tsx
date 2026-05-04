@@ -18,7 +18,8 @@
 
 import { ShoppingBasket, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { getAccounts, getHouseholdContext } from '@/lib/dal';
+import { getAccounts, getHouseholdContext, shouldShowTour } from '@/lib/dal';
+import { HusholdningTour } from './_components/HusholdningTour';
 import {
   currentYearMonth,
   formatAmount,
@@ -69,7 +70,10 @@ export default async function HusholdningPage({
   const monthLabel = formatMonthYearDA(month);
   const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
-  const allAccounts = await getAccounts();
+  const [allAccounts, autoStartTour] = await Promise.all([
+    getAccounts(),
+    shouldShowTour('husholdning'),
+  ]);
   const householdAccounts = allAccounts.filter(
     (a) => a.kind === 'household' && !a.archived
   );
@@ -123,6 +127,7 @@ export default async function HusholdningPage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <HusholdningTour autoStart={autoStartTour} />
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-6">
         <div>
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -204,6 +209,7 @@ function HouseholdAccountCard({
             for budget-ændringer; det er en current-state-værdi). */}
         <form
           action={handleSetBudget}
+          data-tour="husholdning-budget"
           className="mt-4 flex flex-wrap items-end gap-2"
         >
           <div className="flex-1 min-w-[200px]">
@@ -264,6 +270,7 @@ function HouseholdAccountCard({
       {/* Tilføj-køb-formen */}
       <form
         action={handleAdd}
+        data-tour="husholdning-add"
         className="border-b border-neutral-100 bg-neutral-50/50 p-4 sm:p-5"
       >
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_auto_auto]">

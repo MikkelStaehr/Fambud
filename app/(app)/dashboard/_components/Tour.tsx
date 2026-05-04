@@ -50,34 +50,47 @@ export function Tour({ steps, onComplete }: Props) {
   useEffect(() => setMounted(true), []);
 
   // Find target rect, scroll det i view, og hold rect opdateret ved scroll/resize.
+  // Hvis target ikke findes (fx OnboardingChecklist der har skjult sig selv),
+  // auto-springer vi til næste trin efter et kort delay - i stedet for at vise
+  // en forvirrende "vi kunne ikke finde det"-modal.
   useEffect(() => {
     if (!step?.target) {
       setRect(null);
       return;
     }
-    const el = document.querySelector(step.target);
-    if (!el) {
-      setRect(null);
-      return;
+    let cancelled = false;
+    // Vent kort på at elementet evt. bliver rendret (async layout, hydration)
+    // før vi giver op og springer over.
+    function findOrSkip() {
+      if (cancelled) return;
+      const el = document.querySelector(step.target!);
+      if (!el) {
+        // Auto-skip - usynligt for brugeren, går direkte til næste step
+        if (isLast) onComplete();
+        else setIndex((i) => i + 1);
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Lille delay så scrollIntoView har tid til at lande før vi måler
+      setTimeout(() => {
+        if (cancelled) return;
+        const elNow = document.querySelector(step.target!);
+        if (elNow) setRect(elNow.getBoundingClientRect());
+      }, 350);
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    function update() {
-      const elNow = document.querySelector(step.target!);
-      if (elNow) setRect(elNow.getBoundingClientRect());
-    }
-    // Lille delay så scrollIntoView har tid til at lande før vi måler
-    const t = setTimeout(update, 350);
+    findOrSkip();
+
     function tickUpdate() {
       setTick((t) => t + 1);
     }
     window.addEventListener('resize', tickUpdate);
     window.addEventListener('scroll', tickUpdate, true);
     return () => {
-      clearTimeout(t);
+      cancelled = true;
       window.removeEventListener('resize', tickUpdate);
       window.removeEventListener('scroll', tickUpdate, true);
     };
-  }, [step?.target, index]);
+  }, [step?.target, index, isLast, onComplete]);
 
   // Re-mål når tick ændrer sig (scroll/resize)
   useEffect(() => {
@@ -154,36 +167,10 @@ export function Tour({ steps, onComplete }: Props) {
     );
   }
 
-  // Spotlight-step - hvis rect ikke kunne findes, render alligevel modal som fallback
-  if (!rect) {
-    return createPortal(
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-neutral-900/70" />
-        <div className="relative w-full max-w-md rounded-lg border border-neutral-200 bg-white p-6 shadow-2xl">
-          <h3 className="text-lg font-semibold text-neutral-900">
-            {step.title}
-          </h3>
-          <div className="mt-3 text-sm leading-relaxed text-neutral-700">
-            {step.content}
-          </div>
-          <p className="mt-4 text-xs text-neutral-500">
-            (Vi kunne ikke finde det element vi ville pege på - det er sikkert
-            scrollet ud af syne.)
-          </p>
-          <TourFooter
-            index={index}
-            total={steps.length}
-            isFirst={isFirst}
-            isLast={isLast}
-            onBack={back}
-            onNext={next}
-            onSkip={onComplete}
-          />
-        </div>
-      </div>,
-      document.body
-    );
-  }
+  // Spotlight-step - hvis rect endnu ikke er målt (fx scrollIntoView ikke
+  // landet endnu), render intet. useEffect auto-springer hvis target slet
+  // ikke findes, så denne tilstand er kort.
+  if (!rect) return null;
 
   // Bestem hvor tooltip skal placeres relativt til target
   const placement = decidePlacement(rect);

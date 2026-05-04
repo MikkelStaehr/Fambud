@@ -976,3 +976,478 @@ beriger systemet med data). Værktøjs-gruppen har discrete divider med
   husstands-indkomst, men hvis han havde en investerings-konto (aktiedepot)
   kunne husstanden stadig se den under /konti. Lige nu håndteres det via
   `incomeContributors`-filteret — men der er ingen UI for "børn med konti".
+
+---
+
+# Devlog — 30. april til 4. maj 2026
+
+Fem dage med 39 commits og 13 migrationer. Hovedtemaer:
+multi-purpose opsparinger, total wizard-restruktur, privacy hardening,
+DAWA adresse-autocomplete, og to onboarding-systemer (soft InfoTooltips
++ custom Tour med spotlight). Plus to større kode-splits så
+`cashflow.ts` og `opsparinger/page.tsx` ikke længere er monolitter.
+
+---
+
+## 1. Multi-purpose opsparinger + kategori-baserede forudsigelige
+
+**Migration: [0028_predictable_estimates.sql](supabase/migrations/0028_predictable_estimates.sql)**
+— ny tabel for kategori-CRUD af forudsigelige uforudsete (Tandlæge, Bil,
+Gaver osv.). Hver række har et månedligt skøn; sum/12 erstatter den
+gamle 15%-default som nu er væk.
+
+**Migration: [0029_savings_purpose_array.sql](supabase/migrations/0029_savings_purpose_array.sql)**
+— `savings_purpose` (single) → `savings_purposes` (array). Én konto kan
+nu dække flere formål samtidigt (fx både buffer OG forudsigelige).
+
+**Buffer-kalkulator vendt om**: starter ved "hvad kan I afsætte pr. md"
+og beregner tid til 1/3/6/12 måneders buffer-mål — i stedet for "hvor
+langt er du fra målet". Mere motiverende for folk der lige starter.
+
+**Værktøjer flyttet til detail-sider**:
+[/opsparinger/buffer/page.tsx](app/(app)/opsparinger/buffer/page.tsx)
+og [/opsparinger/forudsigelige/page.tsx](app/(app)/opsparinger/forudsigelige/page.tsx)
+— hovedsiden er nu ren oversigt med RecommendedCard'er der linker dertil.
+
+**Dashboard-advarsel ved manglende buffer** når der er faste udgifter —
+men senere lukket fra Sankey/CashflowWarnings og overtaget af den nye
+OnboardingChecklist (se §6).
+
+---
+
+## 2. Buffer-onboarding + empty-state-polish (30. april)
+
+**Aktiv buffer-introduktion i wizarden** (`a386097`):
+[/wizard/privat-opsparing](app/wizard/privat-opsparing/page.tsx) fik et
+grønt anbefalings-card der forklarer hvad en buffer er (nødfond mod
+jobtab, sygdom) og opretter den i ét klik med
+`savings_purposes=['buffer']`. Skjules når brugeren allerede har en
+buffer-tagget konto. Lukker hullet hvor brugeren senere så dashboard-
+advarsel om manglende buffer uden nogensinde at være blevet undervist
+i konceptet.
+
+**Empty-states forbedret** for [/faste-udgifter](app/(app)/faste-udgifter/page.tsx)
+og [/husholdning](app/(app)/husholdning/page.tsx) (`7518f24`): forklarer
+hvad konto-typerne er, og CTAs pre-fylder kind=budget hhv. kind=household
+i stedet for at smide brugeren til en blank /konti/ny.
+
+**Buffer-CTA-loop lukket** (`ca264a3`): /konti/ny læser nu kind,
+savings_purposes og name fra query params, så buffer-CTAs på dashboard
+og /opsparinger lander på en pre-fyldt formular hvor brugeren kun skal
+trykke Gem.
+
+---
+
+## 3. Tier-2 UX-fixes + onboarding-checklist (30. april)
+
+**`fee2c98` — tre fixes på én gang**:
+
+1. **Sidebar-ikon-konflikt**: Budget brugte samme ClipboardList-ikon som
+   Faste udgifter. Skiftet til `Table2` så de er visuelt distinkte.
+
+2. **Wizard /faelleskonti-intro** styrket med eksplicit anbefaling om
+   at oprette begge typer (budget + husholdning) og forklaring af forskellen.
+
+3. **OnboardingChecklist** ([dashboard/_components/OnboardingChecklist.tsx](app/(app)/dashboard/_components/OnboardingChecklist.tsx)):
+   erstatter den gamle enkelt-CTA "Lad os fylde budgettet op". Viser tre
+   fundamentale trin med live-status (faste udgifter, månedlige
+   overførsler, bufferkonto) og skjuler sig selv når alle er færdige.
+   Buffer-advarslen i CashflowWarnings er nu redundant og slukket — det
+   var dårlig UX at advare om noget brugeren skulle gøre én gang.
+
+**Ny DAL-helper**: `getOnboardingProgress()` returnerer alle tre flag i
+én forespørgsel, så checklisten ikke kræver tre separate roundtrips.
+
+---
+
+## 4. Layout-fix og Sankey-polish (30. april)
+
+**Fast app-shell** (`9e1e3f3`): tidligere strækte sidebar sig med
+content-højden, så lange sider som /budget eller /opsparinger gav en
+useligt høj sidebar. Ny struktur: `flex h-screen` på parent +
+`overflow-y-auto` på `<main>`. Sidebar er fastlåst til viewport-højde,
+kun content scroller.
+
+**`CashflowGraph.MIN_BAND_HEIGHT`** bumpet 4 → 20 (`649a5f6`): når
+brugeren har flere små opsparinger blev destinations-rektanglerne stablet
+for tæt og labels overlappede. Trade-off: små bånd ser nu lidt større
+ud end deres faktiske andel ville indikere, men kr-tallet står ved
+siden af, og kildebåndet viser stadig den ægte proportion.
+
+---
+
+## 5. Wizard total restruktur (1.-2. maj, 3 batches)
+
+Hele onboarding-flow'en omskrevet for at fjerne dobbelt-spor og
+introducere familie/ejer-modeller fra starten.
+
+### Batch 1 (`b26defa`): kombinér lonkonto + indkomst, ny familie-trin
+
+- **`/wizard/lonkonto`** kombinerer kontooprettelse og første lønudbetaling
+  i ét trin. Server action opretter account + monthly recurring income +
+  'Løn'-kategori atomisk og tagger income med `income_role='primary'` +
+  `family_member_id` så forecast-motoren kan finde paychecks.
+
+- **`/wizard/familie`** (NY) — solo/familie-valg med tilføj partner
+  (navn+email) og børn (kun navn). Ejeren auto-listet, kan ikke fjernes.
+
+- **`/wizard/indkomst` slettet** (indhold flyttet ind i lonkonto).
+
+### Batch 2 (`abc47e9`): opsparing/investering/ejere + invite-merge
+
+- **`/wizard/privat-opsparing` → `/wizard/opsparing`** — omdøbt og udvidet
+  med børneforbrugskonti pr. barn. `createChildSpendingAccount`-action
+  opretter `kind=savings` med `owner_name=barnets navn`.
+
+- **`/wizard/kredit-laan` → `/wizard/investering`** — kreditkort/lån
+  fjernet helt fra wizarden (håndteres in-app efterfølgende). I stedet:
+  aldersopsparing, aktiesparekonto, aktiedepot, pension via type-dropdown
+  + ét-kliks børneopsparing pr. barn med `investment_type='boerneopsparing'`.
+
+- **`/wizard/ejere`** (NY) — trin 6 i ejer-flowet. Skipper sig selv for
+  solo. Tabel med dropdown for `owner_name` (Ejer/Partner/Fælles/[barn]).
+  Smart defaults bevares.
+
+- **`/wizard/invite` slettet** og indholdet flyttet ind i `/wizard/done`.
+  Pre-godkendte partnere får invitations-sektion med ét-kliks generering
+  og kopier-knapper.
+
+### Batch 3 (`5f60055`): partner-specifikke tilpasninger
+
+- **`/wizard/lonkonto` velkomst-panel** for partner viser husstands-
+  sammendrag (antal fælleskonti, om buffer er sat op, ejerens navn) i
+  5 sekunder så de ved de joiner en eksisterende husstand.
+
+- **`/wizard/oversigt`** (NY) — partnerens trin 2. Read-only tabel over
+  fælleskonti og familiemedlemmer. Forklarer at de ikke skal gen-oprette
+  noget.
+
+- **Skjult buffer-anbefaling** for partner hvis husstanden allerede har
+  en buffer-tagget konto.
+
+### Idempotens-guards og hotfixes
+
+- **`e1614f7`**: idempotens-guard på `/wizard/lonkonto` — hvis brugeren
+  genkører wizarden og allerede har en aktiv checking-konto, sendes de
+  direkte videre i stedet for at oprette duplikater.
+
+- **`6501d98`**: lonkonto-trin understøtter nu **1-3 paycheck-samples** i
+  stedet for én monthly template. Tidligere oprettede trin 1 én recurring
+  monthly-transaktion, og brugeren skulle separat registrere 3 once-paychecks
+  post-wizard. Nu er det ét spor: trin 1 kan oprette 1-3 'once'-transaktioner
+  med `income_role='primary'`, og forecast-motoren bruger dem direkte.
+
+- **`23c216f`**: pay-day-regel auto-fylder paycheck-datoer på de 1-3 rækker
+  baseret på fast-dato/sidste-bankdag/næstsidste-bankdag/første-bankdag.
+
+---
+
+## 6. Round-ups: 4 UX-fixes + adresser + fællesøkonomi (2. maj)
+
+### Round 1 (`7bfd377`): 4 UX-fixes
+1. Buffer-default = 'Fælles' i `/wizard/ejere` (`smartOwnerDefault()`
+   detekterer `savings_purposes=['buffer']` og foreslår 'Fælles').
+2. Foldbar `<details>`-forklaring om hvorfor 3 paychecks er nødvendige
+   (overtid, ferietillæg, bonus-udsving).
+3. **HeroStatus amber-notis vises nu uanset net-tegn** — ikke kun ved
+   underskud. Selv et "positivt" tal kan være misvisende hvis partner-
+   bidrag mangler.
+4. **Konto-skifter på `/faste-udgifter/[accountId]`** — tabs-row øverst
+   med alle konti som inline-knapper. Fælles-konti markeres med blå pill.
+
+### Round 2 (`4de87d8`): adresser + arbejdssted + partner-status
+**Migration: [0033_addresses.sql](supabase/migrations/0033_addresses.sql)
++ [0034_signup_metadata_to_family.sql](supabase/migrations/0034_signup_metadata_to_family.sql)**:
+`family_members.home_address` og `workplace_address` kolonner +
+`handle_new_user`-trigger udvidet til at læse `full_name` og `home_address`
+fra signup-metadata.
+
+- `/signup` og `/join/[code]` har nu fuldt navn + bopælsadresse-felter.
+- `/indstillinger` får ny "Min profil"-sektion med navn + hjem +
+  arbejdsplads-adresse (workplace til fremtidig befordringsfradrag).
+
+**FamilyStatus-komponent** ([dashboard/_components/FamilyStatus.tsx](app/(app)/dashboard/_components/FamilyStatus.tsx)):
+ny dashboard-sektion mellem OnboardingChecklist og IncomeForecastBanner.
+Viser hver "anden voksen" med status-pill (pending / partial / done) og
+hint om hvad der mangler. Pending-rækker har "Se invitation"-link.
+
+### Round 3 (`ecbaecd`): fællesøkonomi-mode
+**Migration: [0035_household_economy_type.sql](supabase/migrations/0035_household_economy_type.sql)**
+— `households.economy_type` ('separate' | 'shared'), default 'separate'.
+
+To indkomst-modeller i wizarden:
+- **Særskilt** (default): hver voksen har sin lønkonto, sender til Fælles.
+- **Fællesøkonomi** (NY): begge lønninger lander på én "Fælles Lønkonto".
+  Indkomst registreres stadig pr. person via `family_member_id` så
+  forecast-mekanikken er uændret — det er bare kontoen der er pooled.
+
+Ny `PartnerSharedIncomeForm`-variant + `registerSharedIncome`-action
+opretter ikke ny lønkonto, men registrerer kun indkomst på den
+eksisterende fælles.
+
+---
+
+## 7. DAWA adresse-autocomplete + adressestruktur (2. maj)
+
+**Migration: [0036_address_components.sql](supabase/migrations/0036_address_components.sql)
++ [0037_signup_address_components.sql](supabase/migrations/0037_signup_address_components.sql)**:
+splittet adresser i adresse/postnr/by — `family_members.home_zip_code`,
+`home_city`, `workplace_zip_code`, `workplace_city`. `home_address` og
+`workplace_address` bevarer "gade + nr + evt. etage". Matcher Danmarks
+Adresseregisters struktur 1:1.
+
+**[DawaAddressInput.tsx](app/_components/DawaAddressInput.tsx)** (225 LOC):
+- Klient-component med debounced fetch (200ms) mod
+  `api.dataforsyningen.dk`
+- AbortController forhindrer race conditions ved hurtig tastning
+- Tastatur-nav: ArrowUp/Down, Enter, Escape
+- `mousedown` frem for `click` på forslag undgår focus-loss-race
+- Brugeren kan stadig taste manuelt — DAWA-nedbrud blokerer ikke signup
+
+Tre form-instances bruger komponenten: `/signup`, `/join/[code]`,
+`/indstillinger Min profil` (sidstnævnte med `namePrefix`-prop for
+hjem vs arbejdsplads).
+
+**Hotfix: [0038_fix_handle_new_user_var_names.sql](supabase/migrations/0038_fix_handle_new_user_var_names.sql)**
+(`cf5f1d1`): Migration 0037's replace_all fangede ikke INSERT-listen i
+Path 3 (brand new household uden invite-kode). PL/pgSQL kompilerer lazy
+så fejlen først opdages runtime når en ny ejer signer op uden invite —
+hvor den fejlede med "Database error saving new user". 0038 genskriver
+funktionen med konsistente `v_`-prefix-variabler i alle 3 paths.
+
+---
+
+## 8. Privacy hardening (1. maj)
+
+**Migration: [0030_private_account_visibility.sql](supabase/migrations/0030_private_account_visibility.sql)**
+— stramme SELECT-policies så private konti reelt er private. Tidligere
+RLS tillod alle husstandsmedlemmer at læse alt, så Louise kunne se
+Mikkel's private udgifter selvom kontoen var `editable_by_all=false`.
+
+Nye SELECT-policies matcher write-policies:
+- accounts: synlig hvis `editable_by_all OR created_by=auth.uid()`
+- transactions: synlig hvis `can_write_account` på underliggende konto
+- transfers: synlig hvis MINDST én af from/to er læsbar (UI håndterer
+  null FK-join graciøst, så Louise stadig ser "Fælles modtog 5.000 kr"
+  uden at se kilden)
+
+**Migration: [0031_components_privacy_and_lonkonto_default.sql](supabase/migrations/0031_components_privacy_and_lonkonto_default.sql)**
+(`d0a5df7`):
+- `transaction_components` får tilsvarende private-aware policies
+- Datapatch: eksisterende `kind='checking'` med `editable_by_all=true`
+  bringes i overensstemmelse med wizard-defaulten (private). Mikkel's
+  lønkonto var læsbar af Louise selv efter 0030 fordi flag'et var
+  forkert sat på den eksisterende række.
+
+**Dashboard-aggregeringsfix** (samme commit): `monthlyTotals` udregnes
+nu fra `getCashflowGraph`'s `perAccount`-aggregat i stedet for at
+filtrere transaktioner på "denne kalendermåned". Effekt: HeroStatus
+viser samme indkomst-tal som cashflow-grafen, inkl. forecast-baseret
+primary income (avg af 3 seneste paychecks). Tidligere viste HeroStatus
+0 kr indkomst hvis brugeren havde paychecks i tidligere måneder men
+endnu ikke i den aktuelle.
+
+`getCashflowGraph` er nu wrapped i React's `cache()` så
+`getDashboardData` og `dashboard/page.tsx` ikke laver dobbelt round-trip.
+
+**HeroStatus missing-income notis** (`6499423`): forklarer underskud når
+en bidragyder har `primary_income_source` sat men 0 logged paychecks.
+Amber-notis siger "Louise har endnu ingen indkomst registreret —
+underskuddet er sandsynligvis bare midlertidigt". Beslutningen er
+bevidst at vise husstands-totalen frem for at splitte i "din andel" —
+det er nyttig oplysning at familien har 41k udgifter med kun 1 indkomst.
+
+---
+
+## 9. Kode-organisering (2. maj)
+
+### `lib/dal/cashflow.ts` splittet (`9ea8606`)
+Fra 655 → 167 linjer i 5 fokuserede moduler:
+- [cashflow.ts](lib/dal/cashflow.ts) (~165): kun `getCashflowGraph` + dets typer
+- [dashboard.ts](lib/dal/dashboard.ts): `getDashboardData`, `getHouseholdFinancialSummary`
+- [advisor.ts](lib/dal/advisor.ts): `getAdvisorContext` + per-bidragyder-splits
+- [expenses-by-category.ts](lib/dal/expenses-by-category.ts): pr-kategori, pr-gruppe, top-N
+- [upcoming-events.ts](lib/dal/upcoming-events.ts): `getUpcomingEvents` (næste 7 dage)
+
+Alle eksporteres via barrel ([lib/dal/index.ts](lib/dal/index.ts)) så
+eksisterende `import { getDashboardData } from '@/lib/dal'` virker uændret.
+
+### `opsparinger/page.tsx` splittet (`858e481`)
+515 → 127 linjer "kun layout". 4 inline-komponenter trukket ud:
+- [BufferCard.tsx](app/(app)/opsparinger/_components/BufferCard.tsx) (86 LOC)
+- [PredictableCard.tsx](app/(app)/opsparinger/_components/PredictableCard.tsx) (90 LOC)
+- [RecommendedCard.tsx](app/(app)/opsparinger/_components/RecommendedCard.tsx) (110 LOC)
+- [SavingsCard.tsx](app/(app)/opsparinger/_components/SavingsCard.tsx) (117 LOC)
+
+### Kvik-oprydning (`1475e7c`)
+- `showBufferWarning` end-to-end fjernet (var hardcoded `false`, hele
+  amber-banneret renderede aldrig)
+- Døde exports slettet: `formatDKK`, `dkkFormatter`,
+  `hasAnyRecurringExpenses`, `_Json`/`Json`
+- Nedgraderet til intern: `adjustToBankingDay`, `TransferWithRelations`,
+  `TransferEdge`, `TransferGraphData` (kun brugt internt)
+- Stale dashboard-kommentar rettet
+
+### Migration [0032_drop_dead_account_columns.sql](supabase/migrations/0032_drop_dead_account_columns.sql)
+(`c2f73d2`): Drop kolonner der aldrig blev brugt:
+- `currency` (alle DKK)
+- `goal_amount`, `goal_date`, `goal_label` (0/10 konti havde sat dem)
+
+Tilhørende form-cleanup i AccountForm + actions + display-pages.
+
+---
+
+## 10. Indkomst Duplikér-flow + Hover-tone (1.-2. maj)
+
+**Duplikér-knap på /indkomst** (`f817e06`): Brugere der skal logge 3
+paychecks for at få forecast'et til at virke har typisk identiske
+lønninger. Ny `Copy`-ikon-knap ved hver række, `?duplicate=<id>`-param
+pre-fylder ALLE felter inkl. netto. Datoen shifts én måned bagud (klampet
+til target-månedens sidste dag så 31. maj → 30. april ikke fejl-overflower
+til 1. maj). Header skifter til "Duplikér lønudbetaling".
+
+**Emerald hover-tone på primary CTAs** (`4b58f9c`): Knappernes hover
+gik fra `neutral-900 → neutral-800` som var for subtilt. Skifter til
+`emerald-700` for tydelig "klik mig"-feedback der matcher appens "grøn
+= action"-sprog. 30 filer berørt via sed-script for konsistens.
+
+---
+
+## 11. Soft onboarding: InfoTooltip + custom Tour-system (2. maj)
+
+### InfoTooltip (`2ced366`)
+**[InfoTooltip.tsx](app/_components/InfoTooltip.tsx)** (82 LOC) — soft
+onboarding via lille `?`-ikon ved nøgle-elementer. Hover (desktop) eller
+click (mobile) viser kort forklaring. Ikke-tvungent — nye brugere
+udforsker, erfarne ignorerer ikonet.
+
+Drysset på 7 dashboard-headere: HeroStatus, CashflowWarnings,
+OnboardingChecklist, FamilyStatus, IncomeForecastBanner, CashflowGraph,
+UpcomingEvents, CategoryGroupChart.
+
+### Custom dashboard-tour (`244c926`)
+**Migration [0039_tour_completed_at.sql](supabase/migrations/0039_tour_completed_at.sql)**
+— `family_members.tour_completed_at` timestamptz. Auto-start på
+dashboard hvis `setup_completed_at != null AND tour_completed_at == null`.
+
+**Tour-komponent** (425 LOC) bygget fra bunden uden bibliotek:
+- **Spotlight via box-shadow-trick**: én div over target med 9999px
+  shadow-spread der dimmer alt udenfor. Target forbliver synligt og
+  klikbart igennem cutoutet.
+- **Smart placement**: foretræk under target, fallback til
+  over/venstre/højre baseret på skærmplads. Klamper til viewport-margin.
+- **Tastatur-nav**: ArrowLeft/Right + Escape
+- **ScrollIntoView** animerer target ind hvis off-screen
+- **Re-positionering** ved scroll/resize via tick-state
+
+7-step rundtur: velkomst → checkliste → HeroStatus → CashflowWarnings
+→ CashflowGraph → Sidebar Værktøjer → færdig-modal.
+
+### Tour-fixes (auto-skip + modal-fallback)
+- **`725a1b1`**: auto-skip steps hvor target ikke findes (typisk fordi
+  OnboardingChecklist er forsvundet når alt er færdigt). 350ms delay
+  for async-renderede komponenter, ellers spring straks.
+- **`1def59e`**: ren modal-fallback — alle steps vises altid, enten med
+  spotlight-tooltip eller centreret modal hvis target mangler. Sikrer
+  at onboardings-fortællingen er komplet uanset side-state.
+- **`53076a8`**: placement-overlap fix på trin 3 (HeroStatus) +
+  vertikal clamping på trin 6 (Sidebar Værktøjer der gik off-screen).
+
+---
+
+## 12. Per-page tour-infrastruktur (4. maj)
+
+### Etape 1 (`6caf26e`)
+**Migration [0040_per_page_tours.sql](supabase/migrations/0040_per_page_tours.sql)**
+— skifter fra single `tour_completed_at`-timestamp til `tours_completed`
+**jsonb**-objekt på `family_members`. Eksisterende dashboard-tour-state
+migreres til `{dashboard: timestamp}`. Den gamle kolonne droppes.
+
+DAL-helpers ([lib/dal/auth.ts](lib/dal/auth.ts)):
+- `hasCompletedTour(key)` — tjekker om brugeren har set en specifik tour
+- `markTourCompleted(key)` — tilføjer timestamp for tourKey i jsonb
+- `resetAllTours()` — nuller hele jsonb (genstart alle rundture)
+
+Tour-komponent flyttet fra `dashboard/_components` til `(app)/_components`
+så enhver side kan importere den.
+
+**Generic [PageTour.tsx](app/(app)/_components/PageTour.tsx)**: tager
+`tourKey + steps + autoStart`, håndterer auto-start lokalt, kalder
+`completeTour`-action ved færdig.
+
+### Etape 2 (`3bea6e7`)
+Per-page tours på 9 hovedsider:
+- **konti**: konti-sections, konti-new
+- **laan**: laan-list, laan-new
+- **indkomst**: indkomst-hovedindkomst, indkomst-biindkomst
+- **budget**: budget-table
+- **poster**: poster-filters, poster-add
+- **overforsler**: overforsler-list, overforsler-add
+- **faste-udgifter**: faste-udgifter-cards
+- **husholdning**: husholdning-budget, husholdning-add
+- **opsparinger**: opsparinger-recommended, opsparinger-all
+
+Ny `shouldShowTour(key)`-helper i `auth.ts` gater på `setup_completed_at
++ tours_completed` — sparer hver side for boilerplate. Dashboard
+refactored fra inline-check til samme helper.
+
+`data-tour="..."` attributes drysset på relevante sektioner/knapper så
+spotlight kan finde målet.
+
+---
+
+## 13. Em-dash-cleanup (4. maj)
+
+`dfaaa11` — sed-fejet 139 filer for at erstatte alle em-dashes med
+almindelige bindestreger overalt i kodebase, kommentarer, UI-tekst og
+migrations. Ændrer min tidligere stil-præference fra forrige session.
+
+---
+
+## Sådan kommer du videre
+
+1. **Kør de 13 nye migrationer** i Supabase i rækkefølge:
+   `0028` → `0040`. Vigtigt at `0030` og `0031` er kørt før privacy-tests,
+   og at `0038` (handle_new_user fix) er kørt før nye brand-new-household
+   signups testes.
+
+2. **Test wizard-flowet ende-til-ende** for både ejer og partner i:
+   - Solo-mode
+   - Familie + særskilt økonomi
+   - Familie + fællesøkonomi (NYT)
+
+3. **Test privacy-hardening**: log ind som Louise og bekræft at hun ikke
+   ser Mikkel's private lønkonto-transaktioner og deres komponenter.
+
+4. **Genstart rundture**: `/indstillinger` → "Genstart rundture i appen"
+   nuller hele `tours_completed`-jsonb. Test at alle 9 sider auto-starter
+   deres egen tour ved næste besøg.
+
+5. **Test DAWA-autocomplete**: skriv 3+ tegn af din adresse på
+   `/indstillinger` Min profil og bekræft at forslag dukker op fra
+   `api.dataforsyningen.dk`.
+
+---
+
+## Åbne tråde
+
+- **Skift mellem economy_type** (separate ↔ shared) er ikke understøttet
+  UI-mæssigt — brugeren skal starte forfra hvis de vil ændre. Kolonnen
+  er teknisk mutable, men vi guider ikke til det.
+- **Tour-content per side er minimal** — typisk 1-2 steps. Hvis brugerne
+  giver feedback om at de mangler kontekst, kan flere steps tilføjes
+  uden migrations (`tours_completed`-jsonb er fri-form).
+- **Workplace-adresse på family_members** bruges på sigt til
+  befordringsfradrag — ikke implementeret endnu.
+- **Privacy-policies på `transaction_components`** følger transactions
+  via cascade, men der er ingen UI-test for at edge cases (komponenter
+  uden transaction-FK) håndteres korrekt. Bør verificeres når flere
+  brugere har data.
+- **DAWA-rate-limiting**: api.dataforsyningen.dk er gratis men har
+  rate-limits. Hvis vi får mange concurrent signups kan vi rammes —
+  bør caches/debounces hærdes hvis trafikken vokser.
+- **Forecast-baseret HeroStatus** viser nu samme tal som cashflow-grafen,
+  men der er stadig kant-tilfælde hvor brugeren har **én** primary 'once'-
+  paycheck og getCashflowGraph ikke kan beregne et meningsfuldt
+  gennemsnit. Den nuværende fallback bruger gennemsnittet af det vi har —
+  bedre end ingenting, men ikke pålideligt.

@@ -4,6 +4,7 @@ import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { BetaNotice } from './_components/BetaNotice';
 import { FambudMark } from './_components/FambudMark';
+import { FeedbackModal } from './_components/FeedbackModal';
 import { SidebarNav } from './_components/SidebarNav';
 import { Toast } from './_components/Toast';
 import { signOut } from './actions';
@@ -51,6 +52,7 @@ export default async function AppLayout({
         </div>
 
         <div className="mt-auto px-1 pt-4">
+          <FeedbackModal />
           <form action={signOut}>
             <button
               type="submit"

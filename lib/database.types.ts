@@ -80,6 +80,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      feedback: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          household_id: string | null;
+          email: string | null;
+          full_name: string | null;
+          message: string;
+          page_url: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          household_id?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          message: string;
+          page_url?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          household_id?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          message?: string;
+          page_url?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       accounts: {
         Row: {
           id: string;

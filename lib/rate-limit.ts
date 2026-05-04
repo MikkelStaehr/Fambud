@@ -18,23 +18,34 @@ export type RateLimitConfig = {
   windowSeconds: number;
 };
 
-// Standardlofter pr. route. Stramme nok til at blokere automatiseret
-// abuse, slappe nok til at en menneskelig bruger der laver fejl ikke
-// rammer dem.
+// Standardlofter pr. route. SOURCE OF TRUTH er nu i public.rate_limit_routes
+// (migration 0048) - klient-leverede max_hits/window ignoreres af RPC'en.
+// Vi beholder objektet her for at signature-validate route names og
+// dokumentere lofter.
 export const RATE_LIMITS: Record<string, RateLimitConfig> = {
-  signup: { maxHits: 5, windowSeconds: 3600 }, // 5/time pr. IP
-  reset_password: { maxHits: 5, windowSeconds: 3600 }, // 5/time pr. IP+email
-  feedback: { maxHits: 10, windowSeconds: 3600 }, // 10/time pr. user
+  signup: { maxHits: 5, windowSeconds: 3600 },
+  reset_password: { maxHits: 5, windowSeconds: 3600 },
+  feedback: { maxHits: 10, windowSeconds: 3600 },
+  login: { maxHits: 10, windowSeconds: 900 },
 };
 
-// Henter klient-IP fra x-forwarded-for. Vercel sætter den korrekt;
-// hvis den mangler, falder vi tilbage til 'unknown' (deler én bucket
-// for alle der mangler header - det rammer dårlig hvis flere reelle
-// brugere ikke har header, men sker ikke i Vercel-prod).
+// Henter klient-IP fra request-headers. På Vercel er den korrekte IP
+// den HØJREMOST værdi i x-forwarded-for - Vercel appender klient-IP'en
+// til chain'en, så den første værdi i listen er attacker-controlled
+// (klienten kan sende vilkårlig X-Forwarded-For som først hop).
+//
+// Vercel eksponerer også x-vercel-forwarded-for som ikke kan spoofes.
+// Vi prøver det først.
 export async function getClientIp(): Promise<string> {
   const h = await headers();
+  const vercelIp = h.get('x-vercel-forwarded-for');
+  if (vercelIp) return vercelIp.split(',')[0]!.trim();
   const xff = h.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0]!.trim();
+  if (xff) {
+    // Tag rightmost (Vercel's appended value), ikke leftmost (kan spoofes)
+    const parts = xff.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1]!;
+  }
   return h.get('x-real-ip') ?? 'unknown';
 }
 

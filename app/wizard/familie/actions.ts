@@ -177,8 +177,11 @@ export async function removeFamilyMember(formData: FormData) {
 
   const { supabase, householdId, user } = await getHouseholdContext();
 
-  // Sikkerhed: forhindrer at ejeren kan fjerne sin egen profil. Vi læser
-  // rækken først og afviser hvis user_id matcher current user.
+  // Sikkerhed: forhindrer at ejeren kan fjerne sin egen profil eller
+  // andre ACTIVE brugere (deres family_member-række er knyttet til en
+  // auth.users-konto - sletning ville låse dem ude permanent fordi
+  // signup fejler 'User already registered' og handle_new_user-triggeren
+  // ikke fyrer på eksisterende auth.users-rækker).
   const { data: target } = await supabase
     .from('family_members')
     .select('user_id')
@@ -189,6 +192,14 @@ export async function removeFamilyMember(formData: FormData) {
     redirect(
       '/wizard/familie?type=family&error=' +
         encodeURIComponent('Du kan ikke fjerne dig selv')
+    );
+  }
+  if (target?.user_id != null) {
+    redirect(
+      '/wizard/familie?type=family&error=' +
+        encodeURIComponent(
+          'Aktive familiemedlemmer kan ikke fjernes - kontakt support'
+        )
     );
   }
 

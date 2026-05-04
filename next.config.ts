@@ -25,7 +25,10 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
+      // Vi tillader kun billeder fra self + data: + Supabase Storage.
+      // 'https:' var for bredt - en eventuel XSS kunne exfiltrere data
+      // via new Image().src med en attacker-host.
+      "img-src 'self' data: https://*.supabase.co",
       "font-src 'self' data:",
       "connect-src 'self' https://*.supabase.co https://api.dataforsyningen.dk https://api.resend.com",
       "frame-ancestors 'none'",

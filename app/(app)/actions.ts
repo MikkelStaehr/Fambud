@@ -89,10 +89,16 @@ export async function submitFeedback(formData: FormData): Promise<FeedbackResult
   const adminEmail = process.env.FEEDBACK_NOTIFICATION_EMAIL;
   if (adminEmail) {
     try {
+      // Subject må aldrig indeholde rå user-input - selvom Resend's
+      // JSON-API blokerer CRLF i headers, vil mail-klienter rendere
+      // markup-tegn underligt. Vi escaper og strip'er CRLF eksplicit.
+      const subjectName = (fullName ?? user.email ?? 'ukendt bruger')
+        .replace(/[\r\n]/g, ' ')
+        .slice(0, 100);
       await sendEmail({
         to: adminEmail,
         replyTo: user.email ?? undefined,
-        subject: `Feedback fra ${fullName ?? user.email ?? 'ukendt bruger'}`,
+        subject: `Feedback fra ${subjectName}`,
         html: buildAdminNotificationHtml({
           fullName,
           email: user.email ?? null,

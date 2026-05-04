@@ -39,6 +39,17 @@ export async function setNewPassword(formData: FormData) {
   }
 
   const { error } = await supabase.auth.updateUser({ password });
+  // SECURITY: Efter succesfuld password-skift logger vi ALLE andre
+  // sessioner ud (på alle andre devices/browsers). Hvis en angriber
+  // havde stjålet brugerens session før reset, ville den ellers
+  // forblive aktiv indtil refresh-token udløb.
+  if (!error) {
+    try {
+      await supabase.auth.signOut({ scope: 'others' });
+    } catch (e) {
+      console.error('signOut(others) after password change failed:', e);
+    }
+  }
   if (error) {
     // SECURITY: Vi viser ikke raw Supabase-fejlen - den kan lække
     // intern info (validation-rules, JWT-claim-issues osv.) der hjælper

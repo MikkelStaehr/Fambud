@@ -40,10 +40,19 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isAuthPage = pathname === '/login' || pathname === '/signup';
+  // Auth-sider redirecter loggede brugere videre til /dashboard - de
+  // har ingen grund til at se login/signup/glemt-kodeord når de
+  // allerede er på.
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/signup' ||
+    pathname === '/glemt-kodeord';
   // Root '/' er nu landing page - offentlig. Selve page-komponenten
   // bouncer loggede brugere videre til /dashboard, så vi behøver ikke
   // gate'e den her.
+  // /nyt-kodeord og /auth/callback er bevidst hverken auth- eller
+  // protected: recovery-flowet skal kunne lande dér med en frisk
+  // session uden bounce.
   const isProtected =
     pathname.startsWith('/dashboard') ||
     pathname.startsWith('/konti') ||

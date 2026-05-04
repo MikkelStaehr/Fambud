@@ -32,9 +32,17 @@ export default async function LoginPage({
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-medium text-neutral-600">
-              Adgangskode
-            </label>
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="password" className="block text-xs font-medium text-neutral-600">
+                Adgangskode
+              </label>
+              <Link
+                href="/glemt-kodeord"
+                className="text-xs font-medium text-neutral-500 hover:text-neutral-900 hover:underline"
+              >
+                Glemt adgangskode?
+              </Link>
+            </div>
             <input
               id="password"
               name="password"

@@ -48,12 +48,15 @@ export async function submitFeedback(formData: FormData): Promise<FeedbackResult
 
   const { supabase, householdId, user } = await getHouseholdContext();
 
-  // SECURITY: Rate limit per user. Uden dette kunne en logget-ind
-  // bruger loope submitFeedback 10000 gange og oversvømme DB +
-  // admin's indbakke (10000 Resend-mails der drainer quota og
-  // potentielt fryser sending-domænet pga. abuse-detection).
-  const limitOk = await checkRateLimit(`user:${user.id}`, 'feedback');
-  if (!limitOk) {
+  // SECURITY: Rate limit på BÅDE user og household-niveau. Uden det
+  // kunne en logget-ind bruger loope submitFeedback og oversvømme DB
+  // + admin's indbakke (drainer Resend-quota og potentielt fryser
+  // sending-domænet pga. abuse-detection).
+  // Per user: 10/time. Per household: 30/time (loft selvom 5 medlemmer
+  // hver bruger deres egne 10).
+  const userOk = await checkRateLimit(`user:${user.id}`, 'feedback');
+  const householdOk = await checkRateLimit(`household:${householdId}`, 'feedback_household');
+  if (!userOk || !householdOk) {
     return {
       ok: false,
       error: 'For mange beskeder på kort tid. Prøv igen om en time.',

@@ -26,6 +26,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
   signup: { maxHits: 5, windowSeconds: 3600 },
   reset_password: { maxHits: 5, windowSeconds: 3600 },
   feedback: { maxHits: 10, windowSeconds: 3600 },
+  feedback_household: { maxHits: 30, windowSeconds: 3600 },
   login: { maxHits: 10, windowSeconds: 900 },
 };
 

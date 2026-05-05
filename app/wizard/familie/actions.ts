@@ -78,7 +78,13 @@ export async function setEconomyType(formData: FormData) {
                 ? 'Lønkonto'
                 : ownerLonkonto.name,
           };
-    await supabase.from('accounts').update(updates).eq('id', ownerLonkonto.id);
+    // Defense-in-depth: scope også på household_id selvom RLS ville
+    // fange cross-household-update. Konsistent med resten af kodebasen.
+    await supabase
+      .from('accounts')
+      .update(updates)
+      .eq('id', ownerLonkonto.id)
+      .eq('household_id', householdId);
   }
 
   revalidatePath('/wizard');

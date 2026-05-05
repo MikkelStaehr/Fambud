@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
+import { mapDbError } from '@/lib/actions/error-map';
 import type {
   AccountKind,
   InvestmentType,
@@ -140,7 +141,8 @@ export async function updateAccount(id: string, formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect(`/konti/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+    console.error('updateAccount failed:', error.message);
+    redirect(`/konti/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Kunne ikke gemme kontoen')));
   }
 
   revalidatePath('/konti');
@@ -161,7 +163,7 @@ export async function archiveAccount(formData: FormData) {
     .update({ archived: true })
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
   redirect(noticeUrl('/konti', 'Konto arkiveret'));
@@ -176,7 +178,7 @@ export async function restoreAccount(formData: FormData) {
     .update({ archived: false })
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
   redirect(noticeUrl('/konti?archived=1', 'Konto gendannet'));

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, parseOptionalAmount, nextOccurrenceAfter, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
+import { mapDbError } from '@/lib/actions/error-map';
 import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_LOAN_TYPES: readonly LoanType[] = [
@@ -201,7 +202,8 @@ export async function updateLoan(id: string, formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect(`/laan/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+    console.error('updateLoan failed:', error.message);
+    redirect(`/laan/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Kunne ikke gemme lånet')));
   }
 
   revalidatePath('/laan');
@@ -219,7 +221,7 @@ export async function deleteLoan(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId)
     .eq('kind', 'credit');
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/laan');
   revalidatePath('/konti');
   redirect(noticeUrl('/laan', 'Lån slettet'));
@@ -250,7 +252,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     .eq('household_id', householdId)
     .eq('kind', 'credit')
     .single();
-  if (loanErr) throw new Error(loanErr.message);
+  if (loanErr) { console.error('Action error:', loanErr.message); throw new Error('Internal error'); }
   if (!loan.payment_amount || loan.payment_amount <= 0) {
     redirect(
       `/laan/${encodeURIComponent(loanId)}?error=` +
@@ -275,7 +277,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       .insert({ household_id: householdId, name: 'Lån', kind: 'expense', color: '#dc2626' })
       .select('id')
       .single();
-    if (catErr) throw new Error(catErr.message);
+    if (catErr) { console.error('Action error:', catErr.message); throw new Error('Internal error'); }
     categoryId = created.id;
   }
 
@@ -357,7 +359,8 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
     .select('id')
     .single();
   if (txErr) {
-    redirect(`/laan/${encodeURIComponent(loanId)}?error=` + encodeURIComponent(txErr.message));
+    console.error('pushLoanToBudget tx insert failed:', txErr.message);
+    redirect(`/laan/${encodeURIComponent(loanId)}?error=` + encodeURIComponent(mapDbError(txErr, 'Kunne ikke oprette lånet på budget')));
   }
 
   if (useBreakdownMode) {
@@ -371,9 +374,10 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       }))
     );
     if (compErr) {
+      console.error('pushLoanToBudget components insert failed:', compErr.message);
       redirect(
         `/laan/${encodeURIComponent(loanId)}?error=` +
-          encodeURIComponent('Lån oprettet på budget, men nedbrydning fejlede: ' + compErr.message)
+          encodeURIComponent('Lån oprettet på budget, men nedbrydning fejlede')
       );
     }
   }

@@ -31,7 +31,8 @@ async function ensureLonCategory(
     .select('id')
     .single();
   if (error || !created) {
-    throw new Error(error?.message ?? 'Kunne ikke oprette Løn-kategori');
+    if (error) console.error('ensureLonCategory failed:', error.message);
+    throw new Error('Kunne ikke oprette Løn-kategori');
   }
   return created.id;
 }
@@ -135,9 +136,10 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
     .select('id')
     .single();
   if (accErr || !account) {
+    if (accErr) console.error('createPersonalAccountWithIncome account insert failed:', accErr.message);
     redirect(
       '/wizard/lonkonto?error=' +
-        encodeURIComponent(accErr?.message ?? 'Kunne ikke oprette lønkontoen')
+        encodeURIComponent('Kunne ikke oprette lønkontoen')
     );
   }
 
@@ -157,7 +159,8 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
   }));
   const { error: txErr } = await supabase.from('transactions').insert(rows);
   if (txErr) {
-    redirect('/wizard/lonkonto?error=' + encodeURIComponent(txErr.message));
+    console.error('wizard/lonkonto txErr:', txErr.message);
+    redirect('/wizard/lonkonto?error=' + encodeURIComponent('Kunne ikke gemme lønudbetalingen'));
   }
 
   // 3) Routing afhænger af rolle
@@ -231,7 +234,8 @@ export async function registerSharedIncome(formData: FormData) {
   }));
   const { error: txErr } = await supabase.from('transactions').insert(rows);
   if (txErr) {
-    redirect('/wizard/lonkonto?error=' + encodeURIComponent(txErr.message));
+    console.error('wizard/lonkonto txErr:', txErr.message);
+    redirect('/wizard/lonkonto?error=' + encodeURIComponent('Kunne ikke gemme lønudbetalingen'));
   }
 
   revalidatePath('/wizard');

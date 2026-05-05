@@ -100,7 +100,7 @@ export async function deletePredictableEstimate(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
   revalidatePath('/opsparinger');
 }

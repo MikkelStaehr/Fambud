@@ -81,7 +81,7 @@ export async function createInvite(formData: FormData) {
 
   if (error) {
     // Surface the message in dev; in real life this is essentially never hit.
-    throw new Error(`Could not create invite: ${error.message}`);
+    { console.error('Could not create invite:', error.message); throw new Error('Could not create invite'); }
   }
 
   revalidatePath('/indstillinger');
@@ -98,7 +98,7 @@ export async function deleteInvite(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
 
-  if (error) throw new Error(`Could not delete invite: ${error.message}`);
+  if (error) { console.error('Could not delete invite:', error.message); throw new Error('Could not delete invite'); }
 
   revalidatePath('/indstillinger');
 }
@@ -162,9 +162,10 @@ export async function updateCategory(id: string, formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
+    console.error('updateCategory failed:', error.message);
     redirect(
       `/indstillinger/kategorier/${encodeURIComponent(id)}?error=` +
-        encodeURIComponent(error.message)
+        encodeURIComponent('Kategorien kunne ikke gemmes')
     );
   }
 
@@ -183,7 +184,7 @@ export async function archiveCategory(formData: FormData) {
     .update({ archived: true })
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/indstillinger');
 }
 
@@ -196,7 +197,7 @@ export async function restoreCategory(formData: FormData) {
     .update({ archived: false })
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/indstillinger');
 }
 
@@ -337,7 +338,7 @@ export async function deleteFamilyMember(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
   revalidatePath('/indstillinger');
   revalidatePath('/faste-udgifter', 'layout');

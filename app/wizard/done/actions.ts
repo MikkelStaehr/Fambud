@@ -13,7 +13,7 @@ import { getHouseholdContext, guardWizardOpen } from '@/lib/dal';
 export async function completeSetup() {
   const supabase = await createClient();
   const { error } = await supabase.rpc('mark_setup_complete');
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');
@@ -34,7 +34,7 @@ export async function generateInviteFromDone() {
     expires_at,
   });
   if (error) {
-    throw new Error(`Could not create invite: ${error.message}`);
+    { console.error('Could not create invite:', error.message); throw new Error('Could not create invite'); }
   }
 
   revalidatePath('/wizard/done');

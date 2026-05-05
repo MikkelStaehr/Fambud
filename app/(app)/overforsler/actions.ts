@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
+import { mapDbError } from '@/lib/actions/error-map';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -100,7 +101,7 @@ export async function updateTransfer(id: string, formData: FormData) {
     .eq('household_id', householdId);
   if (error) {
     redirect(
-      `/overforsler/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message)
+      `/overforsler/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Kunne ikke gemme overførslen'))
     );
   }
 
@@ -118,7 +119,7 @@ export async function deleteTransfer(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
   redirect(noticeUrl('/overforsler', 'Overførsel slettet'));

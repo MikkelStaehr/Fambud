@@ -188,7 +188,7 @@ async function getOrCreateIncomeCategoryId(
     .insert({ household_id: householdId, name: 'Løn', kind: 'income', color: '#22c55e' })
     .select('id')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   return created.id;
 }
 
@@ -268,7 +268,7 @@ export async function deleteIncome(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error) throw new Error(error.message);
+  if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');

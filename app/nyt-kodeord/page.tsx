@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { setNewPassword } from './actions';
+import { SubmitButton } from '@/app/_components/SubmitButton';
 
 export default async function NytKodeordPage({
   searchParams,
@@ -70,12 +71,7 @@ export default async function NytKodeordPage({
             </div>
           )}
 
-          <button
-            type="submit"
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-          >
-            Gem ny adgangskode
-          </button>
+          <SubmitButton pendingText="Gemmer...">Gem ny adgangskode</SubmitButton>
         </form>
       </div>
     </main>

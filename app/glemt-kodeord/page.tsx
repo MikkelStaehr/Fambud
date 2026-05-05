@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { requestPasswordReset } from './actions';
+import { SubmitButton } from '@/app/_components/SubmitButton';
 
 export default async function GlemtKodeordPage({
   searchParams,
@@ -71,12 +72,7 @@ export default async function GlemtKodeordPage({
             </div>
           )}
 
-          <button
-            type="submit"
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-          >
-            Send link
-          </button>
+          <SubmitButton pendingText="Sender link...">Send link</SubmitButton>
         </form>
 
         <p className="mt-6 text-center text-sm text-neutral-500">

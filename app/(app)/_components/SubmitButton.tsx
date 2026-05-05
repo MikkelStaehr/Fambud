@@ -9,6 +9,7 @@
 'use client';
 
 import { useFormStatus } from 'react-dom';
+import { Loader2 } from 'lucide-react';
 
 type Variant = 'primary' | 'danger';
 
@@ -39,7 +40,8 @@ export function SubmitButton({
       aria-busy={pending}
       className={`inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
     >
-      {pending ? pendingLabel : children}
+      {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+      <span>{pending ? pendingLabel : children}</span>
     </button>
   );
 }

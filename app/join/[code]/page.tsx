@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { signup } from '@/app/signup/actions';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
+import { SubmitButton } from '@/app/_components/SubmitButton';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { signOutAndJoin } from './actions';
 
@@ -93,12 +94,7 @@ export default async function JoinByCodePage({
             </p>
             <form action={signOutAndJoin} className="mt-4">
               <input type="hidden" name="code" value={code} />
-              <button
-                type="submit"
-                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-              >
-                Log ud og brug invitation
-              </button>
+              <SubmitButton pendingText="Logger ud...">Log ud og brug invitation</SubmitButton>
             </form>
           </div>
           <Link
@@ -186,12 +182,7 @@ export default async function JoinByCodePage({
             </div>
           )}
 
-          <button
-            type="submit"
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-          >
-            Tilslut husstand
-          </button>
+          <SubmitButton pendingText="Tilslutter...">Tilslut husstand</SubmitButton>
         </form>
 
         <p className="mt-6 text-center text-sm text-neutral-500">

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
+import { assertAccountKind, HOUSEHOLD_PURCHASE_KINDS } from '@/lib/actions/account-validation';
 
 // /husholdning er et forbrugsspor pr. husholdningskonto. Hvert "køb" er en
 // almindelig transaction med recurrence='once' på den valgte dato. Vi
@@ -70,6 +71,17 @@ export async function addHouseholdPurchase(
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // SECURITY: husholdning er KUN for kind='household' - en angriber må
+  // ikke kunne pege accountId på et lån eller en checking-konto og
+  // forfalske debt-down-payments eller checking-balance.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, accountId, HOUSEHOLD_PURCHASE_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect('/husholdning?error=' + encodeURIComponent(accCheck.error));
+  }
+
   const categoryId = await getOrCreateHouseholdCategoryId(supabase, householdId);
 
   const { error } = await supabase.from('transactions').insert({
@@ -82,7 +94,8 @@ export async function addHouseholdPurchase(
     recurrence: 'once',
   });
   if (error) {
-    redirect('/husholdning?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+    console.error('addHouseholdPurchase failed:', error.message);
+    redirect('/husholdning?error=' + encodeURIComponent('Købet kunne ikke gemmes'));
   }
 
   revalidatePath('/husholdning');
@@ -111,13 +124,24 @@ export async function setMonthlyBudget(
   const amount = amountRes.value;
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // monthly_budget giver kun mening på husholdningskonti - ellers er
+  // det støj der kan forvirre forecast-logik.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, accountId, HOUSEHOLD_PURCHASE_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect('/husholdning?error=' + encodeURIComponent(accCheck.error));
+  }
+
   const { error } = await supabase
     .from('accounts')
     .update({ monthly_budget: amount })
     .eq('id', accountId)
     .eq('household_id', householdId);
   if (error) {
-    redirect('/husholdning?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+    console.error('setMonthlyBudget failed:', error.message);
+    redirect('/husholdning?error=' + encodeURIComponent('Budgettet kunne ikke gemmes'));
   }
 
   revalidatePath('/husholdning');

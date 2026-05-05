@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
+import { assertAccountKind, FIXED_EXPENSE_KINDS } from '@/lib/actions/account-validation';
 import {
   nextFixedDayOccurrence,
   nextLastBankingDay,
@@ -91,8 +92,15 @@ export async function addExpense(formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  // can_write_account RLS policy enforces that the caller may write to this
-  // account; we don't need an explicit ownership check here.
+  // SECURITY: faste udgifter må kun ramme budget- eller checking-konti.
+  // Ellers kunne en angriber pege accountId på et lån (kind='credit')
+  // og forfalske ydelses-historik. RLS via can_write_account dækker
+  // ikke denne kind-distinktion.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, accountId, FIXED_EXPENSE_KINDS
+  );
+  if (!accCheck.ok) bounceWithError(accountId, accCheck.error);
+
   const { error } = await supabase.from('transactions').insert({
     household_id: householdId,
     account_id: accountId,
@@ -105,7 +113,10 @@ export async function addExpense(formData: FormData) {
     components_mode,
     family_member_id,
   });
-  if (error) bounceWithError(accountId, error.message);
+  if (error) {
+    console.error('addExpense failed:', error.message);
+    bounceWithError(accountId, 'Udgiften kunne ikke gemmes');
+  }
 
   revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
@@ -123,7 +134,7 @@ export async function removeExpense(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error && accountId) bounceWithError(accountId, error.message);
+  if (error && accountId) bounceWithError(accountId, 'Operationen fejlede - prøv igen');
 
   if (accountId) revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
@@ -177,7 +188,7 @@ export async function addComponent(formData: FormData) {
     position: nextPos,
     family_member_id,
   });
-  if (error) bounceWithError(accountId, error.message);
+  if (error) bounceWithError(accountId, 'Operationen fejlede - prøv igen');
 
   revalidatePath(`/faste-udgifter/${accountId}`);
 }
@@ -193,7 +204,7 @@ export async function removeComponent(formData: FormData) {
     .delete()
     .eq('id', id)
     .eq('household_id', householdId);
-  if (error && accountId) bounceWithError(accountId, error.message);
+  if (error && accountId) bounceWithError(accountId, 'Operationen fejlede - prøv igen');
 
   if (accountId) revalidatePath(`/faste-udgifter/${accountId}`);
 }
@@ -234,7 +245,10 @@ export async function updateComponent(
     .eq('id', componentId)
     .eq('household_id', householdId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    console.error('updateComponent failed:', error.message);
+    return { ok: false, error: 'Kunne ikke gemme komponenten' };
+  }
 
   revalidatePath(`/faste-udgifter/${accountId}`);
   return { ok: true };
@@ -304,7 +318,10 @@ export async function updateBudgetExpense(
     .eq('id', id)
     .eq('household_id', householdId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    console.error('updateBudgetExpense failed:', error.message);
+    return { ok: false, error: 'Kunne ikke gemme udgiften' };
+  }
 
   revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');

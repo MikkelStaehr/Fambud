@@ -45,6 +45,15 @@ export async function sendEmail({
     throw new Error('RESEND_FROM_EMAIL mangler i environment, og from-felt ikke angivet');
   }
 
+  // SECURITY: Strip CRLF fra alle felter der kunne misbruges til
+  // header-injection. JSON-API'et beskytter normalt mod det, men hvis
+  // env-vars er forkert sat eller fremtidige callers passer rå
+  // brugerinput, er det defense-in-depth.
+  const stripCRLF = (s: string) => s.replace(/[\r\n]/g, '');
+  const safeFrom = stripCRLF(from ?? defaultFrom!);
+  const safeSubject = stripCRLF(subject);
+  const safeReplyTo = replyTo ? stripCRLF(replyTo) : undefined;
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -52,17 +61,23 @@ export async function sendEmail({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: from ?? defaultFrom,
+      from: safeFrom,
       to: Array.isArray(to) ? to : [to],
-      subject,
+      subject: safeSubject,
       html,
       text,
-      reply_to: replyTo,
+      reply_to: safeReplyTo,
     }),
   });
 
   if (!res.ok) {
+    // Body kan indeholde Resend's interne debug-data (request-id, og
+    // hvis fremtidige caller har sendt user-input som mistakenly leaked).
+    // Vi logger body til server-side logs men kaster en simpel besked
+    // til caller, så fejlen ikke utilsigtet propagerer ind i en URL
+    // eller UI-toast.
     const body = await res.text().catch(() => '');
-    throw new Error(`Resend ${res.status}: ${body}`);
+    console.error(`Resend API error: status=${res.status} body=${body}`);
+    throw new Error(`Resend ${res.status}`);
   }
 }

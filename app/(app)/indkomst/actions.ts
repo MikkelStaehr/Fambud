@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
+import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import type {
   IncomeRole,
   PrimaryIncomeSource,
@@ -197,6 +198,15 @@ export async function createIncome(formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // SECURITY: Indkomst lander på checking/savings/etc - ikke på lån.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, parsed.data.account_id, POSTER_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect('/indkomst/ny?error=' + encodeURIComponent(accCheck.error));
+  }
+
   const categoryId = await getOrCreateIncomeCategoryId(supabase, householdId);
 
   const { error } = await supabase.from('transactions').insert({
@@ -205,7 +215,8 @@ export async function createIncome(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/indkomst/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+    console.error('createIncome failed:', error.message);
+    redirect('/indkomst/ny?error=' + encodeURIComponent('Indkomsten kunne ikke gemmes'));
   }
 
   revalidatePath('/indkomst');
@@ -222,13 +233,23 @@ export async function updateIncome(id: string, formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
+  // Same kind-validation as createIncome - hvis brugeren ændrer
+  // account_id til et lån, skal det blokeres.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, parsed.data.account_id, POSTER_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(accCheck.error));
+  }
+
   const { error } = await supabase
     .from('transactions')
     .update(parsed.data)
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+    console.error('updateIncome failed:', error.message);
+    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent('Indkomsten kunne ikke gemmes'));
   }
 
   revalidatePath('/indkomst');

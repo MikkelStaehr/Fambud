@@ -6,6 +6,7 @@ import { getHouseholdContext } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
+import { mapDbError } from '@/lib/actions/error-map';
 import type {
   IncomeRole,
   PrimaryIncomeSource,
@@ -216,7 +217,7 @@ export async function createIncome(formData: FormData) {
   });
   if (error) {
     console.error('createIncome failed:', error.message);
-    redirect('/indkomst/ny?error=' + encodeURIComponent('Indkomsten kunne ikke gemmes'));
+    redirect('/indkomst/ny?error=' + encodeURIComponent(mapDbError(error, 'Indkomsten kunne ikke gemmes')));
   }
 
   revalidatePath('/indkomst');
@@ -249,7 +250,7 @@ export async function updateIncome(id: string, formData: FormData) {
     .eq('household_id', householdId);
   if (error) {
     console.error('updateIncome failed:', error.message);
-    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent('Indkomsten kunne ikke gemmes'));
+    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Indkomsten kunne ikke gemmes')));
   }
 
   revalidatePath('/indkomst');

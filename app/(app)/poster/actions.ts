@@ -6,6 +6,7 @@ import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
+import { mapDbError } from '@/lib/actions/error-map';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -95,7 +96,7 @@ export async function createTransaction(formData: FormData) {
   });
   if (error) {
     console.error('createTransaction failed:', error.message);
-    redirect('/poster/ny?error=' + encodeURIComponent('Posten kunne ikke gemmes - tjek felterne'));
+    redirect('/poster/ny?error=' + encodeURIComponent(mapDbError(error, 'Posten kunne ikke gemmes - tjek felterne')));
   }
 
   revalidatePath('/poster');
@@ -127,7 +128,7 @@ export async function updateTransaction(id: string, formData: FormData) {
     .eq('household_id', householdId);
   if (error) {
     console.error('updateTransaction failed:', error.message);
-    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent('Posten kunne ikke gemmes'));
+    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Posten kunne ikke gemmes')));
   }
 
   revalidatePath('/poster');

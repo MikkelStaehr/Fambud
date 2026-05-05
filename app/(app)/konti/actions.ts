@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, capLength, TEXT_LIMITS } from '@/lib/format';
-import { noticeUrl } from '@/lib/flash';
+import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import type {
   AccountKind,
@@ -125,7 +125,8 @@ export async function createAccount(formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/konti', `${parsed.data.name} oprettet`));
+  await setFlashCookie(`${parsed.data.name} oprettet`);
+  redirect('/konti');
 }
 
 export async function updateAccount(id: string, formData: FormData) {
@@ -147,7 +148,8 @@ export async function updateAccount(id: string, formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/konti', `${parsed.data.name} gemt`));
+  await setFlashCookie(`${parsed.data.name} gemt`);
+  redirect('/konti');
 }
 
 // Soft-delete: transactions/transfers reference accounts ON DELETE RESTRICT,
@@ -166,7 +168,8 @@ export async function archiveAccount(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/konti', 'Konto arkiveret'));
+  await setFlashCookie('Konto arkiveret');
+  redirect('/konti');
 }
 
 export async function restoreAccount(formData: FormData) {
@@ -181,5 +184,6 @@ export async function restoreAccount(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/konti?archived=1', 'Konto gendannet'));
+  await setFlashCookie('Konto gendannet');
+  redirect('/konti?archived=1');
 }

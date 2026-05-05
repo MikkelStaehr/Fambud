@@ -196,7 +196,10 @@ export default async function WizardLonkontoPage({
             </ul>
             <p className="mt-2 text-xs text-emerald-900/80">
               Vi mangler bare din side: lønkonto, indkomst og eventuelle
-              private opsparinger.
+              private opsparinger. Som partner har du derfor en kortere
+              wizard end ejeren - 4 trin i stedet for 7. Tilføj familie,
+              fælleskonti og investeringer er allerede gjort, så det
+              springer vi over for dig.
             </p>
           </div>
         )

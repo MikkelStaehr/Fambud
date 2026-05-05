@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, parseOptionalAmount, nextOccurrenceAfter, capLength, TEXT_LIMITS } from '@/lib/format';
-import { noticeUrl } from '@/lib/flash';
+import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import type { LoanType, RecurrenceFreq } from '@/lib/database.types';
 
@@ -186,7 +186,8 @@ export async function createLoan(formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
-  redirect(noticeUrl('/laan', `${parsed.data.name} oprettet`));
+  await setFlashCookie(`${parsed.data.name} oprettet`);
+  redirect('/laan');
 }
 
 export async function updateLoan(id: string, formData: FormData) {
@@ -208,7 +209,8 @@ export async function updateLoan(id: string, formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
-  redirect(noticeUrl('/laan', `${parsed.data.name} gemt`));
+  await setFlashCookie(`${parsed.data.name} gemt`);
+  redirect('/laan');
 }
 
 export async function deleteLoan(formData: FormData) {
@@ -224,7 +226,8 @@ export async function deleteLoan(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/laan');
   revalidatePath('/konti');
-  redirect(noticeUrl('/laan', 'Lån slettet'));
+  await setFlashCookie('Lån slettet');
+  redirect('/laan');
 }
 
 // "Tilføj som ydelse på Budgetkonto X" - creates a recurring expense on
@@ -400,5 +403,6 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
   const message = targetAccount?.name
     ? `Tilføjet på ${targetAccount.name}`
     : 'Tilføjet på budget';
-  redirect(noticeUrl(`/laan/${encodeURIComponent(loanId)}`, message));
+  await setFlashCookie(message);
+  redirect(`/laan/${encodeURIComponent(loanId)}`);
 }

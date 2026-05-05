@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
-import { noticeUrl } from '@/lib/flash';
+import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import { mapDbError } from '@/lib/actions/error-map';
 import type { RecurrenceFreq } from '@/lib/database.types';
@@ -101,7 +101,8 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/poster', 'Post oprettet'));
+  await setFlashCookie('Post oprettet');
+  redirect('/poster');
 }
 
 export async function updateTransaction(id: string, formData: FormData) {
@@ -133,7 +134,8 @@ export async function updateTransaction(id: string, formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/poster', 'Post gemt'));
+  await setFlashCookie('Post gemt');
+  redirect('/poster');
 }
 
 export async function deleteTransaction(formData: FormData) {
@@ -148,5 +150,6 @@ export async function deleteTransaction(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/poster');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/poster', 'Post slettet'));
+  await setFlashCookie('Post slettet');
+  redirect('/poster');
 }

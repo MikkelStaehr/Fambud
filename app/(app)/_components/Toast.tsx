@@ -1,22 +1,17 @@
-// Lille toast-mekanisme der hænger på URL'ens search-params. Server-actions
-// redirecter med ?notice=Gemt&kind=success efter en succesful create/update;
-// denne komponent læser dem, viser toasten i 3s, og rydder så URL'en igen
-// så toasten ikke vender tilbage hvis brugeren refresher.
+// Cookie-baseret flash-toast. Server-actions sætter '_fambud_flash'-cookien
+// via setFlashCookie() før redirect; vi læser cookien her, viser toasten
+// i 3s og rydder så cookien.
 //
-// Vi har bevidst valgt search-param frem for cookie-flash:
-//   - Server components kan ikke nemt slette cookies efter læsning
-//     (kan kun læse i RSC, kan kun mutere i actions/middleware)
-//   - URL-tilstand er debug-bar og forudsigelig
-//   - router.replace med scroll: false giver ren cleanup uden at skubbe
-//     en ny history-entry
+// Tidligere læste vi notice/kind fra URL-params, men det gav en
+// phishing-vektor (angriber kunne crafte URL der viste falske beskeder).
+// Cookies kan kun sættes af samme origin, så de er trusted.
 //
 // Toasten er placed i <AppLayout> så den vises på enhver (app)-side uden
 // at hver page selv skal mounte den.
 
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 
 type ToastKind = 'success' | 'error' | 'info';
@@ -37,36 +32,53 @@ const KIND_STYLES: Record<ToastKind, { wrapper: string; icon: typeof CheckCircle
 };
 
 const TOAST_DURATION_MS = 3000;
+const COOKIE_NAME = '_fambud_flash';
+
+type FlashContent = { kind: ToastKind; message: string };
+
+function readAndClearFlashCookie(): FlashContent | null {
+  if (typeof document === 'undefined') return null;
+  const all = document.cookie.split('; ');
+  const raw = all.find((c) => c.startsWith(`${COOKIE_NAME}=`));
+  if (!raw) return null;
+
+  // Ryd cookien straks. Selv hvis parsing fejler under skal vi ikke
+  // vise samme stale toast på næste navigation.
+  document.cookie = `${COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+
+  const value = raw.substring(COOKIE_NAME.length + 1);
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value));
+    if (typeof parsed?.m !== 'string') return null;
+    const kind: ToastKind =
+      parsed.k === 'error' || parsed.k === 'info' ? parsed.k : 'success';
+    return { kind, message: parsed.m };
+  } catch {
+    return null;
+  }
+}
 
 export function Toast() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+  const [flash, setFlash] = useState<FlashContent | null>(null);
 
-  const notice = params.get('notice');
-  const kindParam = params.get('kind');
-  const kind: ToastKind =
-    kindParam === 'error' || kindParam === 'info' ? kindParam : 'success';
-
+  // Læs cookie ved mount. Server actions kan have sat den lige før
+  // redirect; vi konsumerer den hér og rydder URL-state ikke længere
+  // er nødvendigt.
   useEffect(() => {
-    if (!notice) return;
+    const found = readAndClearFlashCookie();
+    if (found) setFlash(found);
+  }, []);
 
-    const timer = setTimeout(() => {
-      // Ryd notice + kind fra URL'en uden at skubbe history. Andre query-
-      // params (fx /poster?month=2026-04) bevares.
-      const next = new URLSearchParams(params.toString());
-      next.delete('notice');
-      next.delete('kind');
-      const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    }, TOAST_DURATION_MS);
-
+  // Auto-skjul efter TOAST_DURATION_MS.
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), TOAST_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [notice, params, pathname, router]);
+  }, [flash]);
 
-  if (!notice) return null;
+  if (!flash) return null;
 
-  const { wrapper, icon: Icon } = KIND_STYLES[kind];
+  const { wrapper, icon: Icon } = KIND_STYLES[flash.kind];
   return (
     <div
       role="status"
@@ -77,7 +89,7 @@ export function Toast() {
         className={`pointer-events-auto flex max-w-md items-center gap-2 rounded-md border px-4 py-2.5 text-sm shadow-lg ${wrapper}`}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        <span>{notice}</span>
+        <span>{flash.message}</span>
       </div>
     </div>
   );

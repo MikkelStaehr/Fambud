@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
-import { noticeUrl } from '@/lib/flash';
+import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
@@ -82,7 +82,8 @@ export async function createTransfer(formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/overforsler', 'Overførsel oprettet'));
+  await setFlashCookie('Overførsel oprettet');
+  redirect('/overforsler');
 }
 
 export async function updateTransfer(id: string, formData: FormData) {
@@ -107,7 +108,8 @@ export async function updateTransfer(id: string, formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/overforsler', 'Overførsel gemt'));
+  await setFlashCookie('Overførsel gemt');
+  redirect('/overforsler');
 }
 
 export async function deleteTransfer(formData: FormData) {
@@ -122,5 +124,6 @@ export async function deleteTransfer(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/overforsler', 'Overførsel slettet'));
+  await setFlashCookie('Overførsel slettet');
+  redirect('/overforsler');
 }

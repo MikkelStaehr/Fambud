@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
-import { noticeUrl } from '@/lib/flash';
+import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import { mapDbError } from '@/lib/actions/error-map';
 import type {
@@ -223,7 +223,8 @@ export async function createIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  redirect(noticeUrl('/indkomst', 'Indkomst registreret'));
+  await setFlashCookie('Indkomst registreret');
+  redirect('/indkomst');
 }
 
 export async function updateIncome(id: string, formData: FormData) {
@@ -256,7 +257,8 @@ export async function updateIncome(id: string, formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  redirect(noticeUrl('/indkomst', 'Indkomst gemt'));
+  await setFlashCookie('Indkomst gemt');
+  redirect('/indkomst');
 }
 
 export async function deleteIncome(formData: FormData) {
@@ -273,7 +275,8 @@ export async function deleteIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  redirect(noticeUrl('/indkomst', 'Indkomst slettet'));
+  await setFlashCookie('Indkomst slettet');
+  redirect('/indkomst');
 }
 
 // Vælger en families primære indkomst-kilde. Styrer hvilken UI-flow vi guider
@@ -304,5 +307,6 @@ export async function setPrimaryIncomeSource(formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
-  redirect(noticeUrl('/indkomst', 'Indkomst-kilde gemt'));
+  await setFlashCookie('Indkomst-kilde gemt');
+  redirect('/indkomst');
 }

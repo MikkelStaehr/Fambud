@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, getMyMembership, resetAllTours } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
@@ -346,4 +347,139 @@ export async function deleteFamilyMember(formData: FormData) {
   revalidatePath('/indstillinger');
   revalidatePath('/faste-udgifter', 'layout');
   revalidatePath('/budget');
+}
+
+// Self-betjent slet-konto-flow. GDPR ret-til-sletning.
+//
+// Strategi afhænger af brugerens rolle og husstands-struktur:
+//   - Solo-bruger (eneste medlem): slet hele husstanden. CASCADE på FK
+//     fra households til alle child-tabeller fjerner alt finansielt data
+//     i én atomisk operation.
+//   - Almindeligt medlem (ikke owner): slet kun deres egen
+//     family_members-række. Husstanden og andre medlemmer består.
+//   - Owner med andre medlemmer: BLOK. Owner skal først overdrage
+//     ejerskab (ikke implementeret endnu) eller fjerne andre medlemmer.
+//     Alternativet ville være "også slet hele husstanden" - bevidst
+//     ikke implementeret som default for at undgå utilsigtet sletning
+//     af partnerens data.
+//
+// Bekræftelse: brugeren skal indtaste sin egen email i form-feltet for
+// at undgå klik-pause-fejl. Match foretages case-insensitive.
+//
+// Efter data-sletning: kalder admin-klientens deleteUser() der fjerner
+// auth.users-rækken. Brugerens session invalidiseres på næste request,
+// og vi sender dem til landing.
+export async function deleteMyAccount(formData: FormData) {
+  const { supabase, user, householdId } = await getHouseholdContext();
+  const { membership } = await getMyMembership();
+
+  // Bekræftelses-tjek: brugeren skal indtaste sin email.
+  const confirmEmail = String(formData.get('confirm_email') ?? '')
+    .trim()
+    .toLowerCase();
+  if (!confirmEmail || confirmEmail !== user.email?.toLowerCase()) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent(
+          'Indtast din email præcist for at bekræfte sletningen'
+        )
+    );
+  }
+
+  // Tæl andre aktive medlemmer (user_id NOT NULL, ikke os selv) for at
+  // afgøre om husstanden skal slettes med eller bestå.
+  const { data: otherMembers, error: countErr } = await supabase
+    .from('family_members')
+    .select('id, role, user_id')
+    .eq('household_id', householdId)
+    .neq('user_id', user.id)
+    .not('user_id', 'is', null);
+  if (countErr) {
+    console.error('deleteMyAccount count failed:', countErr.message);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Operationen fejlede - prøv igen')
+    );
+  }
+
+  const hasOtherActiveMembers = (otherMembers ?? []).length > 0;
+  const isOwner = membership?.role === 'owner';
+
+  if (isOwner && hasOtherActiveMembers) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent(
+          'Du er ejer af husstanden og kan ikke slette din konto mens andre medlemmer er aktive. Fjern dem først eller kontakt support.'
+        )
+    );
+  }
+
+  // Admin-klient til at slette auth.users-rækken til sidst.
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (e) {
+    console.error('deleteMyAccount: admin client unavailable', e);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent(
+          'Kontosletning er ikke tilgængelig lige nu - kontakt support'
+        )
+    );
+  }
+
+  // Husk userId før vi kalder signOut/redirects der invalidiserer session.
+  const userId = user.id;
+
+  if (isOwner && !hasOtherActiveMembers) {
+    // Solo-bruger (eller ejer hvor andre kun er pre-godkendte/børn):
+    // slet hele husstanden. CASCADE rydder family_members + alt
+    // finansielt data.
+    const { error: hhErr } = await admin
+      .from('households')
+      .delete()
+      .eq('id', householdId);
+    if (hhErr) {
+      console.error('deleteMyAccount household delete failed:', hhErr.message);
+      redirect(
+        '/indstillinger?error=' +
+          encodeURIComponent('Kunne ikke slette husstanden - kontakt support')
+      );
+    }
+  } else {
+    // Almindeligt medlem: slet kun deres family_members-række. Husstanden
+    // og andre medlemmer består. Bruger admin-klient så vi ikke rammer
+    // RLS-policy'en der kun tillader owner at slette family_members.
+    const { error: fmErr } = await admin
+      .from('family_members')
+      .delete()
+      .eq('user_id', userId)
+      .eq('household_id', householdId);
+    if (fmErr) {
+      console.error('deleteMyAccount member delete failed:', fmErr.message);
+      redirect(
+        '/indstillinger?error=' +
+          encodeURIComponent('Kunne ikke fjerne dig fra husstanden')
+      );
+    }
+  }
+
+  // Slet auth.users-rækken. Sætter user_id = null på feedback (ON DELETE
+  // SET NULL) - vi beholder feedback-data så admin kan se den selv efter
+  // brugeren forlader os.
+  const { error: authErr } = await admin.auth.admin.deleteUser(userId);
+  if (authErr) {
+    console.error('deleteMyAccount auth delete failed:', authErr.message);
+    // Datasletning er allerede sket - vi logger og fortsætter til redirect
+    // i stedet for at lade brugeren sidde fast på en fejlskærm uden konto.
+  }
+
+  // Sign out på den lokale klient så cookies ryddes - selv om JWT'en
+  // alligevel er invalid efter auth-sletningen.
+  await supabase.auth.signOut();
+
+  // Redirecter til landing. Toasten lever kun under (app)-layoutet, så
+  // vi sætter ikke flash her - brugeren er logget ud og ved at handlingen
+  // lykkedes når de står på forsiden uden konto-adgang.
+  redirect('/');
 }

@@ -1609,3 +1609,319 @@ inline `<Link>`/`<strong>` virker.
 - **Pricing-page**: 19 kr/md står i FAQ + landing trust-strip + final CTA-
   subline, men der er ingen dedikeret /priser-side. Hvis pricing bliver
   mere kompleks senere (gruppe-rabatter, årlig pris) skal det flyttes ud.
+
+---
+
+# Devlog — 4.-5. maj 2026 (auth, feedback, sikkerhedsaudit, perf)
+
+Lang session. Resend-baseret email-flow (signup-confirmation +
+password-reset), feedback-form med email-notifikation, en beta-notice
+modal, og dernæst 8 runder security-audit med 12 nye migrations. Sluttede
+af med UX/perf-forbedringer på det vi havde lært.
+
+Ingen ny featuremæssig overflade - dette var "det app'en mangler for at
+være delbar med rigtige test-brugere". Bagefter er Fambud klar til at
+åbnes for venner og familie.
+
+---
+
+## 1. Resend email-stak
+
+**Konfiguration:** `fambud.dk` verificeret hos Resend (DKIM + SPF + DMARC
+TXT-records hos one.com), API-key + `RESEND_FROM_EMAIL` (`Fambud
+<noreply@fambud.dk>`) + `FEEDBACK_NOTIFICATION_EMAIL` på Vercel. Supabase
+Auth peger SMTP-kald til Resend så signup-confirmation og password-reset
+mails kommer fra vores eget domæne (ikke Supabase's rate-limited
+default-afsender).
+
+**Email-templates** (Supabase Dashboard → Authentication → Email Templates):
+- *Confirm signup* og *Reset Password* har begge fået dansk HTML-template
+  med Fambud-branding (emerald-grøn knap, neutral-grå brødtekst, 480px
+  max-width, table-baseret layout for Outlook-kompabilitet)
+- Begge bruger samme `{{ .ConfirmationURL }}`-placeholder
+- Plain-text-fallback til mail-klients der ikke renderer HTML
+
+**Glemt-adgangskode-flow:**
+
+[app/glemt-kodeord/](app/glemt-kodeord/) - email-input → Supabase
+`resetPasswordForEmail`-RPC → "tjek din mail"-skærm. Vi viser ALTID
+success-skærmen uanset om emailen findes - forhindrer email-enumeration
+(en angriber kan ikke prøve adresser for at finde gyldige konti).
+
+[app/auth/callback/route.ts](app/auth/callback/route.ts) - GET-handler
+der bytter Supabase PKCE-koden til en session og redirecter til
+`?next=/nyt-kodeord`.
+
+[app/nyt-kodeord/](app/nyt-kodeord/) - bruger sætter ny adgangskode (≥6
+tegn, gentag for verificering). Efter succesfuld update kalder vi
+`signOut({ scope: 'others' })` så stjålne sessioner på andre devices
+kicker'es. Hvis nogen har kompromiteret en session og brugeren reset'er,
+mister angriberen adgangen straks.
+
+---
+
+## 2. Feedback-form med Resend-notifikation
+
+**Migration:** [0041_feedback.sql](supabase/migrations/0041_feedback.sql)
+
+Hybrid-arkitektur fordi vi vil ikke miste feedback hvis Resend fejler:
+
+- DB er kilden: `feedback`-tabel (`id, user_id, household_id, email,
+  full_name, message, page_url, user_agent, created_at`) med RLS der
+  KUN tillader INSERT for authenticated brugere hvor `user_id =
+  auth.uid()`. Ingen SELECT-policy → læsning udelukkende via Supabase
+  Dashboard / service_role.
+- Notifikations-mail er bonus: server action gemmer altid til DB først,
+  derefter Resend. Hvis Resend fejler logges det og fortsætter -
+  feedback'en er stadig sikret.
+
+**App:** [FeedbackModal.tsx](app/(app)/_components/FeedbackModal.tsx) -
+"Send feedback"-knap nederst i sidebaren åbner en modal med textarea
+(5000 tegn cap), auto-fokus, inline success/error-state via
+`useTransition`. Brugeren forlader ikke siden.
+
+**Email:** mail med `replyTo: user.email` så admin kan svare direkte til
+bruger. HTML escapes alle felter (fullName/email/pageUrl/message) inden
+de interpoleres - vi gemmer ikke ondsindede payloads, men en bruger
+kunne sætte sit display-navn til `<a href="evil">klik</a>` og phishe
+admin via mail-klient.
+
+[lib/email/resend.ts](lib/email/resend.ts) - tynd HTTP-wrapper rundt om
+Resend's REST API (intet SDK, bare `fetch`). CRLF strippes fra `from`,
+`subject`, `replyTo` som defense-in-depth mod header-injection.
+
+---
+
+## 3. Beta-notice modal
+
+[BetaNotice.tsx](app/(app)/_components/BetaNotice.tsx) - velkomst-modal
+der vises én gang pr. browser-session via `sessionStorage`.
+
+> *"Tak fordi du er med så tidligt. Appen er stadig under aktiv
+> udvikling - du kan støde på små fejl, manglende detaljer eller
+> ændringer fra dag til dag. Driller noget eller mangler du noget?
+> Skriv det gerne til os."*
+
+Hydration-safe: starter skjult og åbner kun fra `useEffect`, så
+server- og client-render matcher. Ved tab-close eller logout/login
+ryddes sessionStorage og beskeden vises igen - matcher "hver gang man
+logger ind"-kravet uden cookie eller DB-flag.
+
+---
+
+## 4. Sikkerheds-audit (8 runder, 12 migrations)
+
+Det her var sessions-tyngdepunktet. Spawn'ede 3 parallelle audit-agents
+med fokuserede briefs (auth/RLS, injection-vektorer, secrets/abuse) og
+fik 25+ findings i runde 1. Hver runde af fixes blev dernæst re-auditet
+- og hver re-audit fandt nye huller, inklusive 2 P0-bugs hvor vores egne
+sikkerhedsfixes brød funktionalitet.
+
+### Migrations 0042-0053:
+
+**0042 - households owner-only UPDATE.** Tidligere RLS-policy tillod
+alle medlemmer at opdatere households direkte via supabase-anon-key fra
+browser-devtools, hvilket omgik app-niveau owner-tjek i `setEconomyType`.
+
+**0043 - fjern Path 2 email pre-approval.** Tidligere kunne en angriber
+oprette en `family_members`-række med `email = "stranger@example.com"`
+i sin egen husstand. Når personen senere signede op, fanger
+`handle_new_user` Path 2 deres email og linker dem ind i angriberens
+husstand uden samtykke. Path 2 er fjernet helt; Path 1 (invite-kode)
+opgraderet til at adoptere eksisterende pre-godkendelse-rækker. Globalt
+unique-email-indeks erstattet af per-household-unique.
+
+**0044 - rate_limits-tabel + SECURITY DEFINER `rate_limit_check`-RPC.**
+Postgres-baseret rate limiter (frem for Upstash/Redis - færre deps).
+Anvendt på `/signup` (5/time/IP), `/glemt-kodeord` (5/time/IP+email),
+`/login` (10/15min/IP+email), `submitFeedback` (10/time/user +
+30/time/household).
+
+**0045 + 0047 + 0052 - household-consistency triggers.** RLS gater
+hvem der kan SKRIVE til hver tabel, men ikke at cross-table referencer
+forbliver inden for samme husstand. En angriber der lærer en kategori-
+UUID fra en anden husstand kunne tidligere indsætte en transaction der
+refererer den fremmede kategori. Trigger på `transactions.category_id`,
+`transaction_components.transaction_id`, `transfers.from_account_id` +
+`to_account_id`, og `transactions.family_member_id` håndhæver nu
+household-konsistens. Alle SECURITY DEFINER + NULL-as-fail.
+
+**0046 + 0049 + 0051 - `family_members` RLS split + guard-trigger.**
+Den oprindelige policy gav alle medlemmer fuld UPDATE-adgang. Et medlem
+kunne self-promote til 'owner' via direkte Supabase-kald og dermed
+bypasse alle owner-only app-checks. Vi splittede til SELECT/INSERT/
+DELETE for medlemmer + to UPDATE-policies (self for ufarlige felter,
+owner for alt). En BEFORE UPDATE trigger blokerer ændringer af `role`,
+`user_id`, `household_id`, `email` (de eneste felter der reelt er
+privilege-escalation-vektorer) når caller ikke er owner.
+
+To P0-bugs blev opdaget i selve denne mekanisme i to forskellige runder:
+- Runde 4 fandt at trigger'en blokerede `handle_new_user` Path 1's
+  invite-adoption (auth.uid() er ikke owner ved signup). Fix:
+  `pg_trigger_depth() > 1`-bypass for nested trigger-kald.
+- Runde 7 fandt at samme trigger blokerede `mark_setup_complete` RPC -
+  hvilket betød at INGEN non-owner partner-signup kunne afslutte
+  wizarden siden runde 2 (production-broken i 5 dage). Fix: fjern
+  `setup_completed_at`, `joined_at`, `position` fra "kritisk felter"-
+  listen siden de ikke er sikkerhedsrelevante.
+
+**0048 - rate_limit_routes lookup-tabel.** En angriber kunne kalde
+`rate_limit_check` RPC direkte med `p_max_hits=999999` og poison'e
+andre brugeres bucket. Vi indfører nu en lookup-tabel med hardcoded
+lofter pr. route, og RPC'en ignorerer client-leverede args. Plus owner-
+only RLS på `household_invites` og revoke af `rate_limit_cleanup` fra
+public.
+
+**0050 - revoke EXECUTE på interne SECURITY DEFINER funktioner.**
+Postgres grant'er som default EXECUTE til PUBLIC. Trigger-funktioner
+som `handle_new_user` og `guard_family_members_critical_columns` skulle
+ikke kunne kaldes direkte fra anon/authenticated - revoke'd.
+
+**0053 - per-household feedback rate-limit.** Med 5 medlemmer i én
+husstand kunne de samlet sende 50/time → 1200/dag, hvilket drainer
+Resend free-tier (3000/md). Tilføjet `feedback_household` route med
+30/time loft.
+
+### App-niveau hærdninger:
+
+- **Open redirect** på `/auth/callback` lukket (`safeNextPath` afviser
+  `//`, `/\\`, `/@`)
+- **HTML-escape** på alle user-input-felter i feedback-mail (subject,
+  fullName, email, pageUrl, message)
+- **deleteFamilyMember** kræver nu `role='owner'` og afviser sletning
+  af aktive brugere (`user_id IS NOT NULL`) - ellers kunne et medlem
+  forge en POST og slette ejerens family_member-række, hvilket ville
+  låse ejeren ude permanent
+- **proxy.ts deny-by-default**: whitelister kun public routes (`/`,
+  `/login`, `/signup`, `/glemt-kodeord`, `/nyt-kodeord`, `/privatliv`,
+  `/join/*`, `/auth/*`) og kræver auth på alt andet. Tidligere version
+  manglede flere `(app)`-routes fra `isProtected`-listen.
+- **Account-kind validering** på alle write-actions der accepterer
+  `account_id` fra FormData ([lib/actions/account-validation.ts](lib/actions/account-validation.ts)).
+  Forhindrer at en angriber kan POST'e til `/poster` med
+  `account_id` pegende på et lån og forfalske afdrag.
+- **mapDbError** ([lib/actions/error-map.ts](lib/actions/error-map.ts))
+  mapper kendte Postgres-fejl til danske beskeder. Erstatter ~100
+  steder hvor raw `error.message` tidligere blev sendt ind i URL'en
+  (afslørende schema-/constraint-/trigger-navne).
+- **wizard-actions** har nu `guardWizardOpen()` som første linje -
+  redirecter post-setup-brugere til /dashboard så wizard-actions
+  med side-effekter ikke kan kaldes via direkte POST.
+- **Length-caps** på alle fri-tekst-felter via `capLength` +
+  `TEXT_LIMITS` ([lib/format.ts](lib/format.ts)) for at undgå
+  MB-store strings i text-kolonner. Inkl. UTF-16 surrogate-handling
+  (cap'er ikke midt i en emoji).
+
+### Andet:
+
+- **Security headers** ([next.config.ts](next.config.ts)): CSP,
+  X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-
+  Policy strict-origin, Permissions-Policy
+- **Signup user-enumeration fix**: 'User already registered' redirecter
+  nu til check-email-skærmen (samme som ny signup) i stedet for at
+  vise distinkt fejl
+- **postcss CVE GHSA-qx2v-qp2m-jg93** lukket via `overrides` i
+  package.json
+- **Generic getHouseholdContext error**: kaster nu 'Internal error' og
+  logger detail server-side - lækker ikke trigger-navn i UI
+
+---
+
+## 5. UX: loading-feedback når server arbejder
+
+User-rapport: "Klik føles dødt i 1-2 sekunder før knappen reagerer".
+Tre fixes mod den fornemmelse:
+
+**[SubmitButton.tsx](app/_components/SubmitButton.tsx)** + opgradering
+af [eksisterende SubmitButton](app/(app)/_components/SubmitButton.tsx)
+med `useFormStatus()`:
+- Knappen viser instant en `<Loader2>`-spinner + skifter label til
+  pending-text (`Logger ind...`, `Opretter konto...`, `Sender link...`,
+  `Gemmer...`)
+- Disabler sig selv mens action kører - umuligt at double-submit
+- Anvendt på `/login`, `/signup`, `/glemt-kodeord`, `/nyt-kodeord`,
+  `/join/[code]`, og automatisk på alle eksisterende main-forms
+  (LoanForm, AccountForm, TransferForm, TransactionForm, IncomeForm)
+
+**Page-level loading**: [app/(app)/loading.tsx](app/(app)/loading.tsx)
++ [app/wizard/loading.tsx](app/wizard/loading.tsx). Next.js viser
+automatisk denne UI mens en server-component renderer. Fanger
+navigations-pause på 0,5-2s mellem sidebar-klik og næste side er klar.
+Sidebaren forbliver synlig pga. parent layout - kun main-arealet får
+loading-state.
+
+Brugeren ser nu feedback inden for samme animation-frame som deres
+klik. Den faktiske server-tid er uændret, men perceived performance
+forbedres markant fordi "føles ødelagt"-vinduet er væk.
+
+---
+
+## 6. Perf: dedupe auth-context queries
+
+Dashboard-page kalder ~12 DAL-funktioner i parallel via `Promise.all`.
+Hver eneste kalder `getHouseholdContext()` (eller `getMyMembership`)
+internt for at hente household_id. Det resulterede i ~12 redundante
+DB-queries pr. dashboard-load alene for auth-context.
+
+[lib/dal/auth.ts](lib/dal/auth.ts) - wrappet `getHouseholdContext`,
+`getMyMembership` og `requireUser` i React's `cache()`. Dedupliker kald
+inden for samme request:
+- 12 calls → 1 DB query for `family_members` lookup
+- 12 calls → 1 `supabase.auth.getUser()` read
+- 12 calls → 1 `createClient()`
+
+`cache()` er per-request (ikke cross-request) - to forskellige users
+får hver deres data, og cache nulstilles når Next.js streamer responsen
+ud. Sikkerhedsmæssigt safe.
+
+Forventet impact: 50-200ms hurtigere dashboard-load i prod afhængigt af
+DB-latency.
+
+---
+
+## Status
+
+12 nye migrations på prod (0041-0053). Alle anvendt og funktionelt
+verificeret med direct DB-tests:
+- `setup_completed_at` self-update virker (P0 fix verified)
+- Role-change blokeret for non-owner (security maintained)
+- Cross-household category/family_member/transfer-references blokeret
+- Rate-limits blokerer ved konfigureret loft for feedback/login/signup/
+  reset_password
+- Hardcoded route-loft brugt (klient-args ignoreres)
+
+`npm audit`: 0 vulnerabilities. `tsc --noEmit`: 0 errors.
+
+Vi gennemgik 8 audit-runder; runde 1 fandt 25+ fund, runde 8 fandt 0
+Critical og kun copy-issues. Vi har empirisk valideret at hver
+sikkerhedsmekanisme virker som forventet og ikke blokerer normale
+flows. Sikkert at åbne for testbrugere.
+
+---
+
+## Åbne tråde fra denne session
+
+- **Self-betjent slet-konto-flow**: privatliv-siden henviser nu til
+  manuel email-kontakt for sletning. Implementér `auth.admin.deleteUser`
+  + cascade som server-action på et tidspunkt for at matche GDPR-best-
+  practice.
+- **Toast notice phishing**: `?notice=...`-param renders som tekst i
+  toast (React-escaped, ingen XSS) men en angriber kan vise en falsk
+  "Din konto er suspenderet" via crafted URL. Lav risiko; bevidst
+  defereret.
+- **Vercel cold-start på landing**: første besøg efter idle kan tage
+  1-2s før HTML kommer. Kræver Vercel Edge Functions eller pre-warming
+  - vi accepterer dette indtil traffic gør cold-starts sjældne.
+- **Server-action latency**: 200-500ms for selve Supabase-roundtrip
+  kan vi ikke optimere fra app-koden. Vi accepterer det og loader-
+  states i SubmitButton + loading.tsx gør at det føles OK.
+- **Resend SMTP-fallback**: hvis Resend nogensinde går ned, fejler
+  password-reset og signup-confirmation-mails. Worth tilføje en
+  cron-baseret retry på `feedback`-tabellen, men auth-mails går
+  direkte gennem Supabase's eget Resend-link, så vi kan ikke selv
+  retrye dem.
+- **Setup-wizard for non-owner partner**: efter migration 0051's P0
+  fix er flowet teknisk in tact, men der er endnu ingen explicit
+  dansk hjælpetekst om hvorfor partner ser nogle andre wizard-trin
+  end ejer (fx ingen "tilføj partner"-trin for partner). Tilføj
+  copy-pas hvis testbrugere bliver forvirrede.

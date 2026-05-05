@@ -149,6 +149,31 @@ export function formatShortDateDA(iso: string): string {
   }).format(new Date(y, m - 1, d));
 }
 
+// Range-validation på user-provided datoer (transaktioner, indkomst,
+// budget-poster). Postgres date-kolonnen accepterer år 4713 BC til
+// 5874897 AD, så uden eksplicit tjek kan en bruger oprette en post i
+// år 9999 der ville skævvride forecasts og charts. 1900-2100 dækker alt
+// realistic - personlig økonomi er ikke 200+ år gammel og ikke
+// 75+ år ind i fremtiden.
+const MIN_OCCURS_ON_YEAR = 1900;
+const MAX_OCCURS_ON_YEAR = 2100;
+
+export function isValidOccursOn(iso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const year = parseInt(iso.slice(0, 4), 10);
+  if (year < MIN_OCCURS_ON_YEAR || year > MAX_OCCURS_ON_YEAR) return false;
+  // Ekstra sanity: er datoen overhovedet en gyldig dato? "2026-02-30"
+  // matcher regexen men er ikke valid. Vi roundtripper gennem Date og
+  // tjekker at kalenderkomponenterne stadig matcher.
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return (
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m - 1 &&
+    date.getUTCDate() === d
+  );
+}
+
 // Parses a user-typed money input into integer øre. Accepts:
 //   '1234.56'      - period decimal (canonical)
 //   '1234,56'      - comma decimal (Danish keyboard, normalised to period)

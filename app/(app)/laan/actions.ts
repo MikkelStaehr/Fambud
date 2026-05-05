@@ -377,10 +377,23 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
       }))
     );
     if (compErr) {
+      // Compensating delete: rul parent-transactionen tilbage så vi ikke
+      // efterlader en orphan-row der misrepresenterer lånets månedlige
+      // debit. Den her atomicitets-rollback er best-effort; hvis selve
+      // delete'n også fejler, har vi en orphan, men i praksis vil det
+      // kun ske ved totalt DB-nedbrud hvor halvdelen af staten ikke
+      // betyder noget alligevel.
+      const { error: rollbackErr } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', tx.id);
+      if (rollbackErr) {
+        console.error('pushLoanToBudget rollback failed:', rollbackErr.message);
+      }
       console.error('pushLoanToBudget components insert failed:', compErr.message);
       redirect(
         `/laan/${encodeURIComponent(loanId)}?error=` +
-          encodeURIComponent('Lån oprettet på budget, men nedbrydning fejlede')
+          encodeURIComponent('Kunne ikke oprette lånet på budget - prøv igen')
       );
     }
   }

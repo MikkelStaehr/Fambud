@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
+import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import { mapDbError } from '@/lib/actions/error-map';
@@ -49,6 +49,7 @@ function readTransactionForm(formData: FormData):
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
   if (!occurs_on) return { error: 'Dato er påkrævet' };
+  if (!isValidOccursOn(occurs_on)) return { error: 'Vælg en gyldig dato (mellem 1900 og 2100)' };
 
   const recurrenceRaw = String(formData.get('recurrence') ?? 'once');
   if (!VALID_FREQS.includes(recurrenceRaw as RecurrenceFreq)) {

@@ -1,15 +1,20 @@
 import Link from 'next/link';
 import { requestPasswordReset } from './actions';
 import { SubmitButton } from '@/app/_components/SubmitButton';
+import { readAuthStepCookie } from '@/lib/auth-step';
 
 export default async function GlemtKodeordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; step?: string; email?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, step, email } = await searchParams;
+  const { error } = await searchParams;
 
-  if (step === 'check-email') {
+  // Check-email-state via HttpOnly-cookie - emailen kommer ikke i URL'en.
+  const authStep = await readAuthStepCookie();
+
+  if (authStep?.step === 'check-email') {
+    const email = authStep.email;
     return (
       <main className="flex min-h-screen items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm text-center">

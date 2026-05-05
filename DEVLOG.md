@@ -1925,3 +1925,307 @@ flows. Sikkert at åbne for testbrugere.
   dansk hjælpetekst om hvorfor partner ser nogle andre wizard-trin
   end ejer (fx ingen "tilføj partner"-trin for partner). Tilføj
   copy-pas hvis testbrugere bliver forvirrede.
+
+---
+
+# Devlog — 5. maj 2026 (sikkerhedsaudit Prompt 5-10 + Sentry + GDPR)
+
+Dagens session fortsatte den systematiske sikkerhedsaudit fra runde 1-8
+ind i et nyt 13-prompts-forløb fra projektlederen. Vi nåede gennem
+Prompt 5 til 10. Plus en akut GDPR-fix-runde og fuld Sentry-installation.
+
+Fokus var at gå fra "vi har ryddet op i de fund vi selv kunne se" til
+"vi har struktureret roadmap, monitoring, breach-response, og en
+privatlivspolitik der matcher implementeringen". 11 P-items med konkrete
+deadlines er nu i [SECURITY_AUDITS.md](SECURITY_AUDITS.md).
+
+---
+
+## 1. Sikkerhedsaudit Prompt 5-10
+
+Per-prompt-detaljer ligger i [SECURITY_AUDITS.md](SECURITY_AUDITS.md).
+Højdepunkter:
+
+**Prompt 5 — Krypto og randomness**:
+[migration 0054_csprng_invite_codes.sql](supabase/migrations/0054_csprng_invite_codes.sql)
+erstatter `random()` (LCG) med `gen_random_bytes()` (CSPRNG) i
+`generate_invite_code()`. Verificeret med 5 testkoder: ZESG65CV,
+NHKGEMVV, 6SZCK2P8, H8JQ5CPJ, RDAJM25S — alle uniformt fordelt.
+
+**Prompt 6 — Authentication hardening**:
+[lib/common-passwords.ts](lib/common-passwords.ts) — in-app blocklist på
+~100 entries inkl. danske patterns (kodeord1, danmark1, kobenhavn,
+familie123). Brugt i [signup/actions.ts](app/signup/actions.ts) og
+[nyt-kodeord/actions.ts](app/nyt-kodeord/actions.ts). Projektlederen
+udfordrede deferral af denne — vi var enige, blev implementeret samme
+session.
+
+**Prompt 7 — Atomicity + race conditions**:
+`pushLoanToBudget` i [laan/actions.ts](app/(app)/laan/actions.ts) havde
+en race hvor transaction blev oprettet men components-INSERT kunne fejle
+og efterlade en orphan. Fix: compensating delete der ruller transaction
+tilbage hvis components fejler. Soft-delete på finansielle tabeller
+deferret som **P1** (deadline 30. juni 2026) efter projektleder-pushback
+om "trigger 100+ transactions" var for vagt.
+
+**Prompt 8 — IDOR + mass assignment**:
+70 Server Actions optalt; alle reviewed for pattern-konsistens. Ingen
+`Object.fromEntries(formData)`, ingen `.passthrough()` (ingen Zod brugt
+overhovedet), ingen privilegerede felter læst fra request. **Men**
+projektleder-feedback udfordrede "strukturelt immun"-formuleringen —
+omformuleret til "konsistent mønster i alle reviewede actions, konvention
+ikke håndhæves". **P5** (lint-rule der enforcer mønstret) tilføjet til
+roadmap.
+
+**Prompt 9 — Email deliverability + phishing-resistance**:
+Live DNS-lookups viste DKIM publiceret korrekt på `resend._domainkey`,
+SPF korrekt på `send.fambud.dk` (`v=spf1 include:amazonses.com ~all`),
+Null MX på root (RFC 7505). Men **DMARC står på `p=none` uden `rua=`**
+— monitor-mode uden rapport-modtager = compliance theater.
+Reset-password-template mangler kontekst (IP/tid) der kan skelne ægte
+fra phishing. Tre P-items: **P6** (custom reset-mail), **P7** (DMARC
+ramp-up med 5 konkrete kalender-datoer fra 2026-05-19 til 2026-06-23),
+**P8** (officiel `support@fambud.dk`-mailbox).
+
+**Prompt 10 — GDPR compliance review**:
+17-punkts checklist mod GDPR Art. 6, 13, 15-22, 28, 33-34. Resultat:
+4 HIGH + 3 MEDIUM fund. Akut fix-runde kørt samme session — se sektion
+2 nedenfor.
+
+---
+
+## 2. GDPR akut fix-runde (Prompt 10 FIX 1-13)
+
+**Signup samtykke-link** ([app/signup/page.tsx](app/signup/page.tsx)):
+Tilføjet paragraf over "Opret konto"-knap: "Ved at oprette konto
+bekræfter du at have læst vores privatlivspolitik...". Implicit samtykke
+via knap-klik er accepteret praksis under GDPR Art. 13 når policy'en
+er linked synligt og ingen tracking-cookies kræver granular samtykke.
+
+**Privatlivspolitik udvidet** ([app/privatliv/page.tsx](app/privatliv/page.tsx)):
+- Ny "Retsgrundlag og opbevaring"-sektion med 7-rækkers retsgrundlag-
+  tabel (mappet til Art. 6, stk. 1, litra b/f) og 5-rækkers
+  opbevarings-liste (aktive konti, slettede konti, fejl-logs,
+  audit-log fremtid, lovpligtig undtagelse — bogføringsloven nævnt
+  som ikke-relevant pt.)
+- Sub-processor-listen udvidet fra 3 til 5: tilføjet **Resend**
+  (transaktionelle emails via AWS SES eu-west-1) og **one.com** (DNS +
+  email-forwarder)
+- DPA-links tilføjet pr. underleverandør (Supabase, Vercel, Resend)
+  eller dokumenteret-note hvor link ikke er offentligt (one.com, DAWA)
+- "Hvor ligger dine data?"-sektion omformuleret: tidligere lovede vi
+  "alt i Frankfurt" hvilket er upræcist for Vercel global edge-network.
+  Ny formulering: persistent data (DB + emails) er i EU; edge-funktioner
+  kan køre globalt men persisterer ikke. Det er ærlighed-over-claim
+  indtil vi verificerer Vercel-plan og evt. tilføjer
+  `vercel.json: {"regions": ["fra1"]}` (kræver Pro+).
+- To nye komponenter: `LegalBasisTable`, `SubprocessorList`
+
+**Breach response plan** ([SECURITY_AUDITS.md](SECURITY_AUDITS.md)):
+Trigger-liste, 6-trins handle-procedure, kontaktinfo til Datatilsynet
+(<dt@datatilsynet.dk> / +45 33 19 32 00), dokumentationskrav efter
+Art. 33(5). Forudsætter monitoring (Sentry — se sektion 3) for at
+kunne "become aware" inden 72 timer.
+
+---
+
+## 3. Sentry monitoring + PII-redaction
+
+`@sentry/nextjs ^10.51.0` installeret. 5 nye filer:
+
+- [lib/sentry-scrub.ts](lib/sentry-scrub.ts) — delt PII-redaction
+  helper. `scrubPII<T>()` stripper `event.request.data`, `cookies`,
+  `headers.authorization`/`cookie`, `user.email`/`username`/`ip_address`,
+  `query_string` (erstattes med `[redacted]`). Type-narrowed wrappers
+  `scrubErrorEvent` + `scrubTransactionEvent` for at undgå cast i
+  init-calls.
+- [sentry.server.config.ts](sentry.server.config.ts) — Node.js runtime
+  init (Server Actions, Route Handlers, RSC)
+- [sentry.edge.config.ts](sentry.edge.config.ts) — Edge runtime init
+- [instrumentation.ts](instrumentation.ts) — Next.js wire-up,
+  re-eksporterer `captureRequestError as onRequestError`
+- [instrumentation-client.ts](instrumentation-client.ts) — browser init,
+  `onRouterTransitionStart` for Next.js 16 router-instrumentation,
+  Session Replay deaktiveret (PII-risk uden strict masking)
+
+Alle tre runtimes har `sendDefaultPii: false` eksplicit + `beforeSend`
+hooks via shared scrub-helper.
+
+[next.config.ts](next.config.ts) wrapped med `withSentryConfig`:
+- `tunnelRoute: '/monitoring'` — events sendes via vores eget domæne
+  så CSP `connect-src` ikke skal udvides til `*.sentry.io`, og
+  ad-blockers ikke blokerer events
+- `sourcemaps.deleteSourcemapsAfterUpload: true` — source maps
+  uploades til Sentry ved CI-build, slettes derefter fra bundle
+- `silent: !process.env.CI` — stille i lokal dev
+- `tracesSampleRate: 0.1` på alle 3 runtimes (10% performance-spans;
+  errors capture'es 100% uafhængigt)
+- `disableLogger` fjernet — deprecated i v10 og incompatible med
+  Turbopack (Next.js 16's default-bundler)
+
+**Tunnel-route fix i proxy.ts**: Første curl-test efter setup viste
+`HTTP 307 Location: /login` på POST til `/monitoring` — middleware
+fangede den. Fix: tilføjet `monitoring` til matcher-eksklusion i
+[proxy.ts](proxy.ts) sammen med `_next/static` osv. Uden den ville alle
+client-side Sentry-events fra udloggede brugere (landing, signup,
+glemt-kodeord) blive droppet.
+
+Verificeret: `npx tsc --noEmit` passerer, `npm run build` clean uden
+warnings.
+
+---
+
+## 4. Roadmap-struktur: 11 P-items i SECURITY_AUDITS.md
+
+Vi gik fra ad-hoc "vi tager det senere"-deferrals til et struktureret
+roadmap. Hver P-item har severity, trigger, deadline, estimat,
+begrundelse, scope, status:
+
+| P | Tema | Severity | Deadline |
+| --- | --- | --- | --- |
+| P1 | Soft delete på finansielle tabeller | MEDIUM | 30. juni 2026 |
+| P2 | HaveIBeenPwned password-validering | LOW | 30. september 2026 |
+| P3 | Multi-device session UI | LOW | ingen hard deadline |
+| P4 | HSTS preload submission | LOW | 13. maj 2026 |
+| P5 | Lint-rule for Server Action-pattern | LOW | 30. september 2026 |
+| P6 | Custom reset-mail med IP/tid/User-Agent | MEDIUM | 31. december 2026 |
+| P7 | DMARC ramp-up til `p=reject` | MEDIUM | 23. juni 2026 (5 milepæle) |
+| P8 | Officiel support@fambud.dk-kanal (2 trin) | MEDIUM | trin 1 i dag, trin 2 30. juni |
+| P9 | Self-service data-export (Art. 20) | MEDIUM | 30. september 2026 |
+| P10 | Udvidet Sentry runbook + audit-log tabel | LOW | 30. september 2026 |
+| P11 | Vercel region-pin formaliseret | LOW | ingen hard deadline |
+
+Alle deadlines er konkrete datoer, ikke "Q2-slut"-slang. Triggers er
+formuleret som *eksterne hændelser* (vi når 50 brugere, første
+breach-mistanke, etc.) — ikke "når vi har tid".
+
+---
+
+## 5. Hvad du skal gøre manuelt (post-deploy)
+
+Efter `git push` deployer Vercel automatisk. Disse ting kan jeg ikke
+gøre fra koden:
+
+### Akut (i dag)
+
+- [ ] **Verificér Sentry-tunnel virker**: kør
+      `curl -X POST https://www.fambud.dk/monitoring -d "test" -i`
+      efter deploy. Forventet: HTTP 200 (eller 400 invalid envelope —
+      IKKE 307 til /login som tidligere).
+- [ ] **Trigger en bevidst test-error** i preview-deploy (fx
+      `throw new Error('test')` i en Server Action). Bekræft den dukker
+      op i Sentry Dashboard inden 1 minut.
+- [ ] **Verificér PII-stripping**: åbn event'en i Sentry, bekræft
+      INGEN email i breadcrumbs eller `user`-felt; `request.data` tom;
+      `request.cookies` tom; `query_string` er `[redacted]`.
+- [ ] **3 alerts opsættes i Sentry Dashboard**:
+      - Unhandled errors → instant email
+      - 401/403-spike (>10 events / 5 min)
+      - 500-spike (>5 events / 5 min)
+- [ ] **Mail-forwarder hos one.com**: opret `support@fambud.dk` →
+      forward til admin's monitorerede mail. P8 trin 1.
+- [ ] **Reset-password-template** (Supabase Dashboard → Authentication
+      → Email Templates → Reset Password): tilføj nederst
+      "Hvis du ikke selv har anmodet om at nulstille adgangskoden, kan
+      du trygt ignorere... Hvis du modtager flere af disse mails uden
+      at have anmodet om dem, så kontakt os på `support@fambud.dk`."
+- [ ] **DMARC rua-record hos one.com**: Erstat
+      `_dmarc.fambud.dk TXT v=DMARC1; p=none;` med
+      `v=DMARC1; p=none; rua=mailto:[dmarcian-eller-postmark-adresse]; fo=1; adkim=r; aspf=r;`.
+      Brug gratis dmarcian eller postmark-aggregator.
+
+### Inden 14 dage (P7 kalender-reminders SKAL i kalenderen NU)
+
+- [ ] **2026-05-19**: Review rua-rapporter, deploy `p=quarantine; pct=10`
+- [ ] **2026-05-26**: Op til `p=quarantine; pct=50`
+- [ ] **2026-06-02**: Op til `p=quarantine; pct=100`
+- [ ] **2026-06-09**: Skift til `p=reject; pct=10`
+- [ ] **2026-06-23**: Op til `p=reject; pct=100` (slutmål)
+
+### Når lejlighed byder sig
+
+- [ ] **Verificér Vercel-plan** (Dashboard → Settings → Plan). Hvis
+      Pro+, tilføj `vercel.json` med `{"regions": ["fra1"]}` og rul
+      privatlivspolitik tilbage til den stærkere "alt i Frankfurt"-
+      formulering.
+- [ ] **Verificér DPA-status** hos Supabase, Vercel, Resend (deres
+      respektive dashboards). Hvis nogen mangler manuel signing, log
+      i SECURITY_AUDITS.md.
+- [ ] **HSTS preload submission** (P4): efter mindst 7 dages
+      varmeperiode med `includeSubDomains` deployet. Tilføj `preload`
+      til HSTS-header i [next.config.ts](next.config.ts) og submit
+      fambud.dk til <https://hstspreload.org/>.
+
+---
+
+## 6. Observationer fra deploy-test
+
+Curl-testen mod `/monitoring` afslørede tre ting:
+
+1. **Sentry-tunnel-bug** (fixet — se sektion 3)
+2. **Deployed CSP mangler** `object-src 'none'` og
+   `upgrade-insecure-requests` (Prompt 2-ændringer ikke deployet endnu)
+3. **Deployed HSTS mangler** `includeSubDomains` (samme rod-årsag)
+
+Næste deploy trækker både Sentry-fix og CSP/HSTS-tightening med. Worth
+en verify-pass på response-headers post-deploy for at bekræfte alle tre.
+
+---
+
+## 7. Status efter denne session
+
+- **10 ud af 13 audit-prompts kørt** (5, 6, 7, 8, 9, 10 i denne session
+  + 1-4 i forudgående)
+- **3 prompts tilbage**: 11 (logging/observability), 12 (CI/CD security
+  gates), 13 (bug bounty / responsible disclosure)
+- **0 critical fund åbne**, alle HIGH-fund enten fikset eller har
+  basal mitigering (breach response plan + Sentry monitoring lukker
+  Art. 33-gabet)
+- **11 P-items** med konkrete deadlines i [SECURITY_AUDITS.md](SECURITY_AUDITS.md)
+- **`npm audit`**: 0 vulnerabilities (verificeret efter Sentry install)
+- **`npx tsc --noEmit`**: 0 errors
+- **`npm run build`**: clean
+
+---
+
+## 8. Sådan kommer du videre
+
+### Når du har tid (i morgen / over de næste dage)
+
+1. **Kør de manuelle skridt** fra sektion 5 — specielt Sentry-alerts
+   og DMARC rua-record. Begge tager <30 min.
+2. **Verificér post-deploy** at alle tre observationer fra sektion 6
+   nu viser korrekte response-headers.
+3. **Fortsæt audit-runden**: Prompt 11 (logging og observability) er
+   det naturlige næste — vi har basal Sentry på plads, så Prompt 11
+   kan fokusere på audit-log-tabel, struktureret logging, ekstra alerts.
+
+### Åbne tråde fra denne session (udover det allerede dokumenterede)
+
+- **Test-suite for RLS**: [scripts/rls-test.ts](scripts/rls-test.ts)
+  kører 72 tests på 11 tabeller × 5 ops × 3 personas. Køres manuelt;
+  ingen CI-integration endnu. Worth at tilføje til Prompt 12 (CI/CD
+  gates).
+- **Test-brugere**: [scripts/setup-test-users.sql](scripts/setup-test-users.sql)
+  opretter 5 testbrugere på 3 husstande (testA1+A2, testB1+B2,
+  outsider). Bruges af RLS-tester. Idempotent — kan køres flere gange.
+  Password til alle: `Abc123456`.
+- **Vercel-plan-vurdering**: hvis vi på et tidspunkt opgraderer til
+  Pro+, kan vi tighten privatlivspolitik + region-pin samtidig (P11).
+- **Supabase Auth Email Hook (P6)**: ikke startet. Kræver edge function
+  + HMAC-signatur-verifikation + IP-extraction fra proxy-headers.
+  Estimat 6-10 timer. Værdi-overlap med P7 — hvis DMARC `p=reject`
+  virker uden phishing-rapporter i 6 uger, kan P6 muligvis nedprioriteres.
+
+### Hvor vi IKKE skal hen lige nu
+
+- Soft-delete (P1) er deferred til 30. juni — har deadline, ikke akut.
+- HIBP password-validering (P2) er low priority indtil brugerbasen
+  vokser ud over inner circle.
+- Custom reset-mail (P6) afventer P7's resultat for at se om det
+  overhovedet er nødvendigt.
+
+Sikkerhedsroadmap er nu i en tilstand hvor vi kan stå inde for det
+hvis FamBud senere skal igennem due diligence eller compliance-audit.
+Det er ikke længere "vi prøver at fange bugs" — det er "vi har en
+plan, vi følger den, og vi dokumenterer hver beslutning."

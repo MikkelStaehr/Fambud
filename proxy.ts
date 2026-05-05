@@ -71,5 +71,20 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Eksklusioner: statiske assets + offentlige well-known-filer der skal
+  // serveres direkte uden proxy-logik. Tidligere fangede proxy'en
+  // /robots.txt og redirectede til /login, så crawlers fik HTML i stedet
+  // for tekst-direktiverne. /.well-known/ holdes også fri så vi senere
+  // kan placere security.txt, change-password etc. der.
+  //
+  // /monitoring er Sentry's tunnel-route (sat i next.config.ts via
+  // withSentryConfig.tunnelRoute). Browseren POST'er Sentry-events
+  // dertil, og en Route Handler forwarder til sentry.io. Uden eksplicit
+  // eksklusion ville proxy'en redirecte uautentificerede tunnel-requests
+  // til /login, hvilket dropper alle client-side Sentry-events fra
+  // udloggede brugere (inkl. landing-page, signup, glemt-kodeord —
+  // præcis dér hvor vi mest gerne vil fange fejl).
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.json|monitoring|\\.well-known).*)',
+  ],
 };

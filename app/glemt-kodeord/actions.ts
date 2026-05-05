@@ -5,6 +5,7 @@ import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { resolveSiteOrigin } from '@/lib/site-url';
+import { setAuthStepCookie } from '@/lib/auth-step';
 
 export async function requestPasswordReset(formData: FormData) {
   const email = capLength(String(formData.get('email') ?? '').trim(), TEXT_LIMITS.mediumName);
@@ -46,5 +47,6 @@ export async function requestPasswordReset(formData: FormData) {
   // Vi viser ALTID success-skærmen - også hvis emailen ikke findes.
   // Det forhindrer email-enumeration (en angriber kan ikke tjekke om
   // en konto eksisterer ved at prøve resetting på den).
-  redirect('/glemt-kodeord?step=check-email&email=' + encodeURIComponent(email));
+  await setAuthStepCookie({ step: 'check-email', email });
+  redirect('/glemt-kodeord');
 }

@@ -2,15 +2,22 @@ import Link from 'next/link';
 import { signup } from './actions';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
 import { SubmitButton } from '@/app/_components/SubmitButton';
+import { readAuthStepCookie } from '@/lib/auth-step';
 
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; step?: string; email?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, step, email } = await searchParams;
+  const { error } = await searchParams;
 
-  if (step === 'check-email') {
+  // Check-email-state bæres via HttpOnly-cookie i stedet for URL-param.
+  // Det undgår at brugerens email ender i browser-historik / Vercel-logs
+  // / referrer-headers efter signup.
+  const authStep = await readAuthStepCookie();
+
+  if (authStep?.step === 'check-email') {
+    const email = authStep.email;
     return (
       <main className="flex min-h-screen items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm text-center">
@@ -106,11 +113,11 @@ export default async function SignupPage({
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               className="mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
             />
-            <p className="mt-1 text-xs text-neutral-500">Mindst 6 tegn</p>
+            <p className="mt-1 text-xs text-neutral-500">Mindst 8 tegn</p>
           </div>
 
           {error && (
@@ -118,6 +125,14 @@ export default async function SignupPage({
               {error}
             </div>
           )}
+
+          <p className="text-xs text-neutral-600 leading-relaxed">
+            Ved at oprette konto bekræfter du at have læst vores{' '}
+            <Link href="/privatliv" className="font-medium text-neutral-900 underline hover:text-emerald-800">
+              privatlivspolitik
+            </Link>{' '}
+            og accepterer behandling af dine data som beskrevet deri.
+          </p>
 
           <SubmitButton pendingText="Opretter konto...">Opret konto</SubmitButton>
         </form>

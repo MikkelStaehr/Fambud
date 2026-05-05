@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
-import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
+import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, FIXED_EXPENSE_KINDS } from '@/lib/actions/account-validation';
 import {
   nextFixedDayOccurrence,
@@ -289,7 +289,7 @@ export async function updateBudgetExpense(
   const recurrence = recurrenceRaw as RecurrenceFreq;
 
   const occurs_on = String(formData.get('occurs_on') ?? '').trim();
-  if (!occurs_on || !/^\d{4}-\d{2}-\d{2}$/.test(occurs_on)) {
+  if (!occurs_on || !isValidOccursOn(occurs_on)) {
     return { ok: false, error: 'Vælg en gyldig dato' };
   }
 

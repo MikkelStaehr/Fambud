@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 export async function setNewPassword(formData: FormData) {
   const password = String(formData.get('password') ?? '');
@@ -11,10 +12,16 @@ export async function setNewPassword(formData: FormData) {
   if (!password || !passwordConfirm) {
     redirect('/nyt-kodeord?error=' + encodeURIComponent('Udfyld begge felter'));
   }
-  if (password.length < 6) {
+  if (password.length < 8) {
     redirect(
       '/nyt-kodeord?error=' +
-        encodeURIComponent('Adgangskode skal være mindst 6 tegn')
+        encodeURIComponent('Adgangskode skal være mindst 8 tegn')
+    );
+  }
+  if (isCommonPassword(password)) {
+    redirect(
+      '/nyt-kodeord?error=' +
+        encodeURIComponent('Den adgangskode er for let at gætte - vælg noget mere unikt')
     );
   }
   if (password !== passwordConfirm) {

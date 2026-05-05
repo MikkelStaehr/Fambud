@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
+import { setAuthStepCookie } from '@/lib/auth-step';
+import { isCommonPassword } from '@/lib/common-passwords';
 
 // Map a few common Supabase / Postgres error messages to Danish copy.
 // Anything we don't recognise falls through verbatim.
@@ -45,8 +47,17 @@ export async function signup(formData: FormData) {
   if (!email || !password) {
     redirect(`${errorBase}?error=` + encodeURIComponent('Udfyld alle felter'));
   }
-  if (password.length < 6) {
-    redirect(`${errorBase}?error=` + encodeURIComponent('Adgangskode skal være mindst 6 tegn'));
+  if (password.length < 8) {
+    redirect(`${errorBase}?error=` + encodeURIComponent('Adgangskode skal være mindst 8 tegn'));
+  }
+  // Blokér passwords der står på vores liste over almindelige breach-
+  // kandidater. Brugeren tvinges til at vælge noget mindre forudsigeligt
+  // end "password123" eller "12345678".
+  if (isCommonPassword(password)) {
+    redirect(
+      `${errorBase}?error=` +
+        encodeURIComponent('Den adgangskode er for let at gætte - vælg noget mere unikt')
+    );
   }
 
   // SECURITY: Rate limit per IP. Forhindrer mass-account-creation
@@ -88,7 +99,8 @@ export async function signup(formData: FormData) {
   // en mail" (Supabase re-sender også selv mailen til den eksisterende
   // konto, så der er ingen reel handlings-forskel).
   if (error?.message.includes('User already registered')) {
-    redirect('/signup?step=check-email&email=' + encodeURIComponent(email));
+    await setAuthStepCookie({ step: 'check-email', email });
+    redirect('/signup');
   }
 
   if (error || !data.user) {
@@ -98,7 +110,8 @@ export async function signup(formData: FormData) {
 
   // Email-confirmation flow: signUp returns user but no session.
   if (!data.session) {
-    redirect('/signup?step=check-email&email=' + encodeURIComponent(email));
+    await setAuthStepCookie({ step: 'check-email', email });
+    redirect('/signup');
   }
 
   // First-time signup → wizard. The (app) layout would redirect there anyway

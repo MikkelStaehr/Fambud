@@ -31,6 +31,13 @@ export function BetaNotice() {
       // private mode el.lign. blokerer sessionStorage - vi accepterer at
       // brugeren ser beskeden igen ved næste reload i stedet for at fejle.
     }
+    // Custom event så PageTour ved den må starte. Forhindrer at en
+    // dashboard-tour blinker bag BetaNotice-modalen ved første login.
+    try {
+      window.dispatchEvent(new Event('fambud:beta-dismissed'));
+    } catch {
+      // CustomEvent constructor kan kaste i meget gamle browsers
+    }
   }
 
   if (!open) return null;

@@ -156,8 +156,11 @@ export default function PrivacyPage() {
           title="Hvor ligger dine data?"
         >
           <p>
-            På servere i Frankfurt, Tyskland - inden for EU og under GDPR.
-            Vi bruger Supabase som database-platform. Data er krypteret:
+            Persistente data (database og emails) ligger i EU - i Frankfurt
+            (Tyskland) og Irland - inden for GDPR. Server-funktionerne der
+            håndterer dine forespørgsler kan kortvarigt køre på globale
+            edge-noder for hastighed, men ingen data <strong>persisteres</strong>{' '}
+            uden for EU. Data er krypteret:
           </p>
           <List
             items={[
@@ -167,11 +170,90 @@ export default function PrivacyPage() {
               },
               {
                 title: 'I hvile',
-                body: 'Databasen ligger på krypterede diske (AWS EBS, AES-256). Det betyder at indholdet er ulæseligt hvis nogen fysisk får fat i en disk. Vores driftsteam kan dog teknisk læse data via DB-værktøjer - vi gør det aldrig uden eksplicit anmodning fra dig.',
+                body: 'Databasen ligger på krypterede diske i Frankfurt (AWS EBS, AES-256). Det betyder at indholdet er ulæseligt hvis nogen fysisk får fat i en disk. Vores driftsteam kan dog teknisk læse data via DB-værktøjer - vi gør det aldrig uden eksplicit anmodning fra dig.',
               },
               {
                 title: 'Backups',
                 body: 'Daglige backups med 7 dages historik. De er krypterede med samme nøgler som live-databasen, og slettes automatisk efter 7 dage.',
+              },
+              {
+                title: 'Edge-funktioner',
+                body: 'Når du kalder en serverfunktion (fx ved login eller indtastning), kan koden eksekveres på en edge-node tæt på dig for hurtigere respons. Edge-noden læser/skriver til databasen i Frankfurt og holder ingen data bagefter. Forespørgsler er krypteret end-to-end.',
+              },
+            ]}
+          />
+        </Section>
+
+        <Section
+          icon={<ShieldCheck className="h-5 w-5" />}
+          title="Retsgrundlag og opbevaring"
+        >
+          <p>
+            Under GDPR skal vi være tydelige om <em>hvorfor</em> vi behandler
+            din data, og <em>hvor længe</em> vi gemmer den. Her er de to ting,
+            kategori for kategori.
+          </p>
+
+          <h3 className="mt-6 text-sm font-semibold uppercase tracking-wider text-neutral-500">
+            Retsgrundlag
+          </h3>
+          <LegalBasisTable
+            rows={[
+              {
+                category: 'Email + adgangskode (hashet)',
+                basis: 'Kontraktopfyldelse (Art. 6, stk. 1, litra b)',
+              },
+              {
+                category: 'Profil (navn, adresse, husstand)',
+                basis: 'Kontraktopfyldelse (Art. 6, stk. 1, litra b)',
+              },
+              {
+                category: 'Familiemedlemmer + invitations-koder',
+                basis: 'Kontraktopfyldelse (Art. 6, stk. 1, litra b)',
+              },
+              {
+                category: 'Konti, transaktioner, lån, opsparing',
+                basis: 'Kontraktopfyldelse (Art. 6, stk. 1, litra b)',
+              },
+              {
+                category: 'Feedback-beskeder du sender til os',
+                basis: 'Legitime interesser (Art. 6, stk. 1, litra f) - drift og produktforbedring',
+              },
+              {
+                category: 'Fejl-logs (når monitoring aktiveres)',
+                basis: 'Legitime interesser (Art. 6, stk. 1, litra f) - drift og sikkerhed',
+              },
+              {
+                category: 'Auth-cookies (sb-* + fambud_session_only)',
+                basis: 'Nødvendigt for service (Art. 6, stk. 1, litra b)',
+              },
+            ]}
+          />
+
+          <h3 className="mt-6 text-sm font-semibold uppercase tracking-wider text-neutral-500">
+            Opbevaringsperioder
+          </h3>
+          <List
+            items={[
+              {
+                title: 'Aktive konti',
+                body: 'Data opbevares så længe du har en aktiv konto hos Fambud.',
+              },
+              {
+                title: 'Slettede konti',
+                body: 'Når du sletter din konto, fjernes alle persondata og finansielle data inden for 30 dage. Backups roterer ud i op til yderligere 30 dage (samlet maks. 60 dage efter sletning).',
+              },
+              {
+                title: 'Fejl-logs (Sentry, når aktiveret)',
+                body: 'Maks. 90 dages retention. Indeholder ikke email, kodeord eller PII - kun fejl-stak og bruger-UUID.',
+              },
+              {
+                title: 'Audit-log (når implementeret)',
+                body: '365 dages retention af sikkerheds-relevante hændelser (login, password-skift, kontosletning), herefter slettes automatisk.',
+              },
+              {
+                title: 'Lovpligtig undtagelse',
+                body: 'Hvis Fambud senere bliver omfattet af bogføringsloven (fx hvis vi tilbyder betalings-features), kan udvalgte transaktionsdata være lovpligtige at opbevare i op til 5 år. Det gælder ikke i øjeblikket - vi opkræver ikke betaling og er ikke regnskabspligtige for dine data.',
               },
             ]}
           />
@@ -266,7 +348,8 @@ export default function PrivacyPage() {
               bufferkonto" - aldrig hvad enkeltpersoner gemmer.
             </NeverItem>
             <NeverItem>
-              Vi sender ikke dine data ud af EU. Alt forbliver i Frankfurt.
+              Vi persisterer ikke dine data uden for EU. Database og emails
+              ligger i Frankfurt og Irland.
             </NeverItem>
             <NeverItem>
               Vi sender ikke spam, marketing-emails eller "tilbud fra
@@ -282,22 +365,44 @@ export default function PrivacyPage() {
           id="underleverandorer"
         >
           <p>
-            Vi bygger ikke vores egen database eller hosting fra bunden. Tre
-            tjenester hjælper med at køre Fambud:
+            Vi bygger ikke vores egen database eller hosting fra bunden. Disse
+            tjenester hjælper med at køre Fambud. Hver enkelt har vi en
+            databehandleraftale (DPA) med, så de kun behandler din data efter
+            vores instrukser.
           </p>
-          <List
+          <SubprocessorList
             items={[
               {
                 title: 'Supabase (database og auth)',
-                body: 'Hostet i Frankfurt. Behandler al din data som pålagt af os. Data forlader aldrig EU. Læs deres privatlivspolitik på supabase.com/privacy.',
+                body: 'Hostet i Frankfurt (EU). Behandler al din data som pålagt af os. Data forlader aldrig EU.',
+                privacyUrl: 'https://supabase.com/privacy',
+                dpaUrl: 'https://supabase.com/legal/dpa',
               },
               {
                 title: 'Vercel (hosting af appen)',
                 body: 'Serverer Fambud-siderne. Ser kun forespørgsels-metadata (IP, browser-type, sider du besøger) - ikke indholdet af det du indtaster (det går direkte til databasen via krypteret kanal).',
+                privacyUrl: 'https://vercel.com/legal/privacy-policy',
+                dpaUrl: 'https://vercel.com/legal/dpa',
+              },
+              {
+                title: 'Resend (transaktionelle emails)',
+                body: 'Sender mail på vores vegne via AWS SES eu-west-1 (Irland). Modtager kun: din email-adresse, emnefelt, og mailens indhold (fx "bekræft din konto"). Ingen marketing, ingen tracking-pixels.',
+                privacyUrl: 'https://resend.com/legal/privacy-policy',
+                dpaUrl: 'https://resend.com/legal/dpa',
+              },
+              {
+                title: 'one.com (DNS og email-forwarder)',
+                body: 'Driver DNS-records for fambud.dk og forwarder support@fambud.dk til vores admin-mail. Ser kun email-metadata når mails forwardes - ikke noget om dig som bruger.',
+                privacyUrl: 'https://www.one.com/da/info/privatlivspolitik',
+                dpaUrl: null,
+                dpaNote: 'DPA accepteret som del af one.com\'s standardvilkår; ikke offentligt link tilgængeligt.',
               },
               {
                 title: 'DAWA (Danmarks Adresseregister)',
                 body: 'Når du skriver din adresse foreslår vi forslag fra api.dataforsyningen.dk - et offentligt dansk adresseregister. Vi sender kun det du skriver i adressefeltet, intet andet om dig. DAWA logger ikke til en personlig profil.',
+                privacyUrl: 'https://dataforsyningen.dk/privatliv',
+                dpaUrl: null,
+                dpaNote: 'DAWA er et offentligt dansk register (Styrelsen for Dataforsyning og Effektivisering). DPA er ikke relevant - de er ikke databehandler i GDPR\'s forstand for personoplysninger.',
               },
             ]}
           />
@@ -335,7 +440,7 @@ export default function PrivacyPage() {
           <div className="flex items-start gap-2">
             <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
             <p>
-              <strong>Sidst opdateret:</strong> 4. maj 2026. Hvis vi ændrer
+              <strong>Sidst opdateret:</strong> 5. maj 2026. Hvis vi ændrer
               noget væsentligt sender vi dig en email - du behøver ikke selv
               holde øje.
             </p>
@@ -488,6 +593,87 @@ function CookieTable({
               </td>
               <td className="px-4 py-3 align-top text-neutral-600">
                 {r.duration}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SubprocessorList({
+  items,
+}: {
+  items: {
+    title: string;
+    body: string;
+    privacyUrl: string;
+    dpaUrl: string | null;
+    dpaNote?: string;
+  }[];
+}) {
+  return (
+    <ul className="mt-3 space-y-4">
+      {items.map((item) => (
+        <li key={item.title} className="flex items-start gap-3">
+          <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-700" />
+          <div className="flex-1">
+            <span className="font-semibold text-neutral-900">
+              {item.title}.
+            </span>{' '}
+            <span className="text-neutral-700">{item.body}</span>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <a
+                href={item.privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-800 underline hover:text-emerald-900"
+              >
+                Privatlivspolitik
+              </a>
+              {item.dpaUrl ? (
+                <a
+                  href={item.dpaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-800 underline hover:text-emerald-900"
+                >
+                  Databehandleraftale (DPA)
+                </a>
+              ) : item.dpaNote ? (
+                <span className="text-neutral-500">{item.dpaNote}</span>
+              ) : null}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LegalBasisTable({
+  rows,
+}: {
+  rows: { category: string; basis: string }[];
+}) {
+  return (
+    <div className="mt-3 overflow-hidden rounded-md border border-neutral-200">
+      <table className="min-w-full text-sm">
+        <thead className="border-b border-neutral-200 bg-neutral-50 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
+          <tr>
+            <th className="px-4 py-2.5 text-left">Datatype</th>
+            <th className="px-4 py-2.5 text-left">Retsgrundlag</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100">
+          {rows.map((r) => (
+            <tr key={r.category} className="bg-white">
+              <td className="px-4 py-3 align-top font-medium text-neutral-900">
+                {r.category}
+              </td>
+              <td className="px-4 py-3 align-top text-neutral-700">
+                {r.basis}
               </td>
             </tr>
           ))}

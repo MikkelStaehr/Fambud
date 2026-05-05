@@ -167,7 +167,7 @@ export default function PrivacyPage() {
               },
               {
                 title: 'I hvile',
-                body: 'Databasen krypterer data på disk med AES-256. Selv hvis nogen fysisk fik fat i en harddisk, er indholdet ulæseligt.',
+                body: 'Databasen ligger på krypterede diske (AWS EBS, AES-256). Det betyder at indholdet er ulæseligt hvis nogen fysisk får fat i en disk. Vores driftsteam kan dog teknisk læse data via DB-værktøjer - vi gør det aldrig uden eksplicit anmodning fra dig.',
               },
               {
                 title: 'Backups',
@@ -226,7 +226,7 @@ export default function PrivacyPage() {
               },
               {
                 title: 'Sletning',
-                body: 'Slet din konto under /indstillinger. Alt dit data slettes inden for 30 dage - også fra vores backups efterhånden som de roterer ud.',
+                body: 'Skriv til os hvis du vil slette din konto. Vi sletter dit data manuelt inden for 30 dage - også fra vores backups efterhånden som de roterer ud (7 dages backup-retention). Selv-betjent sletning kommer i en senere version.',
               },
               {
                 title: 'Dataportabilitet',

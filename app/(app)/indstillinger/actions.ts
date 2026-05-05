@@ -266,9 +266,12 @@ export async function createFamilyMember(formData: FormData) {
     // hvis samme email allerede ER tilknyttet et medlem i denne
     // husstand. Tidligere var indekset globalt for at understøtte
     // Path 2 i handle_new_user, men det er fjernet (migration 0043).
+    // SECURITY: Andre constraint-violations må IKKE lække raw - de
+    // ville afsløre schema-/trigger-/kolonne-navne i URL'en.
+    console.error('createFamilyMember failed:', error.message);
     const msg = error.message.includes('family_members_email')
       ? 'Den email er allerede brugt på et familiemedlem i jeres husstand'
-      : error.message;
+      : 'Familiemedlemmet kunne ikke oprettes - prøv igen';
     redirect('/indstillinger?error=' + encodeURIComponent(msg));
   }
 

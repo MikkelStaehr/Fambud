@@ -102,11 +102,17 @@ const dkkPlainFormatter = new Intl.NumberFormat('da-DK', {
 // MB-store strenge og DoS'e read-queries der senere streamer dataen
 // ud i UI'et.
 //
-// Anvend til alle action-felter der ender i text-kolonner: navne,
-// beskrivelser, adresser, brugerleverede labels.
+// UTF-16 awareness: hvis vi slice'r midt i et surrogate pair (fx en
+// emoji som 🎉 = U+1F389 = D83C+DF89), efterlader vi en lone high
+// surrogate. JSON.stringify accepterer det, men Postgres TEXT/citext
+// rejecter med 'invalid byte sequence for encoding UTF8'. Vi tjekker
+// om sidste char er en high surrogate og dropper den.
 export function capLength(s: string, max: number): string {
   if (s.length <= max) return s;
-  return s.slice(0, max);
+  const lastCharCode = s.charCodeAt(max - 1);
+  // High surrogate range: U+D800 to U+DBFF
+  const cut = lastCharCode >= 0xd800 && lastCharCode <= 0xdbff ? max - 1 : max;
+  return s.slice(0, cut);
 }
 
 // Standardgrænser - matcher fornuftige UX-værdier (et navn er aldrig

@@ -36,7 +36,7 @@ export async function setEconomyType(formData: FormData) {
     .update({ economy_type })
     .eq('id', householdId);
   if (hhErr) {
-    redirect('/wizard/familie?error=' + encodeURIComponent(hhErr.message));
+    redirect('/wizard/familie?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   // 2) Justér ejer's eksisterende lønkonto til at matche modellen.
@@ -101,7 +101,12 @@ export async function addPartner(formData: FormData) {
   if (!name) {
     redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Navn er påkrævet'));
   }
-  if (!email || !email.includes('@')) {
+  // SECURITY: Brug samme regex som indstillinger - ugyldige emails
+  // ender ellers som dead pre-godkendelse-rækker der aldrig kan
+  // adopteres af handle_new_user (Supabase auth afviser ugyldige
+  // formater).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !EMAIL_RE.test(email)) {
     redirect(
       '/wizard/familie?type=family&error=' +
         encodeURIComponent('Ugyldig email')
@@ -125,9 +130,7 @@ export async function addPartner(formData: FormData) {
     role: null,
   });
   if (error) {
-    redirect(
-      '/wizard/familie?type=family&error=' + encodeURIComponent(error.message)
-    );
+    redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/familie');
@@ -158,9 +161,7 @@ export async function addChild(formData: FormData) {
     role: null,
   });
   if (error) {
-    redirect(
-      '/wizard/familie?type=family&error=' + encodeURIComponent(error.message)
-    );
+    redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/familie');
@@ -214,9 +215,7 @@ export async function removeFamilyMember(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect(
-      '/wizard/familie?type=family&error=' + encodeURIComponent(error.message)
-    );
+    redirect('/wizard/familie?type=family&error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/wizard/familie');

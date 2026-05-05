@@ -140,7 +140,7 @@ export async function createCategory(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/indstillinger?error=' + encodeURIComponent(error.message));
+    redirect('/indstillinger?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/indstillinger');

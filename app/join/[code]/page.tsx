@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { signup } from '@/app/signup/actions';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { signOutAndJoin } from './actions';
 
 export default async function JoinByCodePage({
@@ -16,6 +17,25 @@ export default async function JoinByCodePage({
   const code = decodeURIComponent(codeParam).toUpperCase();
 
   const supabase = await createClient();
+
+  // SECURITY: Rate limit RPC-kald per IP for at gøre brute-force af
+  // invite-koder upraktisk. Vi bruger 'reset_password'-bucket som
+  // gør at samme angriber ikke kan splitte sin abuse mellem flere
+  // mistænkelige flows.
+  const ip = await getClientIp();
+  const rateLimitOk = await checkRateLimit(`ip:${ip}`, 'reset_password');
+  if (!rateLimitOk) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Fambud</h1>
+          <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 p-6">
+            <p className="text-sm text-amber-800">For mange forsøg. Prøv igen om en time.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // validate_invite_code() is anon-callable. Returns one row with
   // (valid, household_name); household_name is null when valid is false.

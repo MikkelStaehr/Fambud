@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, guardWizardOpen } from '@/lib/dal';
 
 // Marks the user's wizard as complete and sends them into the app proper.
 // Goes through the mark_setup_complete() RPC because household_members has
@@ -23,6 +23,7 @@ export async function completeSetup() {
 // genererbar med ét klik. Knytter sig til household_invites - brugeren
 // kopierer link/kode og deler med sin partner uden for appen.
 export async function generateInviteFromDone() {
+  await guardWizardOpen();
   const { supabase, householdId, user } = await getHouseholdContext();
 
   const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();

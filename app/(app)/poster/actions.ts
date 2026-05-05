@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { noticeUrl } from '@/lib/flash';
+import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -74,12 +75,27 @@ export async function createTransaction(formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // SECURITY: Bekræft at account_id er en konto-type der må modtage
+  // transactions via /poster. Specielt UDELUKKER vi 'credit' (lån/
+  // kreditkort) og 'investment' - de har deres egne dedikerede flows
+  // (laan/actions.ts pushLoanToBudget, ingen direkte for investment
+  // pt). Uden tjekket kunne et medlem indsætte en transaction på et
+  // lån og forfalske afdrag.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, parsed.data.account_id, POSTER_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect('/poster/ny?error=' + encodeURIComponent(accCheck.error));
+  }
+
   const { error } = await supabase.from('transactions').insert({
     household_id: householdId,
     ...parsed.data,
   });
   if (error) {
-    redirect('/poster/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+    console.error('createTransaction failed:', error.message);
+    redirect('/poster/ny?error=' + encodeURIComponent('Posten kunne ikke gemmes - tjek felterne'));
   }
 
   revalidatePath('/poster');
@@ -94,13 +110,24 @@ export async function updateTransaction(id: string, formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // Samme account-kind-tjek som ved create - hvis brugeren ændrer
+  // account_id til et lån, skal det blokeres.
+  const accCheck = await assertAccountKind(
+    supabase, householdId, parsed.data.account_id, POSTER_KINDS
+  );
+  if (!accCheck.ok) {
+    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(accCheck.error));
+  }
+
   const { error } = await supabase
     .from('transactions')
     .update(parsed.data)
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
-    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(error.message));
+    console.error('updateTransaction failed:', error.message);
+    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent('Posten kunne ikke gemmes'));
   }
 
   revalidatePath('/poster');

@@ -7,18 +7,30 @@
 // gate adgang til (app)/-routes før setup_completed_at er sat.
 
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 
-export async function requireUser() {
+// PERFORMANCE: requireUser kaldes fra alle DAL-funktioner. Cache
+// dedupliker auth.getUser() og createClient() per request - de er
+// fra-cookie reads (billige), men add up når 10+ DAL-funktioner
+// kører i parallel.
+export const requireUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
   return { supabase, user };
-}
+});
 
-export async function getHouseholdContext() {
+// PERFORMANCE: React's cache() dedupliker kald inden for samme
+// request. Dashboard-page kalder getHouseholdContext() indirekte
+// 10-15 gange (én gang i hver DAL-funktion); uden dedup koster det
+// 10-15 DB-roundtrips alene for auth-context. Med cache: 1 query.
+//
+// cache() er per-request - to forskellige users får hver deres
+// resultat. Cache nulstilles når Next.js streamer responsen ud.
+export const getHouseholdContext = cache(async () => {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('family_members')
@@ -38,12 +50,15 @@ export async function getHouseholdContext() {
     throw new Error('Internal error');
   }
   return { supabase, householdId: data.household_id, user };
-}
+});
 
 // Wizard / onboarding helpers - used by the (app) layout to gate access and
 // by the wizard pages to read user-specific state.
 
-export async function getMyMembership() {
+// PERFORMANCE: Samme dedup-pattern som getHouseholdContext - kaldes
+// flere steder under samme request (proxy, layout, role-check i
+// actions) og bør kun ramme DB én gang.
+export const getMyMembership = cache(async () => {
   const { supabase, user } = await requireUser();
   const { data, error } = await supabase
     .from('family_members')
@@ -52,7 +67,7 @@ export async function getMyMembership() {
     .maybeSingle();
   if (error) throw error;
   return { supabase, user, membership: data };
-}
+});
 
 export async function isSetupComplete(): Promise<boolean> {
   const { membership } = await getMyMembership();

@@ -58,6 +58,7 @@ i SECURITY_AUDITS.md som "konvention, ikke automatisk håndhævet":
 | `fambud-no-zod-passthrough` | ERROR | `.passthrough()` på Zod schema fjerner whitelist-effekt (P5) |
 | `fambud-no-pii-console-log` | WARNING | `console.log` af user-objekter eller email/password (PII-leak til Vercel logs) |
 | `fambud-dangerously-set-inner-html` | WARNING | `dangerouslySetInnerHTML` skal verificeres for ikke at indeholde user-input (XSS) |
+| `fambud-no-em-dash` | ERROR | Em-dash (—) i `app/**/*.{tsx,ts}` eller `lib/**/*.{tsx,ts}` — AI-fingeraftryk i copy. Se [CLAUDE.md](../CLAUDE.md) for begrundelse. |
 
 Test reglerne lokalt:
 

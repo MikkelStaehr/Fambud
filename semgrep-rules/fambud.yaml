@@ -132,3 +132,47 @@ rules:
     languages: [tsx, jsx]
     pattern: |
       <$EL ... dangerouslySetInnerHTML={$HTML} ... />
+
+  # ----------------------------------------------------------------
+  # Em-dash (—, U+2014) i copy. Em-dash er en af de mest pålidelige
+  # AI-fingeraftryk i tekst — Claude og andre LLM'er bruger det som
+  # default-tegnsætning når de genererer copy. Når brugere ser em-dash
+  # i en dansk app, mærker de "det her er AI-skrevet" på et subliminalt
+  # plan. Vi banner det globalt i kildekoden.
+  #
+  # Vi banner KUN i .tsx/.ts-filer i app/ og lib/ - dokumentation
+  # (DEVLOG.md, SECURITY_AUDITS.md, docs/) må gerne bruge em-dash
+  # fordi den læses af mennesker der ved hvad det er. Forskellen er
+  # bruger-vendt prod-kode vs. internal docs.
+  #
+  # Hvis em-dash er bevidst (citat fra ekstern kilde, UI-placeholder,
+  # etc.), tilføj // nosemgrep: fambud-no-em-dash på den linje.
+  # For UI-placeholder af "ingen-værdi" bør du i stedet bruge en-dash
+  # (–, U+2013) som er den typografiske konvention for det.
+  # ----------------------------------------------------------------
+  - id: fambud-no-em-dash
+    message: |
+      Em-dash (—, U+2014) er forbudt i kildekoden. Erstat med komma,
+      punktum eller kolon afhængigt af kontekst. For "ingen-værdi"-
+      placeholders i UI, brug en-dash (–, U+2013).
+
+      Hvorfor: em-dash er en af de mest pålidelige AI-fingeraftryk og
+      sniger sig konstant ind når vi copy-paster fra Claude-output.
+      En CI-regel er billigere end manuelle purges hver 3. måned. Se
+      CLAUDE.md for fuld begrundelse.
+
+      Hvis bevidst (citat, UI-symbol osv.):
+        // nosemgrep: fambud-no-em-dash
+    severity: ERROR
+    languages: [generic]
+    pattern-regex: '—'
+    paths:
+      include:
+        - 'app/**/*.tsx'
+        - 'app/**/*.ts'
+        - 'lib/**/*.tsx'
+        - 'lib/**/*.ts'
+        - 'proxy.ts'
+        - 'next.config.ts'
+        - 'instrumentation.ts'
+        - 'instrumentation-client.ts'

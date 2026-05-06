@@ -276,10 +276,18 @@ export function PosterTable({ rows }: Props) {
                     )}
                   </button>
                 </th>
-                <Th onClick={() => toggleSort('date')} indicator={sortIndicator('date')}>
+                <Th
+                  onClick={() => toggleSort('date')}
+                  indicator={sortIndicator('date')}
+                  hideOnMobile
+                >
                   Dato
                 </Th>
-                <Th onClick={() => toggleSort('account')} indicator={sortIndicator('account')}>
+                <Th
+                  onClick={() => toggleSort('account')}
+                  indicator={sortIndicator('account')}
+                  hideOnMobile
+                >
                   Konto
                 </Th>
                 <Th
@@ -336,20 +344,20 @@ export function PosterTable({ rows }: Props) {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5" />
-                      <td className="px-4 py-2.5" />
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="hidden px-4 py-2.5 sm:table-cell" />
+                      <td className="hidden px-4 py-2.5 sm:table-cell" />
+                      <td className="px-3 py-2.5 text-right sm:px-4">
                         <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
                           {formatAmount(g.total)} kr
                         </div>
                       </td>
-                      <td className="px-4 py-2.5" />
+                      <td className="px-2 py-2.5 sm:px-4" />
                     </tr>
 
                     {open &&
                       g.items.map((r) => (
                         <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                          <td className="px-4 py-2 pl-12">
+                          <td className="px-3 py-2 pl-8 sm:px-4 sm:pl-12">
                             <div className="flex items-center gap-2">
                               <span className="truncate text-neutral-900">
                                 {r.description}
@@ -367,33 +375,42 @@ export function PosterTable({ rows }: Props) {
                             <div className="truncate text-[11px] text-neutral-500">
                               {r.categoryName}
                             </div>
+                            {/* På mobile vises dato+konto her som
+                                metadata - kolonnerne er hidden under sm */}
+                            <div className="mt-0.5 truncate text-[11px] text-neutral-400 sm:hidden">
+                              {formatShortDateDA(r.occursOn)} · {r.accountName}
+                            </div>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-2 text-xs text-neutral-600">
+                          <td className="hidden whitespace-nowrap px-4 py-2 text-xs text-neutral-600 sm:table-cell">
                             {formatShortDateDA(r.occursOn)}
                           </td>
-                          <td className="px-4 py-2 text-neutral-900">{r.accountName}</td>
-                          <td className="px-4 py-2 text-right">
+                          <td className="hidden px-4 py-2 text-neutral-900 sm:table-cell">
+                            {r.accountName}
+                          </td>
+                          <td className="px-3 py-2 text-right sm:px-4">
                             <div className="tabnum font-mono text-sm font-medium text-neutral-900">
                               {formatAmount(r.amount)} kr
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-2 text-right">
+                          <td className="whitespace-nowrap px-2 py-2 text-right sm:px-4">
                             <div className="inline-flex items-center gap-1">
                               <Link
                                 href={`/poster/${r.id}`}
+                                aria-label="Rediger"
                                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
                               >
                                 <Pencil className="h-3 w-3" />
-                                Rediger
+                                <span className="hidden sm:inline">Rediger</span>
                               </Link>
                               <form action={deleteTransaction}>
                                 <input type="hidden" name="id" value={r.id} />
                                 <button
                                   type="submit"
+                                  aria-label="Slet"
                                   className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-red-50 hover:text-red-700"
                                 >
                                   <Trash2 className="h-3 w-3" />
-                                  Slet
+                                  <span className="hidden sm:inline">Slet</span>
                                 </button>
                               </form>
                             </div>
@@ -407,9 +424,13 @@ export function PosterTable({ rows }: Props) {
             {grouped.length > 0 && (
               <tfoot className="border-t-2 border-neutral-200 bg-neutral-50">
                 <tr>
-                  <td colSpan={3} className="px-4 py-2.5 text-xs font-medium text-neutral-600">
+                  <td className="px-4 py-2.5 text-xs font-medium text-neutral-600">
                     {totalCount} {totalCount === 1 ? 'post' : 'poster'} i alt
                   </td>
+                  {/* Tomme celler matcher de hidden-on-mobile kolonner
+                      så Beløb lander i højre kolonne uanset viewport */}
+                  <td className="hidden px-4 py-2.5 sm:table-cell" />
+                  <td className="hidden px-4 py-2.5 sm:table-cell" />
                   <td className="px-4 py-2.5 text-right">
                     <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
                       {formatAmount(totalAmount)} kr
@@ -431,16 +452,20 @@ function Th({
   onClick,
   indicator,
   align = 'left',
+  hideOnMobile = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   indicator: string;
   align?: 'left' | 'right';
+  hideOnMobile?: boolean;
 }) {
   return (
     <th
       scope="col"
-      className={`px-4 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`px-4 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'} ${
+        hideOnMobile ? 'hidden sm:table-cell' : ''
+      }`}
     >
       <button
         type="button"

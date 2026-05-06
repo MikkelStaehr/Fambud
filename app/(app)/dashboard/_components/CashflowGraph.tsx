@@ -348,8 +348,44 @@ function LonkontoSankey({
         </div>
       </div>
 
+      {/* Mobile-fallback: SVG-Sankey er for kompleks på smalle skærme.
+          Vi viser i stedet en simpel liste med outflows farve-kodet på
+          type. På md+ skjules listen og SVG'en kommer frem. */}
+      <ul
+        className={`flex flex-col gap-1.5 rounded-md md:hidden ${
+          isDeficit ? 'border border-red-200 bg-red-50/30 p-3' : ''
+        }`}
+      >
+        {outflows.map((o, i) => (
+          <li
+            key={i}
+            className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-1.5 last:border-0 last:pb-0"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm"
+                style={{
+                  backgroundColor: TYPE_FILL[o.type],
+                  border: `1px solid ${TYPE_STROKE[o.type]}`,
+                }}
+                aria-hidden="true"
+              />
+              <span className="truncate text-sm text-neutral-900">
+                {o.label}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-neutral-400">
+                {TYPE_LABEL[o.type]}
+              </span>
+            </div>
+            <span className="tabnum shrink-0 font-mono text-sm text-neutral-700">
+              {formatAmount(o.amount)} kr
+            </span>
+          </li>
+        ))}
+      </ul>
+
       <div
-        className={`overflow-x-auto rounded-md ${
+        className={`hidden overflow-x-auto rounded-md md:block ${
           isDeficit ? 'border border-red-200 bg-red-50/30' : ''
         }`}
       >
@@ -357,8 +393,8 @@ function LonkontoSankey({
           viewBox={`0 0 ${W} ${H}`}
           className="block"
           // Cap render-bredden så grafen ikke vokser ukontrollabelt på
-          // brede skærme. På smalle skærme scroller den horisontalt
-          // inde i overflow-x-auto-containeren.
+          // brede skærme. På smalle skærme bruger vi list-fallback ovenfor
+          // i stedet for at vise SVG'en med horisontal scroll.
           style={{ width: '100%', maxWidth: 680, minWidth: 480, height: 'auto' }}
         >
           {/* Bands (tegnes først så rektangler ligger ovenpå) */}

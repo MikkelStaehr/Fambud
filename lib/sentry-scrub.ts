@@ -37,11 +37,18 @@ export function scrubPII<T extends Event>(event: T): T {
   }
 
   // User-objekt: behold kun opake user.id (UUID) til korrelation. Email,
-  // brugernavn, IP er PII der ikke skal forlade os.
+  // brugernavn, IP, geo er PII der ikke skal forlade os.
+  //
+  // Vigtig note om geo: Sentry's ingest-server udleder geo (city, country)
+  // fra request-IP'en EFTER vores beforeSend har kørt. SDK-side delete
+  // beskytter kun mod manuelle Sentry.setUser({ geo: ... })-kald. For at
+  // forhindre server-side geo-lookup skal "Prevent Storing of IP Addresses"
+  // toggles ON i Sentry Dashboard → Project Settings → Security & Privacy.
   if (event.user) {
     delete event.user.email;
     delete event.user.username;
     delete event.user.ip_address;
+    delete event.user.geo;
   }
 
   return event;

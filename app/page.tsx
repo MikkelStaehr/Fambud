@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { HeroDemoMockup } from '@/app/_components/HeroDemoMockup';
 
 const FAMBUD_FONT = 'var(--font-zt-nature), system-ui, sans-serif';
 
@@ -75,18 +76,19 @@ function Hero() {
         <div>
           <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-900">
             <Sparkles className="h-3 w-3" />
-            For danske familier - ikke en bank-app
+            Økonomisk planlægning for almindelige mennesker
           </p>
           <h1
             className="mt-5 text-4xl leading-tight tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl"
             style={{ fontFamily: FAMBUD_FONT }}
           >
-            Få overblik over jeres husholdningsbudget - uden bank-import.
+            Se hvor pengene løber hen — før de gør det
           </h1>
           <p className="mt-5 max-w-lg text-base text-neutral-600 sm:text-lg">
-            Fambud er en cashflow-app for danske familier. Du indtaster jeres
-            faste udgifter og lønsedler. Vi forudsiger jeres månedlige flow og
-            viser hvor pengene løber hen - privat og fælles.
+            Fambud hjælper dig med at sætte din økonomi i system. Du fortæller
+            os hvad der kommer ind, hvad der går ud, og hvad du gerne vil
+            spare op. Vi viser dig hvordan månederne kommer til at se ud — og
+            hvor du kan justere, før overraskelserne indtræffer.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -106,15 +108,15 @@ function Hero() {
           <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
             <span className="inline-flex items-center gap-1">
               <Check className="h-3 w-3 text-emerald-700" />
-              19 kr/md fast pris
+              19 kr/md
             </span>
             <span className="inline-flex items-center gap-1">
               <Check className="h-3 w-3 text-emerald-700" />
-              Lavet i Danmark
+              Dine data bliver i EU
             </span>
             <span className="inline-flex items-center gap-1">
               <Check className="h-3 w-3 text-emerald-700" />
-              Ingen bank-adgang
+              Uafhængig af banker
             </span>
             <span className="inline-flex items-center gap-1">
               <Check className="h-3 w-3 text-emerald-700" />
@@ -126,64 +128,6 @@ function Hero() {
         <HeroDemoMockup />
       </div>
     </section>
-  );
-}
-
-// Visuel "screenshot" af dashboardets HeroStatus + et lille flydende
-// CashflowWarnings-card. Gengivet med ægte tal og samme styling som appen,
-// så det er en autentisk demo i stedet for et stock-illustration.
-function HeroDemoMockup() {
-  return (
-    <div className="relative">
-      <div className="rounded-xl border border-neutral-200 bg-white shadow-2xl shadow-neutral-300/40">
-        <div className="flex items-baseline justify-between border-b border-neutral-100 px-5 py-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-            Er du på rette spor?
-          </span>
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-            April 2026
-          </span>
-        </div>
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
-          <div className="tabnum font-mono text-3xl font-semibold text-emerald-800 sm:text-4xl">
-            + 16.589,00 kr
-          </div>
-          <p className="mt-1 text-sm font-medium text-emerald-800">
-            Du har overskud denne måned
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-neutral-100 pt-4">
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
-                Indtægter
-              </div>
-              <div className="tabnum mt-1 font-mono text-base font-semibold text-emerald-800">
-                + 29.747,00
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
-                Udgifter
-              </div>
-              <div className="tabnum mt-1 font-mono text-base font-semibold text-red-900">
-                - 13.158,00
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Lille flydende advisor-card - viser at appen aktivt holder øje */}
-      <div className="absolute -bottom-6 -right-4 hidden w-60 rounded-lg border border-emerald-200 bg-white p-4 shadow-xl shadow-emerald-900/10 sm:block">
-        <div className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-emerald-700">
-          <Sparkles className="h-3 w-3" />
-          Cashflow-tjek
-        </div>
-        <div className="flex items-start gap-2 text-xs text-emerald-900">
-          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
-          Alt på din side er dækket
-        </div>
-      </div>
-    </div>
   );
 }
 

@@ -2229,3 +2229,122 @@ Sikkerhedsroadmap er nu i en tilstand hvor vi kan stå inde for det
 hvis FamBud senere skal igennem due diligence eller compliance-audit.
 Det er ikke længere "vi prøver at fange bugs" — det er "vi har en
 plan, vi følger den, og vi dokumenterer hver beslutning."
+
+---
+
+# Devlog — 5. maj 2026 (mobile-first shell)
+
+Brugerrapport: "Hele applikationen ser forfærdelig ud på mobilen". Kort,
+fokuseret session der adresserer det som tre concrete fixes.
+
+---
+
+## 1. Hamburger-drawer for (app)-navigation
+
+Hovedproblemet var den faste `w-56` sidebar (224px) der altid var
+synlig - på en 375px-skærm åd den 60% af viewporten og main-indholdet
+blev squashet til ulæselig bredde.
+
+Ny client-komponent [MobileNav.tsx](app/(app)/_components/MobileNav.tsx)
+med:
+
+- **Sticky top-bar** (h-14) med hamburger-knap til venstre + Fambud-mark
+  centreret. Vises kun under `md` (< 768px).
+- **Slide-out drawer** fra venstre, 80% bredde max 320px, med backdrop +
+  blur. Indeholder samme `SidebarNav` + `FeedbackModal` + log-ud-knap +
+  user-email som desktop-sidebar - DRY: vi genbruger komponenterne.
+- **Auto-luk** ved: pathname-skift (route-navigation), backdrop-klik,
+  Escape-tast.
+- **Body-scroll låses** mens drawer er åben (`document.body.style.overflow
+  = 'hidden'` i useEffect-cleanup) - forhindrer iOS-scroll bag drawer.
+
+Layout opdateret:
+- `< md`: vertikal flex (top-bar + main)
+- `md+`: horizontal flex (sidebar + main) som før
+- Sidebar er nu `hidden md:flex`, main får fuld bredde på mobile
+
+---
+
+## 2. Cashflow-graf list-fallback
+
+[CashflowGraph.tsx](app/(app)/dashboard/_components/CashflowGraph.tsx)
+SVG'en har `minWidth: 480` så den force-trigger horisontal scroll på
+mobile, hvilket gjorde grafen praktisk ulæselig på en 375px-skærm.
+
+Vi viser nu i stedet en simpel liste på mobile med outflows som
+`farveklat + label + type-tag + kr/md`-rækker. Farverne (rød/amber/
+neutral) matcher Sankey-typernes `TYPE_FILL`/`TYPE_STROKE` så bruger
+ser samme visuelle hint på begge breakpoints.
+
+Implementation: én ny `<ul className="md:hidden">` ovenfor den
+eksisterende `<div className="hidden md:block">` om SVG'en. Ingen ny
+data-fetching - vi bruger samme `outflows`-array der allerede var i
+scope.
+
+---
+
+## 3. PosterTable responsive kolonner
+
+[PosterTable.tsx](app/(app)/poster/_components/PosterTable.tsx) havde
+4 kolonner + actions (Gruppe/Navn, Dato, Konto, Beløb, Handlinger).
+På mobile trængte den ud i horisontal scroll.
+
+Strategi: skjul de mindst kritiske kolonner (Dato, Konto), flyt deres
+indhold ind under navnet som en lille grå metadata-linje:
+
+```
+Husleje                           5.000 kr
+Bolig
+15.04.2026 · Budgetkonto         (kun på mobile)
+```
+
+Konkrete ændringer:
+- `Th`-component fik et `hideOnMobile`-prop (`hidden sm:table-cell`
+  klasse)
+- Dato- og Konto-cellerne på data-rows: tilsvarende
+  `hidden sm:table-cell`
+- Ny mobile-only metadata-linje `<div className="sm:hidden">` under
+  navn/kategori med `formatShortDateDA(occursOn) · accountName`
+- Action-knapper: `Rediger`/`Slet`-tekst nu `hidden sm:inline`, ikoner
+  alene synlige på mobile (med `aria-label` for accessibility)
+- Padding skaleret: `px-3 sm:px-4`
+
+Cell-spans i group-row + footer matcher de nye hidden-kolonner via
+`display:none`-trick. Browser table-layout håndterer ikke responsive
+`colSpan` af sig selv, så vi har eksplicit hidden filler-celler der
+forsvinder på mobile men rumdeler på desktop.
+
+---
+
+## 4. Status
+
+**Bekræftet af bruger efter første commit:**
+- Hamburger-menuen "løste meget"
+- Sankey "fungerer ikke skide godt på mobilen" → fixet i runde 2
+- /Poster "skal man scrolle for at se" → fixet i runde 2
+
+**Ikke testet endnu** (potentielle kandidater til samme behandling):
+- `/budget` (samme tabel-pattern som poster)
+- `/faste-udgifter/[accountId]` (recurring expenses med components)
+- `/laan/[id]` (amortisationsprojektion - graf + tabel)
+- `/overforsler` (transfers-liste, formentlig OK pga eksisterende
+  responsive grids)
+- Wizard-trin på mobile (multi-felt forms)
+
+---
+
+## Åbne tråde fra denne session
+
+- **Tabel-mønster bør abstraheres**: PosterTable, BudgetTable,
+  formentlig også laan-amortisationsprojektion vil alle have samme
+  responsive-kolonne-behov. Når vi har fixet 2-3 tabeller manuelt,
+  worth at kigge på en delt `<ResponsiveTable>`-komponent der
+  parameteriserer hvilke kolonner skjules på mobile.
+- **Dashboard 2-kolonne grids**: brydes pt på `lg:` (1024px). Tablet
+  i portrait (768-1023px) får dem stacked, hvilket kan være OK eller
+  spildt plads - test før justering.
+- **Wizard på mobile**: ikke gennemgået. Forms med multi-column inputs
+  (lonkonto-paycheck-samples osv.) kan trænge til responsive layout-
+  klasser.
+- **Form-buttons stack**: nogle action-bars har "Annullér + Gem"-par i
+  flex - check at de ikke overflow'er mobile viewport.

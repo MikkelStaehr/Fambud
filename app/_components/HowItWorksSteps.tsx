@@ -258,11 +258,16 @@ function PaychecksMockup() {
 // Mockup 3: Faste udgifter-liste
 // ----------------------------------------------------------------
 function ExpensesMockup() {
+  // Beløbene vises med rigtig minus-tegn (−, U+2212), ikke ASCII-hyphen.
+  // Dæmpet rød (text-red-900 = #7f1d1d) signalerer "udgift" frem for
+  // "fejl/alarm". Samme farve som DemoStripMockup's "Udgifter" + samme
+  // som ForecastMockup's udgifts-bars - konsistent semantik på tværs af
+  // landing.
   const rows = [
-    { label: 'Realkredit', amount: '8.490 kr', color: '#7c3aed' },
-    { label: 'Forsikringer', amount: '2.140 kr', color: '#0891b2' },
-    { label: 'Daginstitution', amount: '3.580 kr', color: '#ea580c' },
-    { label: 'Abonnementer', amount: '890 kr', color: '#16a34a' },
+    { label: 'Realkredit', amount: '−8.490 kr', color: '#7c3aed' },
+    { label: 'Forsikringer', amount: '−2.140 kr', color: '#0891b2' },
+    { label: 'Daginstitution', amount: '−3.580 kr', color: '#ea580c' },
+    { label: 'Abonnementer', amount: '−890 kr', color: '#16a34a' },
   ];
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
@@ -283,7 +288,7 @@ function ExpensesMockup() {
               />
               <span className="text-neutral-700">{r.label}</span>
             </span>
-            <span className="tabnum font-mono text-neutral-700">{r.amount}</span>
+            <span className="tabnum font-mono text-red-900">{r.amount}</span>
           </li>
         ))}
       </ul>
@@ -299,14 +304,12 @@ function ForecastMockup() {
   // by side. Indtægt er konstant 50.600 (samme person, samme job, ingen
   // overtid-bonus i forecast). Udgift varierer per måned.
   //
-  // Udgift-farve afhænger af ratio til indtægt:
-  //   < 80%   -> emerald (godt dækket)
-  //   80-95%  -> amber (pas på)
-  //   > 95%   -> red (underdækket)
+  // Farver er semantiske, ikke ratio-baserede:
+  //   Indtægt -> emerald-600 (positiv pengestrøm ind)
+  //   Udgift  -> red-900 (penge ud, dæmpet jordnær - ikke alarm)
   //
-  // For Juni har vi 96.6% (48.900 / 50.600) som teknisk er > 95%, men
-  // brugeren har kategoriseret den som "amber" i spec - vi følger spec
-  // og bruger explicit color-property frem for at re-derive fra ratio.
+  // Brugeren ser balancen mellem indtægt og udgift via højdeforholdet -
+  // ingen ekstra signalering eller farveskifter pr. måned.
   //
   // MAX_VALUE = 55000 normaliserer alle bars mod en højde der lader
   // indtægts-baren fylde ~92% af container. Det giver visuelt headroom
@@ -314,11 +317,11 @@ function ForecastMockup() {
   const MAX_VALUE = 55000;
   const INCOME = 50600;
   const months = [
-    { label: 'Maj', expense: 33200, expenseColor: 'bg-emerald-600' },
-    { label: 'Juni', expense: 48900, expenseColor: 'bg-amber-500' },
-    { label: 'Juli', expense: 31500, expenseColor: 'bg-emerald-600' },
-    { label: 'Aug', expense: 35800, expenseColor: 'bg-emerald-600' },
-    { label: 'Sep', expense: 38200, expenseColor: 'bg-emerald-600' },
+    { label: 'Maj', expense: 33200 },
+    { label: 'Juni', expense: 48900 },
+    { label: 'Juli', expense: 31500 },
+    { label: 'Aug', expense: 35800 },
+    { label: 'Sep', expense: 38200 },
   ];
 
   const incomeHeight = (INCOME / MAX_VALUE) * 100;
@@ -340,7 +343,7 @@ function ForecastMockup() {
               aria-hidden
             />
             <div
-              className={`flex-1 rounded-t-sm ${m.expenseColor}`}
+              className="flex-1 rounded-t-sm bg-red-900"
               style={{ height: `${(m.expense / MAX_VALUE) * 100}%` }}
               aria-hidden
             />
@@ -360,16 +363,16 @@ function ForecastMockup() {
         ))}
       </div>
 
-      {/* Legend. Indtægt-prik matcher den faste emerald-600. Udgift-prik
-          er emerald-800 (mørkere) som "default udgift"-farve - når en
-          bar er amber/red i en specifik måned, ses det som undtagelsen. */}
+      {/* Legend matcher bar-farverne: emerald-600 for indtægt, red-900
+          for udgift. Samme farve-semantik som ExpensesMockup-beløbene
+          (text-red-900) og DemoStripMockup's "Udgifter"-tekst. */}
       <div className="mt-3 flex justify-center gap-4 text-[10px] text-neutral-500">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-sm bg-emerald-600" aria-hidden />
           Indtægt
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-emerald-800" aria-hidden />
+          <span className="h-2 w-2 rounded-sm bg-red-900" aria-hidden />
           Udgift
         </span>
       </div>

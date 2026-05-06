@@ -132,17 +132,25 @@ function Step({
       }}
       // Mobile (<sm): 2-kolonne grid (badge | tekst), mockup på row 2
       // sm+: 3-kolonne grid (badge | tekst | mockup) på én row
+      //
+      // min-h sikrer at hvert trin er minimum lige så højt som det
+      // største trin's naturlige indhold. Det giver konsistent rytme
+      // mellem badges - afstanden mellem cirkel-numrene er ens uanset
+      // hvor højt mockup eller tekst er. Mobile er højere fordi mockup
+      // er stacked under tekst (vs. side-by-side på desktop).
       className={`relative grid grid-cols-[40px_1fr] gap-x-4 sm:grid-cols-[40px_1fr_minmax(0,260px)] sm:gap-x-6 ${
-        isLast ? '' : 'pb-10 sm:pb-12'
+        isLast ? 'min-h-[300px] sm:min-h-[200px]' : 'min-h-[360px] pb-10 sm:min-h-[240px] sm:pb-12'
       }`}
     >
       {/* Vertikal forbindelseslinje. Animeres med scaleY 0->1 fra top
           så den "vokser ned" fra badge til næste trin. transform-origin
           top sikrer at den ikke vokser begge veje. Delay synced så
-          linjen kommer ind LIGE efter step-content lander. */}
+          linjen kommer ind LIGE efter step-content lander.
+          Farve: stone-300 (~#d6d3d1) - neutral grå der er tilstede uden
+          at trække fokus. Tidligere emerald-200 var for visuel støj. */}
       {!isLast && (
         <motion.div
-          className="absolute left-5 top-10 bottom-0 w-0.5 origin-top -translate-x-1/2 bg-emerald-200"
+          className="absolute left-5 top-10 bottom-0 w-0.5 origin-top -translate-x-1/2 bg-stone-300"
           initial={reducedMotion ? { scaleY: 1 } : { scaleY: 0 }}
           animate={
             isInView || reducedMotion ? { scaleY: 1 } : { scaleY: 0 }
@@ -287,41 +295,60 @@ function ExpensesMockup() {
 // Mockup 4: Forecast bar-chart
 // ----------------------------------------------------------------
 function ForecastMockup() {
-  // Heights er procent-baserede. Juni er amber (advarsel) som signaler
-  // "pas på i denne måned" - matcher samme amber-pattern som
-  // HeroDemoMockup's underskuds-frame.
+  // Grouped bar chart: hver måned har 2 bars (indtægt + udgift) side
+  // by side. Indtægt er konstant 50.600 (samme person, samme job, ingen
+  // overtid-bonus i forecast). Udgift varierer per måned.
   //
-  // Tidligere version brugte nested flex-col med flex-1, hvilket gav
-  // ingen pixel-context for height: % beregning - bars renderede med
-  // 0px højde. Nu bruger vi grid-cols-5 + items-end så hver bar har en
-  // klar parent-højde at regne mod.
+  // Udgift-farve afhænger af ratio til indtægt:
+  //   < 80%   -> emerald (godt dækket)
+  //   80-95%  -> amber (pas på)
+  //   > 95%   -> red (underdækket)
+  //
+  // For Juni har vi 96.6% (48.900 / 50.600) som teknisk er > 95%, men
+  // brugeren har kategoriseret den som "amber" i spec - vi følger spec
+  // og bruger explicit color-property frem for at re-derive fra ratio.
+  //
+  // MAX_VALUE = 55000 normaliserer alle bars mod en højde der lader
+  // indtægts-baren fylde ~92% af container. Det giver visuelt headroom
+  // og gør udgift-bars varierede uden at overlappe top.
+  const MAX_VALUE = 55000;
+  const INCOME = 50600;
   const months = [
-    { label: 'Maj', heightPct: 65, fill: 'bg-emerald-600' },
-    { label: 'Juni', heightPct: 30, fill: 'bg-amber-500' },
-    { label: 'Juli', heightPct: 85, fill: 'bg-emerald-600' },
-    { label: 'Aug', heightPct: 75, fill: 'bg-emerald-600' },
-    { label: 'Sep', heightPct: 50, fill: 'bg-emerald-600' },
+    { label: 'Maj', expense: 33200, expenseColor: 'bg-emerald-600' },
+    { label: 'Juni', expense: 48900, expenseColor: 'bg-amber-500' },
+    { label: 'Juli', expense: 31500, expenseColor: 'bg-emerald-600' },
+    { label: 'Aug', expense: 35800, expenseColor: 'bg-emerald-600' },
+    { label: 'Sep', expense: 38200, expenseColor: 'bg-emerald-600' },
   ];
+
+  const incomeHeight = (INCOME / MAX_VALUE) * 100;
+
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
       <div className="mb-3 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
         Forecast
       </div>
-      {/* Bars: 5-kolonne grid med fast container-højde (h-24 = 96px) +
-          items-end for at justere bars til bunden. Inde i hver kolonne
-          har bar w-full + height i pct af de 96px. */}
+
+      {/* Bars: 5-kolonne grid for måneder med 8px gap mellem grupper.
+          Inde i hver gruppe: 2 bars (indtægt+udgift) med 2px gap. */}
       <div className="grid h-24 grid-cols-5 items-end gap-2">
         {months.map((m) => (
-          <div
-            key={m.label}
-            className={`w-full rounded-t-sm ${m.fill}`}
-            style={{ height: `${m.heightPct}%` }}
-            aria-hidden
-          />
+          <div key={m.label} className="flex h-full items-end gap-0.5">
+            <div
+              className="flex-1 rounded-t-sm bg-emerald-600"
+              style={{ height: `${incomeHeight}%` }}
+              aria-hidden
+            />
+            <div
+              className={`flex-1 rounded-t-sm ${m.expenseColor}`}
+              style={{ height: `${(m.expense / MAX_VALUE) * 100}%` }}
+              aria-hidden
+            />
+          </div>
         ))}
       </div>
-      {/* Labels i separat grid med samme 5-kolonne struktur så de
-          ligger præcis under hver bar uden at påvirke bar-layouten. */}
+
+      {/* Labels under bars - samme grid-struktur for præcis alignment. */}
       <div className="mt-1.5 grid grid-cols-5 gap-2">
         {months.map((m) => (
           <span
@@ -331,6 +358,20 @@ function ForecastMockup() {
             {m.label}
           </span>
         ))}
+      </div>
+
+      {/* Legend. Indtægt-prik matcher den faste emerald-600. Udgift-prik
+          er emerald-800 (mørkere) som "default udgift"-farve - når en
+          bar er amber/red i en specifik måned, ses det som undtagelsen. */}
+      <div className="mt-3 flex justify-center gap-4 text-[10px] text-neutral-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm bg-emerald-600" aria-hidden />
+          Indtægt
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm bg-emerald-800" aria-hidden />
+          Udgift
+        </span>
       </div>
     </div>
   );

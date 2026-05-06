@@ -1,0 +1,133 @@
+name: Security
+
+# Kører på alle PR'er + push til main. Fail af hvilken som helst gate
+# blokerer merge når branch-protection er konfigureret (se docs/ci-security.md).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Manuel trigger fra GitHub UI til ad-hoc-kørsel.
+  workflow_dispatch:
+
+# Kun én run per branch ad gangen - cancel ældre PR-runs hvis ny push kommer.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write  # til SARIF-upload
+
+jobs:
+  # ------------------------------------------------------------------
+  # Gate 1: Hemmeligheds-scan. Fanger AWS-keys, GitHub-tokens, private
+  # keys osv. der ved et uheld er commit'et. Kører på FULL git-historik
+  # på push til main (catches gamle commits), kun diff på PR'er.
+  # ------------------------------------------------------------------
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for fuld scan på push
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------------
+  # Gate 2: Dependency vulnerabilities via npm audit + OSV-Scanner.
+  # npm audit fanger npm-registry-CVEs; OSV-Scanner fanger bredere
+  # incl. transitive deps og non-npm sources.
+  # ------------------------------------------------------------------
+  dependencies:
+    name: Dependency CVEs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      # npm audit fail på high+critical. Moderate er ofte transitive
+      # og ikke exploit-relevante - vi tracker dem men blokerer ikke.
+      - name: npm audit (high+critical)
+        run: npm audit --audit-level=high
+
+      # OSV-Scanner fanger bredere CVE-database end npm audit.
+      # Officielt Google-supported, ingen ekstern API-key krævet.
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --recursive
+            --skip-git
+            ./
+
+  # ------------------------------------------------------------------
+  # Gate 3: TypeScript strict check + production build. Fanger type-
+  # errors og build-failures der ellers først ville blive synlige
+  # ved deploy. Vercel build kører også dette, men vi vil have det
+  # på PR'er FØR merge.
+  # ------------------------------------------------------------------
+  typecheck-and-build:
+    name: TypeScript + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript strict
+        run: npx tsc --noEmit
+
+      # Build verificerer at Sentry source-maps kan uploades, alle
+      # routes kan genereres osv. Bruger placeholder-DSN så vi ikke
+      # spammer rigtige Sentry under CI-builds.
+      - name: Production build
+        run: npm run build
+        env:
+          # Stub-DSN - Sentry init silent-no-op'er ved tom DSN.
+          SENTRY_DSN: ''
+          NEXT_PUBLIC_SENTRY_DSN: ''
+          # Supabase-stubs - build skal ikke kunne kontakte DB'en.
+          NEXT_PUBLIC_SUPABASE_URL: 'https://stub.supabase.co'
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'eyJhbGciOiJIUzI1NiJ9.stub.stub'
+
+  # ------------------------------------------------------------------
+  # Gate 4: Semgrep static analysis. Standard regelsæt + custom regler
+  # der dækker FamBud-specifikke patterns (se semgrep-rules/fambud.yaml).
+  # ------------------------------------------------------------------
+  semgrep:
+    name: Static analysis (semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep scan
+        run: |
+          semgrep scan \
+            --config=p/owasp-top-ten \
+            --config=p/nextjs \
+            --config=p/typescript \
+            --config=p/javascript \
+            --config=./semgrep-rules/fambud.yaml \
+            --error \
+            --severity ERROR \
+            --severity WARNING \
+            --metrics off

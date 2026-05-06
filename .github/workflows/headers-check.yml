@@ -1,0 +1,32 @@
+name: Headers check
+
+# Verificerer at production-deploy serverer alle required security
+# headers (CSP, HSTS, X-Frame-Options osv.). Kører:
+# - Nightly (catch regressions fra Vercel-side ændringer)
+# - On-demand via workflow_dispatch
+# - Efter merge til main (efter Vercel deploy er færdig)
+on:
+  schedule:
+    # 04:00 UTC = 06:00 CEST. Tidligt nok til at flag fixes inden
+    # arbejdsdagen, sent nok til at ikke spamme Vercel under build-
+    # vinduet.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: Verify production headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vent på at Vercel-deploy er færdig hvis vi blev trigget af
+      # push til main. 90 sekunder dækker typisk build+deploy.
+      - name: Wait for Vercel deploy (only on push)
+        if: github.event_name == 'push'
+        run: sleep 90
+
+      - name: Run headers-check
+        run: bash scripts/check-headers.sh https://www.fambud.dk

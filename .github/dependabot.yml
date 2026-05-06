@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # npm-dependencies. Ugentlig pull-request med samlede minor/patch-
+  # updates. Major-updates kommer som separate PR'er så vi kan
+  # vurdere hver enkelt.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Copenhagen
+    open-pull-requests-limit: 5
+    groups:
+      # Bundle minor + patch updates til én PR pr. uge så vi ikke
+      # drukner i 20 separate PR'er. Major skal stadig komme separat.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - security
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # GitHub Actions versioner — også weekly for at fange action-bumps
+  # når vi har dem (gitleaks-action, osv-scanner osv.). Lille overflade.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope

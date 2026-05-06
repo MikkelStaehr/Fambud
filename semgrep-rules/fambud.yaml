@@ -1,0 +1,134 @@
+# Custom Semgrep-regler for FamBud-specifikke patterns.
+#
+# Disse er supplerer p/owasp-top-ten + p/nextjs + p/typescript +
+# p/javascript (kørt via security.yml workflow). De her regler
+# håndhæver mønstre dokumenteret i SECURITY_AUDITS.md som
+# "konvention, ikke automatisk håndhævet" - P5 + P11.
+#
+# Test reglerne lokalt:
+#   semgrep scan --config=./semgrep-rules/fambud.yaml app/
+
+rules:
+  # ----------------------------------------------------------------
+  # Service-role-key må ALDRIG bundles til klient. createAdminClient
+  # bruger SUPABASE_SERVICE_ROLE_KEY der bypasser RLS - hvis den
+  # imports'es i 'use client'-fil, ender keyen i klient-bundle.
+  #
+  # Reference: lib/supabase/admin.ts kommentar + Prompt 8 IDOR-audit.
+  # ----------------------------------------------------------------
+  - id: fambud-no-admin-client-import
+    message: |
+      createAdminClient bruger SUPABASE_SERVICE_ROLE_KEY der bypasser
+      RLS. Importer den ALDRIG i 'use client'-filer, _components.tsx
+      eller andre filer der bundles til klient. Brug en Server Action
+      eller Route Handler i stedet.
+    severity: ERROR
+    languages: [typescript, tsx]
+    paths:
+      include:
+        - '**/_components/**'
+        - '**/*.client.ts'
+        - '**/*.client.tsx'
+    pattern: |
+      import { createAdminClient } from '@/lib/supabase/admin'
+
+  # ----------------------------------------------------------------
+  # Mass assignment via Object.fromEntries(formData). Hele FamBud's
+  # IDOR-resistance bygger på eksplicit formData.get('field')-pattern
+  # (Prompt 8). Dette pattern bryder den.
+  # ----------------------------------------------------------------
+  - id: fambud-no-form-data-spread
+    message: |
+      Object.fromEntries(formData) eller spread af formData bypasser
+      den eksplicitte field-by-field whitelist. Læs hver felt med
+      formData.get('field_name') og pak dem manuelt i et objekt med
+      deklareret type.
+      Reference: SECURITY_AUDITS.md Prompt 8 + P5.
+    severity: ERROR
+    languages: [typescript, javascript]
+    pattern-either:
+      - pattern: Object.fromEntries(formData)
+      - pattern: Object.fromEntries(formData.entries())
+      - pattern: Object.fromEntries($X)
+        # Filtrer til kun formData-lignende sources.
+        metavariable-regex:
+          metavariable: $X
+          regex: '.*[Ff]orm[Dd]ata.*'
+
+  # ----------------------------------------------------------------
+  # Privilegerede felter må ALDRIG læses fra request. household_id og
+  # user_id kommer fra getHouseholdContext() (server-bestemt), role
+  # fra getMyMembership() (DB-side). Hvis de læses fra formData kan
+  # en angriber overskrive dem.
+  # ----------------------------------------------------------------
+  - id: fambud-no-privileged-field-from-formdata
+    message: |
+      Privilegerede felter (household_id, user_id, role, owner_user_id,
+      created_at, email_verified, is_paid) må ALDRIG læses fra
+      formData. De skal komme fra getHouseholdContext() eller
+      getMyMembership() server-side. Reference: SECURITY_AUDITS.md
+      Prompt 8.
+    severity: ERROR
+    languages: [typescript]
+    pattern-either:
+      - pattern: formData.get('household_id')
+      - pattern: formData.get('user_id')
+      - pattern: formData.get('role')
+      - pattern: formData.get('owner_user_id')
+      - pattern: formData.get('created_at')
+      - pattern: formData.get('email_verified')
+      - pattern: formData.get('is_paid')
+
+  # ----------------------------------------------------------------
+  # Zod .passthrough() på schemas der bruges til DB-write fjerner
+  # whitelist-effekten. Hvis Zod nogensinde introduceres i FamBud,
+  # skal vi have .strict() (eller default), aldrig .passthrough().
+  # ----------------------------------------------------------------
+  - id: fambud-no-zod-passthrough
+    message: |
+      Zod .passthrough() lader ukendte felter slippe igennem - det
+      bryder mass-assignment-resistance hvis schema-resultatet
+      spredes ind i DB-write. Brug .strict() (default) eller eksplicit
+      pluk hvert felt. Reference: SECURITY_AUDITS.md P5.
+    severity: ERROR
+    languages: [typescript]
+    pattern: $SCHEMA.passthrough()
+
+  # ----------------------------------------------------------------
+  # Console.log af PII. console.error('user', user) ville lække
+  # email til Vercel logs. lib/sentry-scrub.ts og lib/audit-log.ts
+  # stripper PII i deres respektive paths, men direkte console.log
+  # går uden om dem.
+  # ----------------------------------------------------------------
+  - id: fambud-no-pii-console-log
+    message: |
+      Log af user-objekter, email eller password til console kan
+      lække PII til Vercel function logs (kun strippet i Sentry, ikke
+      i console). Brug lib/audit-log.ts logAuditEvent() i stedet,
+      eller log kun specifikke ikke-PII-felter (user.id, user.role).
+    severity: WARNING
+    languages: [typescript, javascript]
+    pattern-either:
+      - pattern: console.log(..., user, ...)
+      - pattern: console.error(..., user, ...)
+      - pattern: console.log(..., $X.email, ...)
+      - pattern: console.error(..., $X.email, ...)
+      - pattern: console.log(..., password, ...)
+      - pattern: console.error(..., password, ...)
+
+  # ----------------------------------------------------------------
+  # Direkte HTML-injection via dangerouslySetInnerHTML uden sanitize.
+  # I de fleste tilfælde er dette ikke en bug fordi indholdet kommer
+  # fra os selv (constants), men det er værd at flag'e så fremtidige
+  # bugs hvor det kombineres med user-input fanges.
+  # ----------------------------------------------------------------
+  - id: fambud-dangerously-set-inner-html
+    message: |
+      dangerouslySetInnerHTML er kun safe når indholdet er statisk
+      eller manuelt sanitized. Hvis kilden er user-input, har vi en
+      XSS-vektor. Verificér at $HTML.__html ikke kan indeholde
+      user-controlled strings.
+    severity: WARNING
+    languages: [tsx, jsx]
+    pattern: |
+      <$EL ... dangerouslySetInnerHTML={$HTML} ... />

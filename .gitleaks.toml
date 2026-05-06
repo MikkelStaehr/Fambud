@@ -1,0 +1,38 @@
+# Gitleaks-konfig for FamBud. Bruger default-regler men allowlister
+# kendte safe patterns der ellers triggere false positives.
+#
+# Reference: https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+# Brug indbyggede default-regler som baseline.
+useDefault = true
+
+[allowlist]
+description = "FamBud-specifikke false positives"
+
+# Regex-allowlist for værdier der matcher secret-patterns men er sikre
+# at committe.
+regexes = [
+    # Supabase publishable key (ikke service-role) er PUBLIC by design
+    # og må gerne være i .env.example eller dokumentation.
+    # Format: eyJ... (JWT). Gitleaks tror nogle gange det er en privat
+    # key. Vi allowlister den når den er prefixed med NEXT_PUBLIC_.
+    '''NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\s*=\s*[a-zA-Z0-9_\-\.]+''',
+
+    # Test-bruger-passwords i scripts/setup-test-users.sql er bevidst
+    # plain text fordi de er til lokale test-environments.
+    '''Abc123456''',
+
+    # Mock-DSN'er i CI workflows.
+    '''https?://stub\.''',
+]
+
+# Filer/mapper der skal skippes helt.
+paths = [
+    # Lock-filer indeholder ofte SHA-hashes der ligner secrets.
+    '''package-lock\.json''',
+    # Migration-filer kan referere til public Supabase-felter.
+    '''supabase/migrations/.*\.sql''',
+    # Auto-genererede types.
+    '''lib/database\.types\.ts''',
+]

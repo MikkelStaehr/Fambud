@@ -2601,6 +2601,152 @@ verificeret (PII-redaction).
 - [ ] `npm run db:types` kørt + commit
 - [ ] Klar til **Prompt 12** (CI/CD security gates)
 
+---
+
+## 2026-05-06 — Prompt 12: CI/CD security gates
+
+**Tid (start)**: 13:00 CEST
+**Tid (afsluttet)**: 14:00 CEST
+**Auditor**: Claude Code (Opus 4.7)
+**Scope**: Automatiserede sikkerheds-gates i GitHub Actions + custom
+Semgrep-regler + headers-verifikation + branch-protection-dokumentation.
+
+### Resultat: 🟢 PASS — 5 automated gates + 6 custom regler deployet
+
+FamBud havde før denne audit INGEN CI/CD security automation udover
+Vercel's egen build-validation. Nu har vi 5 automated gates på hver
+PR + nightly headers-monitoring + ugentlige Dependabot-PR'er +
+manuel-konfig-vejledning til branch protection.
+
+### Findings-tabel
+
+| # | Område | Status |
+| --- | --- | --- |
+| 1 | Pre-commit / pre-push lokalt | 🟡 ikke implementeret — CI fanger det samme; kan tilføjes med husky som P-item |
+| 2 | gitleaks secret scan | ✅ DONE — `.github/workflows/security.yml` job 1 |
+| 3 | npm audit (high+critical) | ✅ DONE — security.yml job 2 |
+| 4 | OSV-Scanner CVE | ✅ DONE — security.yml job 2 (erstatter Snyk; ingen ekstern account krævet) |
+| 5 | Semgrep med standard regelsæt | ✅ DONE — p/owasp-top-ten + p/nextjs + p/typescript + p/javascript |
+| 6 | Semgrep custom rules (FamBud-specifikke) | ✅ DONE — [semgrep-rules/fambud.yaml](semgrep-rules/fambud.yaml) (6 regler) |
+| 7 | TypeScript strict + build | ✅ DONE — security.yml job 3 |
+| 8 | Headers verifikation | ✅ DONE — [scripts/check-headers.sh](scripts/check-headers.sh) + headers-check.yml workflow |
+| 9 | OWASP ZAP baseline | ⏳ DEFERRED → P19 (kompleks Vercel-preview-integration) |
+| 10 | Smoke tests af auth-flows | ⏳ DEFERRED → P20 (kræver test-runner setup, ingen tests endnu) |
+| 11 | Test coverage på security-modules | ⏳ DEFERRED → kombineret med P20 |
+| 12 | Renovate (alternativ til Dependabot) | 🟢 SKIPPED — Dependabot dækker behovet uden ekstern setup |
+| 13 | Dependabot | ✅ DONE — [.github/dependabot.yml](.github/dependabot.yml) |
+| 14 | Re-kør RLS test suite nightly | ⏳ DEFERRED → P21 (kræver test-bruger-credentials i CI secrets + Supabase prod-permission) |
+| 15 | Vercel TS-strict på build | 🟢 PASS — verificeret 2026-05-06 |
+| 16 | GitHub branch protection | 🟡 MANUAL — dokumenteret i [docs/ci-security.md](docs/ci-security.md) |
+| 17 | Snyk integration | 🟢 SKIPPED — OSV-Scanner dækker; undgår ekstern account |
+
+### Custom Semgrep-regler
+
+[semgrep-rules/fambud.yaml](semgrep-rules/fambud.yaml) — 6 regler der
+håndhæver mønstre dokumenteret i tidligere audits:
+
+| Regel | Severity | Reference |
+| --- | --- | --- |
+| `fambud-no-admin-client-import` | ERROR | Lib/supabase/admin.ts kommentar — service-role-key må ikke bundles til klient |
+| `fambud-no-form-data-spread` | ERROR | Prompt 8 IDOR-audit + P5 |
+| `fambud-no-privileged-field-from-formdata` | ERROR | Prompt 8 — `household_id`, `user_id`, `role` osv. fra formData blokeres |
+| `fambud-no-zod-passthrough` | ERROR | P5 — hvis Zod nogensinde introduceres, `.passthrough()` er forbudt |
+| `fambud-no-pii-console-log` | WARNING | Prompt 11 — undgår PII-leak til Vercel function logs (Sentry strippes, console gør ikke) |
+| `fambud-dangerously-set-inner-html` | WARNING | XSS-vektor; manuel verifikation kræves ved match |
+
+### Headers-verifikation
+
+[scripts/check-headers.sh](scripts/check-headers.sh) tester 14
+assertions mod prod. Køres:
+
+- Nightly via [.github/workflows/headers-check.yml](.github/workflows/headers-check.yml) (06:00 CEST)
+- Efter push til main (med 90 sek wait på Vercel-deploy)
+- On-demand via `bash scripts/check-headers.sh https://www.fambud.dk`
+
+**Verificeret 2026-05-06 14:00 CEST**: alle 14 assertions PASS.
+
+### Workflows på plads
+
+```text
+.github/
+├── workflows/
+│   ├── security.yml          # 4 jobs: gitleaks, deps, build, semgrep
+│   └── headers-check.yml     # nightly + post-merge
+└── dependabot.yml            # weekly npm + github-actions PRs
+
+semgrep-rules/
+└── fambud.yaml              # 6 custom rules
+
+scripts/
+└── check-headers.sh         # 14-point headers verification
+
+.gitleaks.toml               # allowlists + extends default rules
+docs/ci-security.md          # full documentation + branch protection
+```
+
+### Ikke-implementeret (deferred)
+
+| Item | Hvorfor ikke | Tracker |
+| --- | --- | --- |
+| Pre-commit hooks (husky/lint-staged) | Ekstra dev-dep, udviklere skal manuelt installere; CI fanger det samme | — |
+| Snyk | OSV-Scanner dækker overlappet uden ekstern account | — |
+| OWASP ZAP baseline | Kompleks Vercel-preview-URL-integration | P19 |
+| Smoke tests af auth-flows | Kræver test-runner (Playwright/Vitest) — vi har ingen tests endnu | P20 |
+| Test coverage på security-modules | Kombineret med P20 (kommer med smoke tests) | P20 |
+| Re-kør RLS-test nightly | Kræver test-bruger-credentials i CI secrets + Supabase prod-permission | P21 |
+
+### Vercel-side automation (allerede aktiv)
+
+- ✅ Build fails på TypeScript errors — verificeret
+- ✅ Preview deployments per PR
+- ✅ Source-map upload til Sentry via `withSentryConfig`
+
+### Branch protection (manuel konfig kræves)
+
+GitHub → Settings → Branches → main → Add rule:
+
+- Require PR with 1 approval
+- Require status checks (alle 4 fra security.yml):
+  - `Secret scan (gitleaks)`
+  - `Dependency CVEs`
+  - `TypeScript + build`
+  - `Static analysis (semgrep)`
+- Require conversation resolution
+- Disallow force pushes + deletions
+- Disallow bypass
+
+Fuld dokumentation i [docs/ci-security.md](docs/ci-security.md).
+
+### Konklusion
+
+FamBud har nu **defense-in-depth automation**: hvert push og hver PR
+køres gennem 4 sikkerheds-gates før merge er muligt (når branch
+protection sættes). Custom Semgrep-regler håndhæver de mønstre vi
+dokumenterede som "konvention" i Prompt 8 og P5 — drift mod usikre
+mønstre fanges nu automatisk.
+
+Det blanker ikke alle CI-luksus-features (Snyk, ZAP, smoke tests),
+men det dækker baseline-arbejdet med standard-tools, ingen ekstern
+account-friction, og fri brug.
+
+### Roadmap udvidelser
+
+- **P19** — OWASP ZAP baseline scan mod Vercel preview deployments (estimat 4-6t, deadline 30. juni 2026)
+- **P20** — Test-runner (Playwright eller Vitest) + smoke tests af auth-flows + coverage på security-modules (estimat 8-12t, deadline 30. september 2026)
+- **P21** — Nightly RLS-test-suite via GitHub Actions med dedikeret test-Supabase-instans (estimat 2-4t, deadline 30. juni 2026)
+- **P22** — Husky/lint-staged pre-commit hooks (lavt prioriteret — CI fanger det samme; estimat 1t)
+
+### Næste skridt
+
+**Manuelt på GitHub** (ikke kode-arbejde):
+
+- [ ] Merge denne commit til main
+- [ ] Verificér første GitHub Actions-run grøn
+- [ ] Sæt branch protection rules per [docs/ci-security.md](docs/ci-security.md)
+- [ ] Verificér Dependabot finder package.json (første PR kommer mandag)
+
+Klar til **Prompt 13** (bug bounty / responsible disclosure).
+
 Bevidst-accepterede svagheder der ikke er fund men dokumenteres så
 de ikke bliver oversights ved senere audit-runder.
 

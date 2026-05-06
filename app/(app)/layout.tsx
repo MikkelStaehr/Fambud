@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { BetaNotice } from './_components/BetaNotice';
 import { FambudMark } from './_components/FambudMark';
 import { FeedbackModal } from './_components/FeedbackModal';
+import { MobileNav } from './_components/MobileNav';
 import { SidebarNav } from './_components/SidebarNav';
 import { Toast } from './_components/Toast';
 import { signOut } from './actions';
@@ -34,12 +35,17 @@ export default async function AppLayout({
   if (!membership?.setup_completed_at) redirect('/wizard');
 
   return (
-    // App-shell med fast viewport-højde. Sidebar holder samme størrelse
-    // uanset hvor langt indholdet er - det er kun <main> der scroller. Det
-    // giver et stabilt navigations-anker og undgår at sidebaren strækker
-    // sig på lange sider som /budget eller /opsparinger.
-    <div className="flex h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4">
+    // App-shell:
+    // - Mobile (< md): MobileNav top-bar med hamburger; sidebaren er
+    //   skjult og åbner som drawer ved klik. Stack vertikalt så main
+    //   får fuld bredde.
+    // - md+ (tablet/desktop): klassisk side-by-side med fast sidebar
+    //   til venstre. Sidebar holder samme størrelse uanset hvor langt
+    //   indholdet er - det er kun <main> der scroller.
+    <div className="flex h-screen flex-col md:flex-row">
+      <MobileNav userEmail={user.email ?? ''} />
+
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4 md:flex">
         <div className="px-2 pb-6">
           <FambudMark size="lg" />
         </div>
@@ -68,7 +74,7 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
 
       {/* Toast hænger på URL search-params; Suspense er påkrævet fordi
           useSearchParams ellers vil bailout client-side for hele route'en. */}

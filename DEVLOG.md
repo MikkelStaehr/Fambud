@@ -2851,3 +2851,480 @@ kommer."
 
 Klar til at åbne for testbrugere ud over inner circle. P15, P17 (HIGH-
 items) bør være afsluttet inden første eksterne testbruger.
+
+---
+
+# Devlog — 6.-7. maj 2026 (landing redesign + animation)
+
+Efter at sikkerhedsauditten lukkede sin 13-prompts-runde, gik vi over
+til landing-page-redesign. 11 commits gennem dagen, fokuseret på
+copy + animationer + visuel polish. Ingen funktions-ændringer i appen
+selv. Hele landing er nu på samme designnivå som dashboardet og kan
+sælges til testbrugere uden at være pinligt.
+
+Hvis du læser dette om 6 måneder fordi du undrer dig over hvorfor en
+animations-bibliotek dukkede op midt i projektet, eller hvorfor copy
+har en bestemt tone, så er sammenhængen her.
+
+Commits: `5acd2b4` -> `1117c7f`. Alle på main.
+
+---
+
+## 1. Login-side: stort fambud-logo som tilbage-link
+
+Commit `5acd2b4`. Lille fix - login-siden havde ingen vej tilbage til
+landing, og "Fambud" stod som lille standard h1.
+
+[app/login/page.tsx](app/login/page.tsx):
+- "Fambud" -> "fambud" (lowercase) i ZT-Nature-fonten der matcher
+  brand-stilen på landing, privatliv og security
+- text-xl -> text-5xl (sm: text-6xl) - betydeligt større
+- Wrapped i `<Link href="/">` med hover-emerald + aria-label
+
+Vi har samme mønster på de andre offentlige sider (privatliv, security)
+men login havde det ikke. Nu er det konsistent.
+
+---
+
+## 2. Hero-redesign: ny copy + animeret cashflow-mockup
+
+Commits `3f6424e` + `b779a76`.
+
+### 2.1 Tekst (statisk)
+
+| Område | Før | Efter |
+| --- | --- | --- |
+| Badge | "For danske familier - ikke en bank-app" | "Økonomisk planlægning for almindelige mennesker" |
+| H1 | "Få overblik over jeres husholdningsbudget - uden bank-import." | "Se hvor pengene løber hen, før de gør det" |
+| Sub | bank-app-fokuseret tekst | ny: "...sætte din økonomi i system. Du fortæller os hvad der kommer ind, hvad der går ud..." |
+| Trust-row | "19 kr/md fast pris · Lavet i Danmark · Ingen bank-adgang · GDPR-compliant" | "19 kr/md · Dine data bliver i EU · Uafhængig af banker · GDPR-compliant" |
+
+### 2.2 Animation: 3-måneds cashflow-mockup
+
+[app/_components/HeroDemoMockup.tsx](app/_components/HeroDemoMockup.tsx).
+Erstattede den statiske "April 2026"-mockup med en der cykler gennem
+3 måneder hver 4. sekund:
+
+| Frame | Måned | Net | Tekst | Badge |
+| --- | --- | --- | --- | --- |
+| 1 | April 2026 | + 16.589 kr (emerald) | "Du har overskud" | Check + "Alt på din side er dækket" |
+| 2 | Maj 2026 | − 2.340 kr (amber) | "Pas på i denne måned" | AlertTriangle + "Husk: bilforsikring trækkes 5. maj" |
+| 3 | Juni 2026 | + 8.420 kr (emerald) | "Du har overskud" | Check + "Alt på din side er dækket" |
+
+Indtægter konstant 29.747; udgifter svinger så netto matematisk passer.
+Maj viser bevidst et underskud så det signalerer at appen håndterer
+både gode og mindre gode måneder.
+
+Første implementering brugte CSS @keyframes + React `key={frameIndex}`
+til at force-remounte. Det virkede men havde et subtilt
+overlap-frame ved skift hvor gammelt og nyt element kort lå oven på
+hinanden. Refactor til `motion`-library (`b779a76`):
+- AnimatePresence mode="wait" - venter på exit-fade før entry-fade
+- Stagger: 60ms cascade gennem måned -> net -> label -> indtægter ->
+  udgifter -> badge
+- Ease-out-quint cubic-bezier (0.16, 1, 0.3, 1)
+- Exit-translate -4px Y opad, entry +6px Y nedad - giver retning
+- useReducedMotion hook erstatter min tidligere matchMedia-listener
+- IntersectionObserver bibeholdt - pause når kortet ruller ud af viewport
+
+---
+
+## 3. Animations-stack-beslutning: motion vs Framer Motion
+
+Brugeren spurgte om vi skulle bruge Framer Motion. Jeg svarede ærligt:
+~50KB ekstra bundle for en hero-animation alene er dyrt. Anbefalede
+i stedet `motion`-pakken (samme maintainer Matt Perry, samme API,
+~6KB gzipped, det er den nye officielle navn for det der tidligere hed
+framer-motion).
+
+Brugeren godkendte. `npm install motion`. Version 12.38.0.
+
+Beslutning dokumenteret i komponent-headers så fremtidige sessions ved
+hvorfor vi ikke har framer-motion direkte. Vigtig pointe: den moderne
+`motion`-pakke ER Framer Motion's efterfølger, så hvis nogen senere
+googler "framer-motion" og finder dokumentation, gælder den stadig
+for vores import.
+
+---
+
+## 4. Hvorfor Fambud-redesign + global em-dash purge
+
+Commit `5e13342`.
+
+### 4.1 Sektion-revision
+
+| Område | Før | Efter |
+| --- | --- | --- |
+| H2 | "Bygget til familier - ikke til bogholderi" | "Lavet til hverdagen, ikke regnearket" |
+| Sub | familie-fokuseret | "De fleste banker antager at økonomi er simpelt. Det er det sjældent..." |
+
+Privatliv-kort fjernet (skal flyttes til separat tillids-sektion senere).
+Lån + pension splittet ud i to separate kort. Samlet 6 kort:
+
+| # | Titel | Ikon |
+| --- | --- | --- |
+| 1 | Til dig, og dem du deler med | Users |
+| 2 | Forecast der ved hvad du tjener | TrendingUp |
+| 3 | Opsparing med formål, og i system | PiggyBank |
+| 4 | Se hvor pengene rent faktisk ender | BarChart3 |
+| 5 | Realkredit der regnes som realkredit | Home |
+| 6 | Pension med både din og firmaets andel | LineChart |
+
+Imports opdateret: -ShieldCheck, +BarChart3, +Home, +LineChart.
+
+### 4.2 Em-dash purge
+
+Verificeret med `grep -rn "—" app/` og fjernet 5 forekomster:
+- Hero H1 + sub (em-dash -> komma)
+- Privatliv "Cookies — kun det nødvendige" -> komma
+- HeroDemoMockup kode-kommentarer
+- BudgetTable UI-placeholder em-dash -> EN-dash (typografisk korrekt
+  for "ingen-værdi"-marker)
+
+---
+
+## 5. Em-dash lint-rule + CLAUDE.md
+
+Commit `a2953ec`. Projektlederens forslag: "Em-dash er en af de mest
+pålidelige AI-fingeraftryk. Lav en CI-regel der fanger det."
+
+### 5.1 Semgrep custom rule
+
+[semgrep-rules/fambud.yaml](semgrep-rules/fambud.yaml) tilføjet
+`fambud-no-em-dash`-regel:
+- Severity: ERROR (blokerer merge når branch protection aktiv)
+- Scope: `app/**/*.{tsx,ts}`, `lib/**/*.{tsx,ts}`, root .ts-filer
+- Markdown undtaget (DEVLOG, SECURITY_AUDITS, docs/) - læses af
+  mennesker der ved hvad em-dash er
+- Suppress med `// nosemgrep: fambud-no-em-dash`
+
+### 5.2 CLAUDE.md ny
+
+Claude Code læser automatisk CLAUDE.md i project-root som persistent
+context. Tilføjet ny [CLAUDE.md](CLAUDE.md) med:
+1. Em-dash-reglen + fuld begrundelse (AI-fingeraftryk, copy-paste-drift,
+   manuel-purge-omkostning)
+2. Mass-assignment-pattern (Prompt 8 reference)
+3. PII-logging-disciplin (Prompt 11 reference)
+4. createAdminClient i klient-filer (forbudt)
+5. Verificér-efter-deploy (Prompt 9 lærdom)
+6. bigint-øre konvention
+
+Plus protokol for at tilføje nye regler: "Føj reglen til Semgrep og
+dokumentér hvorfor i denne fil."
+
+---
+
+## 6. DemoStrip-redesign: 3-frame animeret med sankey
+
+Commits `b89b5c5` + `43eee41`.
+
+[app/_components/DemoStripMockup.tsx](app/_components/DemoStripMockup.tsx).
+Erstattede den statiske BudgetBar-blok med en animeret komponent der
+cykler gennem 3 visninger hver 5. sek:
+
+### Frame 1: Udgifter pr. gruppe, fælles
+5 horisontale procentbarer (Bolig, Forsyning, Børn, Mad, Underholdning).
+Total 34.830 kr. Procenterne 41/23/16/12/8 matematisk konsistente.
+
+### Frame 2: Pengestrømmen, april
+Forenklet sankey med 2 indtægter -> 4 destinationer.
+
+Initial implementering havde 5 destinationer (inkl. "Buffer/rest")
+som var for visuelt støjende. `43eee41` mergede "Buffer/rest" ind i
+"Opsparing" -> "Opsparing & buffer" 10.080 kr. Total stadig 50.600.
+
+Sankey-implementering:
+- Matematisk korrekt: hver venstre-blok bidrager proportionalt til
+  hver højre-blok via `income.amount * (expense.amount / total)`
+- 8 cubic-Bezier paths (2 incomes x 4 expenses) med 35% opacity
+- Sub-cursors per blok sikrer paths stables i samme rækkefølge på
+  begge sider af SVG'en (uden det ville flows krydses visuelt)
+- Mobile fallback: SVG kollapser til 2-kolonne ind/ud-liste
+- 480x280 viewBox med preserveAspectRatio="none" -> responsive
+
+### Frame 3: Bolig & lån, detaljer
+Drill-down af frame 1's lilla bolig-bar. 6 underposter (afdrag, rente,
+bidragssats, ejerforening, ejendomsskat, husforsikring) der summer
+til 14.250 kr - matcher frame 1's bolig-tal præcist. Lilla-palette
+antyder zoom-in.
+
+ArrowLeft-icon + label i header signalerer drill-down (ikke
+funktionel, kun visuel).
+
+### Højde-fix
+
+`43eee41`: containeren hoppede mellem frames pga. forskellige
+naturlige højder. Fix: `min-h-[400px] mobile + sm:min-h-[360px]
+desktop` på outer container. Hver motion.div får `flex h-full
+flex-col`. Frame 1 + 3 body bruger `flex-1 + justify-evenly` så bars
+fyldes jævnt. Frame 2 SVG strækkes via `h-full + min-h-[180px]`.
+
+### Bullet-list-rettelser i højre kolonne
+
+| Før | Efter |
+| --- | --- |
+| "9 tematiske grupper - Bolig..." | "9 tematiske grupper: Bolig..." |
+| "Andele af det samlede budget - find de store sten" | "Andele af det samlede budget, så du finder de store sten" |
+| "Hierarkisk drill-down til hver enkelt post" | "Klik en gruppe for at se de enkelte poster" |
+
+---
+
+## 7. HowItWorks-redesign: vertikal timeline med mockups
+
+Commits `3d44330` + `705846c` + `db3e291` + `1117c7f`. Den største
+sektion-ændring i dag, krævede 4 commits at få helt rigtigt.
+
+### 7.1 Sektion-struktur (3d44330)
+
+[app/_components/HowItWorksSteps.tsx](app/_components/HowItWorksSteps.tsx).
+Erstattede 4-kolonne-grid med vertikal timeline:
+
+```
+[Eyebrow: SÅDAN KOMMER DU I GANG]
+[H2: Du er kørende på 10 minutter]
+[Sub: Du behøver ikke have alt klar...]
+
+┌──┬─────────────────┐  ← mobile (badge+tekst, mockup under)
+│ 1│ Opret konto     │  ← desktop (badge+tekst+mockup samme row)
+│  │ Email og kode   │
+│  └─────────────────┘
+│  [Mockup 1]
+│
+┌──┬─────────────────┐
+│ 2│ Tilføj din løn  │
+│  │ Tre lønninger   │
+...
+```
+
+Layout: `grid-cols-[40px_1fr]` mobile, `sm:grid-cols-[40px_1fr_minmax(0,260px)]`
+desktop. Mockup `col-span-2` mobile, `sm:col-start-3 sm:row-start-1`.
+
+Tekst-rettelser:
+- H2: "4 trin til overblik" -> "Du er kørende på 10 minutter"
+- Sub omskrevet med fokus på "begynd med løn og største udgifter"
+
+### 7.2 Fire mockups (forenklede, ikke pixel-perfekte)
+
+| # | Mockup | Indhold |
+| --- | --- | --- |
+| 1 | SignupMockup | 2 input-felter + emerald "Opret konto"-knap |
+| 2 | PaychecksMockup | "LØNUDBETALINGER" + 3 rækker (Feb/Mar/Apr 28.450/29.120/28.890 kr) emerald monospace |
+| 3 | ExpensesMockup | "FASTE UDGIFTER" + 4 farvede prikker (Realkredit/Forsikringer/Daginstitution/Abonnementer) |
+| 4 | ForecastMockup | "FORECAST" bar-chart |
+
+### 7.3 Animation-bug og fix (`705846c`)
+
+Initial implementering brugte `whileInView` med `viewport: { once:
+true, amount: 0.3 }`. Animation triggede teknisk men var ikke synlig
+nok (16px Y, 0.4s, 30%-amount).
+
+Fix: refactor til eksplicit `useInView` hook med ref:
+- Y-translation 16px -> **24px**
+- Duration 0.4s -> **0.55s**
+- amount 0.3 -> **0.15** (trigger så snart 15% af elementet er i viewport)
+- Stagger 150ms mellem trinene bevaret
+- once: true bevaret
+
+Plus separat scaleY-animation på connector-line:
+- transform-origin: top + initial scaleY: 0
+- Delay = step-delay + 0.18s -> linjen "vokser ned" lige efter step
+  lander
+- 0.5s duration
+
+### 7.4 Forecast-bar-chart bug og fix (`705846c`)
+
+Initial ForecastMockup havde nested flex-col med flex-1 wrapper. `height:
+%` på bar-divs havde ingen pixel-context at regne mod -> bars renderede
+0px og var usynlige.
+
+Fix: refactor til `grid h-24 grid-cols-5 items-end gap-2`. Hver bar har
+nu klar parent-højde (96px) at regne procenter mod.
+
+### 7.5 Step-rytme + linjefarve (`db3e291`)
+
+Brugeren bemærkede at afstanden mellem badges var inkonsistent fordi
+spacing styres af indholdshøjde. Mockups varierede ~140-180px,
+forskellige steps havde forskellige row-højder.
+
+Fix: `min-h` per step:
+- Mobile (mockup stacked under tekst): `min-h-[360px]` (sidste step `min-h-[300px]`)
+- Desktop (mockup parallelt): `min-h-[240px]` (sidste step `min-h-[200px]`)
+
+Sidste step's reducerede min-h kompenserer for manglende `pb-12`,
+så badge-til-badge-afstanden er ens for alle 4 trin.
+
+Connector-line farve: `bg-emerald-200` -> `bg-stone-300` (~#d6d3d1).
+Brugerens spec: "neutral grå, tilstede uden at trække fokus".
+
+### 7.6 Forecast som grouped bar chart (`db3e291`)
+
+Initial forecast var single-bar pr. måned. Brugeren ville have
+indtægt+udgift side om side så balancen er synlig.
+
+Refactor: 5 grupper med 2 bars hver. Indtægt 50.600 konstant, udgifter
+varierer (33.200 / 48.900 / 31.500 / 35.800 / 38.200).
+
+Layout: `grid-cols-5 gap-2` mellem grupper, `gap-0.5` (2px) mellem
+bars i samme gruppe. MAX_VALUE 55000 normaliserer så indtægts-bar
+er ~92% af 96px container.
+
+Initialt havde udgifts-bars ratio-baseret farveskifter (emerald < 80%,
+amber 80-95%, red > 95%). Brugeren `1117c7f` ændrede til at alle
+udgifts-bars skal være røde uanset ratio - "brugeren ser balancen via
+højdeforholdet alene".
+
+### 7.7 Negative udgifter + ensartet rød (`1117c7f`)
+
+ExpensesMockup-beløb gået fra neutral-700 til **text-red-900** med
+rigtig minus-tegn (−, U+2212):
+- −8.490 kr / −2.140 kr / −3.580 kr / −890 kr
+
+Forecast udgifts-bars: alle nu `bg-red-900` uanset ratio. Legend-prik
+opdateret til red-900 så den matcher bar-farven.
+
+Konsistens på tværs af landing: `text-red-900` / `bg-red-900` er nu
+"udgift"-farven på 3 steder:
+1. DemoStripMockup "Udgifter"-tekst (eksisterende)
+2. HowItWorksSteps ExpensesMockup beløbene
+3. HowItWorksSteps ForecastMockup udgifts-bars + legend
+
+### 7.8 CTA-blok i bunden af sektion
+
+Centreret blok 16-20rem under sidste step:
+- H3 "Det tager mindre tid end at lave kaffe" (ZT-Nature font)
+- Brødtekst om at man kan starte med løn alene
+- Emerald-800 "Opret konto gratis"-knap (matcher hero-CTA)
+- Tekst-link "Eller log ind hvis du allerede har en konto"
+
+CTA bruger egen `useInView` så den fader ind separat fra steps.
+
+---
+
+## 8. Læringspunkter
+
+### 8.1 Animation-debugging er ikke trivielt
+
+`whileInView` virkede teknisk (motion's intersection-detection fyrede
+events), men brugeren så det ikke synligt. Tre mulige årsager: amount
+for høj, duration for kort, Y-translation for lille. Refactor til
+eksplicit useInView gjorde det meget mere synligt - både fordi
+parametrene blev mere generøse (24px/0.55s/0.15) og fordi vi havde
+fuld kontrol med ref + state.
+
+### 8.2 Procent-højder skal have pixel-context
+
+Min første ForecastMockup havde `height: %` på bars uden parent med
+fast pixel-højde. CSS grid `h-24 grid-cols-5 items-end` løste det -
+hver bar har nu klar parent (96px) at regne mod.
+
+Tilsvarende fix lavede vi i DemoStripMockup hvor min-h på containeren
+gav SVG en højde at strække sig til.
+
+### 8.3 Hardkodede farver vs ratio-baserede regler
+
+Initialt forsøgte jeg at automatisk farve forecast-bars baseret på
+ratio (emerald < 80%, amber 80-95%, red > 95%). Brugeren foretrak
+at hardkode: indtægt grøn, udgift rød, brugeren læser balance via
+højdeforhold.
+
+Pointe: regelbaserede farver virker når data er objektivt katego-
+riseret. Mockup-data er ikke "objektivt" - det er pædagogisk
+illustration. Hardkoding gør spec'en tydelig og forhindrer at en
+fremtidig udvikler skal forstå reglen for at ændre værdier.
+
+### 8.4 Mobile-first kræver eksplicit tankegang
+
+Hver layout-prompt fra brugeren har "MOBILE FIRST" eller mockup
+stacked-fallback. Det er fordi den naturlige Tailwind-default
+(`grid grid-cols-3`) er desktop-først, og man får på mobile uden
+at tænke over det.
+
+For HowItWorksSteps brugte vi:
+- `grid-cols-[40px_1fr]` (mobile baseline)
+- `sm:grid-cols-[40px_1fr_minmax(0,260px)]` (desktop udvidelse)
+
+Inden den eksplicite mobile-first-tilgang, blev mockup squeezet til
+~80px på mobile.
+
+### 8.5 Brugerens forsikring om "vi bruger Framer Motion" var ikke korrekt
+
+Brugeren sagde "vi bruger allerede Framer Motion i projektet" da de
+spurgte om animationer. Det viste sig vi IKKE havde det installeret.
+Pragmatic løsning: jeg installerede `motion` (~6KB, samme maintainer)
+i stedet for Framer Motion (~50KB) og forklarede hvorfor.
+
+Lærdom: tjek altid hvad der faktisk er installeret. Brugerens
+forventninger om hvad der findes er ikke autoritative.
+
+### 8.6 Em-dash som AI-fingeraftryk
+
+Vi har manuelt purget em-dashes 2-3 gange denne uge. Hver gang vi
+copy-paster fra Claude-output, sniger de sig ind. Projektlederens
+forslag om en lint-regel var rigtig: 80% præcision er bedre end 0%,
+og false positives kan suppresses med en comment.
+
+CLAUDE.md har nu sektionen "Em-dash er forbudt i kildekoden" som
+fremtidige Claude-sessions vil læse automatisk og forhåbentlig
+respektere.
+
+---
+
+## 9. Status efter dagen
+
+**Landing-page-redesign**: complete. Hero + Hvorfor + DemoStrip +
+HowItWorks alle redesignet med ny copy + animationer.
+
+**Bundle-impact**: +6KB (motion) + ~3KB (HowItWorksSteps) + ~2KB
+(DemoStripMockup mockup-arbejde). Total +11KB på landing-bundle.
+Ikke voldsomt for visuel kvalitets-løft.
+
+**Animations-stack**: motion 12.38.0. Brugt på:
+- HeroDemoMockup (3-måneds cykling, AnimatePresence)
+- DemoStripMockup (3-frame cykling, AnimatePresence)
+- HowItWorksSteps (per-step fade-up + scaleY connector-line, useInView)
+
+Alle tre komponenter har:
+- useReducedMotion-respekt
+- IntersectionObserver / useInView for performance
+- Konsistent ease-out-quint cubic-bezier (0.16, 1, 0.3, 1)
+
+**Em-dash-disciplin**: 0 em-dashes i kildekoden. Lint-rule deployet
+i CI så fremtidig drift fanges automatisk. CLAUDE.md har begrundelse
+for fremtidige Claude-sessions.
+
+**Bytes**: 11 commits fra `5acd2b4` til `1117c7f`. Alle på main, alle
+deployet.
+
+---
+
+## 10. Hvor er vi
+
+Landing er klar til at vise testbrugere uden at skulle pinligt
+rationalisere noget. Animationer er rolige (4-5 sek interval), copy
+er kalibreret (banker antager simpelt vs. det er det sjældent),
+sikkerhedsfundamentet ligger fra dagen før.
+
+**Næste skridt** (ingen er locked-in, brugeren beslutter):
+
+- Tillids-sektion ned mod bunden af landing der samler privatliv +
+  EU-data + GDPR + sikkerheds-retorikken (fjernet fra Hvorfor-grid'et
+  i `5e13342`)
+- FAQ-sektion gennemgang (har ikke været rørt i dag)
+- Final CTA blok (kommer efter HowItWorks's CTA, måske redundant nu?)
+- Footer revidering (matcher den nye copy-tone?)
+- A/B test-setup hvis vi vil måle conversion
+
+**Åbne tråde fra dagen**:
+
+- HowItWorksSteps har `min-h` på steps der er hardcodede pixel-mål.
+  Hvis indhold ændrer sig markant (større mockups, længere tekst),
+  bryder rytmen. ResizeObserver kunne måle dynamisk men er over-
+  engineering pt.
+- ForecastMockup's MAX_VALUE 55000 er hardcoded - hvis indtægts-værdier
+  ændres, skal MAX også. Lille teknisk gæld.
+- Min-h på HeroDemoMockup er `min-h-[400px]` mobile / `min-h-[360px]`
+  desktop. Frame 2 (sankey) er sandsynligvis tightere her end frame
+  3 (Bolig-detaljer) men det checked ikke matematisk.
+- Vi har endnu ikke testet sektionen i Lighthouse - bundle-impact
+  bør verificeres mod Performance score post-deploy.

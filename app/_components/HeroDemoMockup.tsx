@@ -1,22 +1,25 @@
 'use client';
 
 // Animated hero-demo-mockup på landing page. Cykler gennem 3 måneder
-// (April → Maj → Juni → April) hver 4. sekund med en blød fade-up-
-// transition. Maj viser bevidst et underskud i amber/orange, så det
-// signalerer at appen håndterer både gode og mindre gode måneder.
+// (April → Maj → Juni → April) hver 4. sekund med stagger-fade så
+// elementerne skifter sekventielt frem for synkront. Maj viser bevidst
+// et underskud i amber/orange så det signalerer at appen håndterer
+// både gode og mindre gode måneder.
+//
+// Animation-stack: motion (~6KB gzipped). AnimatePresence med mode="wait"
+// venter på at det gamle element fader ud før det nye fader ind, så vi
+// undgår overlap. Stagger via individuelle delay-værdier (kunne også
+// være staggerChildren på parent, men elementerne er fordelt på header
+// + body + absolutely-positioned badge, så individual delay er klarere).
 //
 // Tilgængelighed:
-// - prefers-reduced-motion: kun frame 0 vises statisk, ingen interval
-// - IntersectionObserver: pause når kortet er ude af viewport (sparer CPU)
-// - aria-live=polite på de skiftende felter så skærmlæsere annoncerer ændringer
-//   uden at afbryde brugeren
-//
-// Animation implementeret via CSS @keyframes (globals.css :: fambud-fade-up)
-// + React key-skift der force-remounter elementet og dermed replayer
-// keyframen. Ingen Framer Motion - vi sparer ~50KB bundle på en simpel
-// 3-state-cykling.
+// - useReducedMotion(): hvis OS-flag er sat, fade-varighed = 0, ingen
+//   stagger, ingen interval — kortet vises som statisk frame 0.
+// - IntersectionObserver: pause cykling når kortet er ude af viewport.
+// - aria-live=polite på de skiftende felter.
 
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AlertTriangle, Check, Sparkles } from 'lucide-react';
 
 type Frame = {
@@ -72,21 +75,34 @@ const FRAMES: readonly Frame[] = [
 
 const FRAME_INTERVAL_MS = 4000;
 
+// Stagger-delays. Header-elementet starter først, derefter cascader
+// vi ned gennem net-amount, label, indtægter, udgifter, badge. 60ms
+// mellem hvert trin føles "alive" uden at trække totalen ud over
+// 0.5 sek.
+const STAGGER_BASE = 0.06;
+const FADE_DURATION = 0.32;
+// Ease-out-quint - hurtig start, blød landing. Standard "naturlig"-
+// følende kurve for entry-animationer.
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+// Standard motion-config der bruges for alle skiftende elementer.
+// `delay` overskrives per element for stagger-cascade.
+const fadeProps = (delay: number, reduced: boolean) => ({
+  initial: reduced ? false : { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0 },
+  exit: reduced ? undefined : { opacity: 0, y: -4 },
+  transition: {
+    duration: reduced ? 0 : FADE_DURATION,
+    delay: reduced ? 0 : delay,
+    ease: EASE,
+  },
+});
+
 export function HeroDemoMockup() {
   const [frameIndex, setFrameIndex] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
-  const [reducedMotion, setReducedMotion] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // prefers-reduced-motion-detect. Skifter dynamisk hvis brugeren
-  // ændrer OS-indstillingen mens siden er åben.
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  const reducedMotion = useReducedMotion() ?? false;
 
   // IntersectionObserver - pauser animationen når kortet ikke er synligt.
   // Vigtigt på lange landing-pages hvor brugeren ruller forbi hero.
@@ -112,11 +128,6 @@ export function HeroDemoMockup() {
 
   const frame = FRAMES[frameIndex];
 
-  // Brugte til React key-baseret remount så CSS animation replayer
-  // ved hvert frame-skift. Konsistent suffix per element så de ikke
-  // collider.
-  const k = (suffix: string) => `${frameIndex}-${suffix}`;
-
   // Net-amount tekst-farve afhænger af om månedens netto er positiv
   // eller negativ. Vi genbruger samme palette som dashbordet bruger.
   const netColorClass = frame.netIsPositive ? 'text-emerald-800' : 'text-amber-700';
@@ -128,50 +139,65 @@ export function HeroDemoMockup() {
           <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
             Er du på rette spor?
           </span>
-          <span
-            key={k('month')}
-            className="fambud-fade-up text-xs font-medium uppercase tracking-wider text-neutral-400"
-            aria-live="polite"
-          >
-            {frame.month}
-          </span>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={frame.month}
+              {...fadeProps(STAGGER_BASE * 0, reducedMotion)}
+              className="text-xs font-medium uppercase tracking-wider text-neutral-400"
+              aria-live="polite"
+            >
+              {frame.month}
+            </motion.span>
+          </AnimatePresence>
         </div>
         <div className="px-5 py-5 sm:px-6 sm:py-6">
-          <div
-            key={k('net')}
-            className={`fambud-fade-up tabnum font-mono text-3xl font-semibold sm:text-4xl ${netColorClass}`}
-            aria-live="polite"
-          >
-            {frame.netAmount}
-          </div>
-          <p
-            key={k('label')}
-            className={`fambud-fade-up mt-1 text-sm font-medium ${netColorClass}`}
-          >
-            {frame.netLabel}
-          </p>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={`net-${frameIndex}`}
+              {...fadeProps(STAGGER_BASE * 1, reducedMotion)}
+              className={`tabnum font-mono text-3xl font-semibold sm:text-4xl ${netColorClass}`}
+              aria-live="polite"
+            >
+              {frame.netAmount}
+            </motion.div>
+          </AnimatePresence>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p
+              key={`label-${frameIndex}`}
+              {...fadeProps(STAGGER_BASE * 2, reducedMotion)}
+              className={`mt-1 text-sm font-medium ${netColorClass}`}
+            >
+              {frame.netLabel}
+            </motion.p>
+          </AnimatePresence>
           <div className="mt-5 grid grid-cols-2 gap-3 border-t border-neutral-100 pt-4">
             <div>
               <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
                 Indtægter
               </div>
-              <div
-                key={k('income')}
-                className="fambud-fade-up tabnum mt-1 font-mono text-base font-semibold text-emerald-800"
-              >
-                {frame.income}
-              </div>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`income-${frameIndex}`}
+                  {...fadeProps(STAGGER_BASE * 3, reducedMotion)}
+                  className="tabnum mt-1 font-mono text-base font-semibold text-emerald-800"
+                >
+                  {frame.income}
+                </motion.div>
+              </AnimatePresence>
             </div>
             <div>
               <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
                 Udgifter
               </div>
-              <div
-                key={k('expenses')}
-                className="fambud-fade-up tabnum mt-1 font-mono text-base font-semibold text-red-900"
-              >
-                {frame.expenses}
-              </div>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`expenses-${frameIndex}`}
+                  {...fadeProps(STAGGER_BASE * 4, reducedMotion)}
+                  className="tabnum mt-1 font-mono text-base font-semibold text-red-900"
+                >
+                  {frame.expenses}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -179,7 +205,8 @@ export function HeroDemoMockup() {
 
       {/* Lille flydende cashflow-tjek-card. Border + shadow farve følger
           badgeAccent (emerald for OK, amber for advarsel). transition-colors
-          giver en blødere skift end hård border-swap. */}
+          giver en blødere skift end hård border-swap, og sker uafhængigt
+          af AnimatePresence-fade på den indre tekst. */}
       <div
         className={`absolute -bottom-6 -right-4 hidden w-60 rounded-lg border bg-white p-4 shadow-xl transition-colors duration-300 sm:block ${
           frame.badgeAccent === 'emerald'
@@ -195,19 +222,22 @@ export function HeroDemoMockup() {
           <Sparkles className="h-3 w-3" />
           Cashflow-tjek
         </div>
-        <div
-          key={k('badge')}
-          className={`fambud-fade-up flex items-start gap-2 text-xs ${
-            frame.badgeAccent === 'emerald' ? 'text-emerald-900' : 'text-amber-900'
-          }`}
-        >
-          {frame.badgeIcon === 'check' ? (
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
-          ) : (
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
-          )}
-          {frame.badgeText}
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`badge-${frameIndex}`}
+            {...fadeProps(STAGGER_BASE * 5, reducedMotion)}
+            className={`flex items-start gap-2 text-xs ${
+              frame.badgeAccent === 'emerald' ? 'text-emerald-900' : 'text-amber-900'
+            }`}
+          >
+            {frame.badgeIcon === 'check' ? (
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
+            ) : (
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
+            )}
+            {frame.badgeText}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

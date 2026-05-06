@@ -12,26 +12,3 @@
   font-feature-settings: "tnum";
 }
 
-/* Hero-demo-mockup-animation: fade in + 6px Y-translate.
-   Triggers ved key-skift på elementer der cykler gennem måneder.
-   prefers-reduced-motion: ingen animation, statisk vis. */
-@keyframes fambud-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fambud-fade-up {
-  animation: fambud-fade-up 350ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fambud-fade-up {
-    animation: none;
-  }
-}

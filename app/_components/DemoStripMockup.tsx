@@ -43,12 +43,13 @@ const SANKEY_INCOMES = [
   { id: 'p2', label: 'Løn person 2', amount: 22100, color: '#06b6d4' },
 ] as const;
 
+// Buffer/rest merged ind i Opsparing for at reducere visuel støj.
+// 8.500 + 1.580 = 10.080 kr. Total stadig 50.600.
 const SANKEY_EXPENSES = [
   { id: 'shared', label: 'Faste udgifter, fælles', amount: 28450, color: '#7c3aed' },
   { id: 'private', label: 'Faste udgifter, private', amount: 6200, color: '#a78bfa' },
-  { id: 'savings', label: 'Opsparing', amount: 8500, color: '#16a34a' },
+  { id: 'savings', label: 'Opsparing & buffer', amount: 10080, color: '#16a34a' },
   { id: 'consumption', label: 'Forbrug', amount: 5870, color: '#eab308' },
-  { id: 'buffer', label: 'Buffer/rest', amount: 1580, color: '#94a3b8' },
 ] as const;
 
 // ----------------------------------------------------------------
@@ -91,10 +92,22 @@ export function DemoStripMockup() {
     return () => clearInterval(id);
   }, [reducedMotion, isVisible]);
 
+  // min-height locked til frame 3's faktiske desktop-højde (~360px) +
+  // mobile har ekstra plads til sankey-fallback-list (~400px). Ydre
+  // container er derfor mindst lige så høj som det højeste frame, så
+  // AnimatePresence-fade ikke kollapser layout under transition og
+  // får sektionen til at "hoppe".
+  //
+  // relative + absolute-positioned children: under fade-out af et
+  // frame ligger gammelt og nyt frame oven på hinanden i samme
+  // koordinatsystem. Uden absolute ville mode="wait" garantere
+  // sekventiel rendering, men børnene ville stadig flyde efter hinanden
+  // i normal-flow. relative på containeren + h-fuld via min-h sikrer
+  // at uanset hvilket frame der er aktivt, fylder det hele containeren.
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-neutral-300/30"
+      className="relative overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-neutral-300/30 min-h-[400px] sm:min-h-[360px]"
     >
       <AnimatePresence mode="wait" initial={false}>
         {frameIndex === 0 && (
@@ -104,6 +117,7 @@ export function DemoStripMockup() {
             animate={{ opacity: 1, y: 0 }}
             exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
             transition={{ duration: reducedMotion ? 0 : FADE_DURATION, ease: EASE }}
+            className="flex h-full min-h-[400px] flex-col sm:min-h-[360px]"
           >
             <GroupsFrame />
           </motion.div>
@@ -115,6 +129,7 @@ export function DemoStripMockup() {
             animate={{ opacity: 1, y: 0 }}
             exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
             transition={{ duration: reducedMotion ? 0 : FADE_DURATION, ease: EASE }}
+            className="flex h-full min-h-[400px] flex-col sm:min-h-[360px]"
           >
             <SankeyFrame />
           </motion.div>
@@ -126,6 +141,7 @@ export function DemoStripMockup() {
             animate={{ opacity: 1, y: 0 }}
             exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
             transition={{ duration: reducedMotion ? 0 : FADE_DURATION, ease: EASE }}
+            className="flex h-full min-h-[400px] flex-col sm:min-h-[360px]"
           >
             <BoligDetailsFrame />
           </motion.div>
@@ -139,6 +155,9 @@ export function DemoStripMockup() {
 // Frame 1
 // ----------------------------------------------------------------
 function GroupsFrame() {
+  // Body bruger flex-1 + flex-col + justify-evenly så de 5 bars fordeler
+  // sig jævnt i den lukket-min-højde. Det giver luftig spacing der match'er
+  // frame 3's tighter look (6 bars) uden at vi behøver faste pixel-mål.
   return (
     <>
       <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3">
@@ -146,7 +165,7 @@ function GroupsFrame() {
           Udgifter pr. gruppe, fælles
         </span>
       </div>
-      <div className="space-y-2.5 p-4">
+      <div className="flex flex-1 flex-col justify-evenly p-4">
         {GROUPS.map((g) => (
           <BudgetBar
             key={g.label}
@@ -272,7 +291,7 @@ function SankeyFrame() {
           Pengestrømmen, april
         </span>
       </div>
-      <div className="grid gap-3 p-4 sm:grid-cols-[100px_1fr_140px] sm:items-stretch">
+      <div className="grid flex-1 gap-3 p-4 sm:grid-cols-[100px_1fr_140px] sm:items-stretch">
         {/* Venstre labels */}
         <ul className="hidden flex-col justify-between text-right text-xs sm:flex">
           {incomeBlocks.map((b) => (
@@ -285,10 +304,13 @@ function SankeyFrame() {
           ))}
         </ul>
 
-        {/* SVG flow */}
+        {/* SVG flow - h-full sikrer at SVG'en strækker sig til grid-rækkens
+            højde (som er flex-1 inde i frame-containeren). preserveAspectRatio
+            "none" lader båndene strække sig vertikalt med plads, hvilket gør
+            dem mere læsbare jo højere containeren er. */}
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="h-48 w-full sm:h-auto"
+          className="h-full min-h-[180px] w-full"
           preserveAspectRatio="none"
           aria-hidden
         >
@@ -382,6 +404,10 @@ function SankeyFrame() {
 // Frame 3: Drill-down
 // ----------------------------------------------------------------
 function BoligDetailsFrame() {
+  // Frame 3 er typisk den højeste (6 rows + breadcrumb). Vi bruger
+  // justify-evenly her også, så bars strækkes hvis containeren er
+  // højere end deres summed natural height. Konsistent layout-pattern
+  // med GroupsFrame.
   return (
     <>
       <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-3">
@@ -393,7 +419,7 @@ function BoligDetailsFrame() {
           14.250 kr
         </span>
       </div>
-      <div className="space-y-2.5 p-4">
+      <div className="flex flex-1 flex-col justify-evenly p-4">
         {BOLIG_DETAILS.map((b) => (
           <BudgetBar
             key={b.label}

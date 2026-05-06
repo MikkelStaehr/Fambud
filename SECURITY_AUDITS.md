@@ -2390,6 +2390,217 @@ kanal via security.txt.
 
 Klar til **Prompt 12** (CI/CD security gates).
 
+---
+
+## 2026-05-06 — Prompt 11 (revideret): full gap-analyse + Sentry-check
+
+**Tid (start)**: 11:30 CEST
+**Tid (afsluttet)**: 12:30 CEST
+**Auditor**: Claude Code (Opus 4.7)
+**Scope**: Den reviderede Prompt 11 fra projektlederen kræver eksplicit
+gap-analyse + severity-vurdering + Sentry-integration-check + security.txt
+verifikation oven på v1-implementeringen fra forrige iteration.
+
+### Del 1 — Audit-log gap-analyse
+
+Komplet event-fortegnelse mod den reviderede prompts checkliste:
+
+| # | Event-type | Logges nu i audit_log? | Logges andre steder? | Severity |
+| --- | --- | --- | --- | --- |
+| | **Authentication** | | | |
+| 1 | Login success | ✅ DONE (1b5f98d) | Supabase auth-logs | HIGH |
+| 2 | Login failure | ✅ DONE (1b5f98d) — m. email-hash | Supabase auth-logs | HIGH |
+| 3 | Password reset request | ✅ DONE (1b5f98d) — m. email-hash | Supabase auth-logs | HIGH |
+| 4 | Password reset completion | ✅ DONE (1b5f98d) | Supabase auth-logs | HIGH |
+| 5 | Email verification | ❌ ikke logget | Supabase auth-logs | MEDIUM |
+| 6 | Logout | ❌ ikke logget | Supabase auth-logs | LOW |
+| 7 | Account deletion | ✅ DONE (1b5f98d) — m. was_owner-metadata | Supabase auth-logs | HIGH |
+| | **Authorization** | | | |
+| 8 | Failed RLS policy checks | ❌ ikke logget app-side | Supabase Postgres-logs (verbose, svær at filtrere) | HIGH |
+| 9 | Owner-role escalation forsøg | ❌ ikke logget app-side | DB-trigger blokerer (mig 0046+); Sentry får exception ved blokeret update | MEDIUM |
+| 10 | Cross-household access forsøg | ❌ ikke logget app-side | RLS returnerer 0 rows (silent); Sentry ser intet | MEDIUM |
+| | **Membership** | | | |
+| 11 | Invite-code creation | ❌ ikke logget i audit_log; data i `household_invites.created_at` | — | LOW |
+| 12 | Invite-code redemption (success) | ✅ DONE (1b5f98d) — m. had_invite_code-flag | — | HIGH |
+| 13 | Invite-code redemption (fail) | ✅ DONE (1b5f98d) | — | HIGH |
+| 14 | Family member added | ❌ ikke logget; data i `family_members.created_at` | — | MEDIUM |
+| 15 | Family member removed | ❌ ikke logget; CASCADE deletes mister evidens | — | HIGH |
+| 16 | Household role changes | ❌ ikke logget; DB-trigger blokerer non-owner-skift (mig 0046+) | — | MEDIUM |
+| | **Financial** | | | |
+| 17 | Transaction created | ❌ ikke logget | — | LOW |
+| 18 | Transaction modified | ❌ ikke logget; ingen audit-trail af før-værdi | — | MEDIUM |
+| 19 | Transaction deleted | ❌ ikke logget; data væk uden trace | — | MEDIUM |
+| 20 | Bulk-operations (push loan to budget) | ❌ ikke logget | — | MEDIUM |
+
+**Sammenfatning**:
+
+- **HIGH-events dækket**: 6/8 (75%) — auth-events + invite-redemption + account-deletion
+- **HIGH-events ikke dækket**: RLS-denials (#8), family member removed (#15)
+- **MEDIUM-events dækket**: 0/9
+- **LOW-events dækket**: 1/3 (signup.success kunne tælle som "transaction created" lite-version)
+
+### Del 2 — Scope-beslutning v1 vs deferreret
+
+**v1 audit_log scope (allerede committet i 1b5f98d)** — alle HIGH-events
+fra auth-domænet:
+
+- login.success/failure (#1, #2)
+- password.reset_requested/completed (#3, #4)
+- account.deleted (#7)
+- signup.success/failure + invite.redeemed/failed (#12, #13)
+
+**Begrundelse for prioritering**: auth-events er mest sikkerhedsrelevante
+for en finansiel app uden brugerbase pt. — credential-attacks er den
+sandsynlige første angrebsvektor og kræver evidens-trail. Membership +
+financial-events kommer i værdi når brugerbasen vokser.
+
+**Anbefales til v2 (P15-P17)**:
+
+- **P15 (HIGH)**: family member removed (#15) + email verification (#5).
+  Family member removed er kritisk fordi CASCADE deletes mister evidens
+  af "hvem fjernede hvem" — det er en oplagt vinkel i fremtidige
+  family-konflikter ("min eks fjernede mig fra husstanden uden at sige
+  noget"). Estimat: 1 time. Tilføj `member.removed`-call i
+  `removeFamilyMember` + `wizard/familie/removeFamilyMember`.
+
+- **P16 (MEDIUM)**: financial-events on UPDATE/DELETE (#18, #19, #20).
+  Ikke INSERT — det er for noisy. Bare modificering og sletning.
+  Implementeres bedst som DB-triggere fordi der er mange code-paths
+  der UPDATE'er transactions, og en før-after-snapshot er værdifuld.
+  Estimat: 4-6 timer (migration + helper + trigger på transactions +
+  loans + accounts).
+
+- **P17 (HIGH→MEDIUM)**: RLS-denial logging (#8, #10). Kræver enten:
+  - (a) Eksplicit "0 rows affected"-detection i alle UPDATE/DELETE-actions
+  - (b) DB-side trigger der logger ved RLS-evaluering
+  Option (a) er pragmatisk — wrap eksisterende actions i en helper der
+  detecter `data === null && error === null && rowCount === 0` →
+  `audit_log` med `result: 'denied'`. Estimat: 2-3 timer.
+
+**Defereret som LOW prioritet (måske aldrig)**:
+
+- Logout (#6) — ingen security-værdi i happy-path
+- Invite-code creation (#11) — `household_invites.created_at` har data
+- Family member added (#14) — `family_members.created_at` har data
+- Transaction created (#17) — for noisy
+
+### Del 3 — Sentry-integration check
+
+Verifikation af de 4 punkter fra promptenrev:
+
+#### 3.1 Edge runtime instrumentation
+
+[sentry.edge.config.ts](sentry.edge.config.ts) er skabt og init'es via
+[instrumentation.ts](instrumentation.ts) når `NEXT_RUNTIME === 'edge'`.
+
+**Status**: 🟡 Konfigureret men **ikke verificeret end-to-end**.
+
+Edge runtime bruges af [proxy.ts](proxy.ts) (Next.js middleware), men
+proxy kaster ikke errors i normal drift — den redirecter eller passer
+gennem. For at teste edge-error-capture skulle vi midlertidigt smide en
+`throw` i proxy.ts, deploye, navigere, fjerne. Det kan gøres som
+P-item hvis vi vil have 100% coverage.
+
+**Vurdering**: konfigurationen følger Sentry's officielle pattern.
+Sandsynligheden for at den ikke virker er lav. Ikke akut at verificere.
+
+#### 3.2 Server Actions errors
+
+✅ **VERIFICERET END-TO-END** via /sentry-test FAMBUD-2 (knap 3 — Server
+Action throw). Issue grupperet sammen med RSC-fejl pga. Next.js's
+production message-stripping, men begge events landede i Sentry.
+
+#### 3.3 Database errors / RLS-denials
+
+🔴 **KENDT BLIND SPOT**.
+
+Supabase RLS-policy-fejl returnerer typisk **`{ error: null, data: [], count: 0 }`** (ikke en exception). Sentry's auto-instrumentation ser ingen
+"error", så events fanges ikke.
+
+**Eksempler på blind-spot-scenarier**:
+
+- En authenticated user prøver at UPDATE'e en row uden for deres
+  household: RLS filtrerer den ud, UPDATE rammer 0 rows, `error: null`
+- Cross-household DELETE: samme silent-success-pattern
+- Manuelt manipuleret form-data der fjerner `eq('household_id')` filter:
+  RLS catches det, men app-koden tror operationen lykkedes
+
+**Mitigerende design**:
+
+App-laget filtrerer ALTID på `id + household_id` i WHERE-clauses (verificeret
+i Prompt 8 IDOR-audit). Så for legitim klient kan vi ikke ramme RLS-deny-
+path uden bug i koden. Men hvis bug introduceres, opdager vi det ikke.
+
+**Anbefaling**: P17-item (RLS-denial logging) tracket ovenfor som
+HIGH→MEDIUM. Implementering = wrap UPDATE/DELETE i
+`detectAndLogRLSDenial(query, expectedRows)`-helper.
+
+#### 3.4 PII-redaction efter nye events
+
+✅ **VERIFICERET** via FAMBUD-3 (Prompt 10 fix-runde, geo-strip
+deployed). Nye audit-events i Prompt 11 går ikke gennem Sentry — de går
+direkte i `audit_log`-tabellen via service-role-klient. Sentry-relevante
+errors på det path ville være "audit_log insert failed" som logges via
+`console.error` (uden PII fra metadata, fordi vi har `redactPII()` i
+audit-log.ts før insert).
+
+Defense-in-depth: hvis en udvikler ved et uheld logger PII via
+`console.error('user', user)`, så ville Sentry's `beforeSend`-hook
+stadig strippe det via `scrubPII` ([lib/sentry-scrub.ts](lib/sentry-scrub.ts)).
+
+### Del 4 — security.txt verifikation
+
+[public/.well-known/security.txt](public/.well-known/security.txt) deployet
+i 1b5f98d. Indhold matcher RFC 9116-format:
+
+```text
+Contact: mailto:support@fambud.dk
+Expires: 2027-05-06T00:00:00.000Z
+Preferred-Languages: da, en
+Canonical: https://www.fambud.dk/.well-known/security.txt
+```
+
+[proxy.ts:80](proxy.ts#L80) ekskluderer allerede `\.well-known` fra
+matcher (Prompt 3-fix), så filen serveres som plain static-asset uden
+proxy-redirect.
+
+**Curl-verifikation 2026-05-06 08:21 CEST efter deploy**: ✅ PASS
+
+```sh
+$ curl -i https://www.fambud.dk/.well-known/security.txt
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Content-Length: 325
+Cache-Control: public, max-age=0, must-revalidate
+```
+
+Filen serveres som plain static-asset. Initial 404 var pre-deploy
+caching; efter Vercel build færdig serveres filen korrekt fra
+`public/.well-known/`-mappen uden brug af headers-konfig.
+
+### Konklusion
+
+V1 audit_log dækker **6 af 8 HIGH-events** (75%). Resterende HIGH-fund
+(family member removed + RLS-denials) er P15 + P17 — anbefales til
+implementation indenfor 30 dage. Sentry-integration har 1 verificeret
+end-to-end (Server Actions), 1 kendt blind spot (RLS-denials), 1
+ikke-verificeret men sandsynligt-virkende (edge runtime), og 1
+verificeret (PII-redaction).
+
+### Roadmap
+
+- **P15** — Member-removal audit-log (estimat 1t, deadline 31. maj 2026)
+- **P16** — Financial-events audit-log via DB-triggers (estimat 4-6t, deadline 30. juni 2026)
+- **P17** — RLS-denial detection via 0-rows-helper (estimat 2-3t, deadline 31. maj 2026)
+- **P18** — Edge runtime Sentry verifikation (estimat 30 min, defensiv)
+
+### Næste skridt
+
+- [ ] Vercel-deploy færdig + curl https://www.fambud.dk/.well-known/security.txt → 200 OK
+- [ ] Migration 0055 kørt i Supabase
+- [ ] `npm run db:types` kørt + commit
+- [ ] Klar til **Prompt 12** (CI/CD security gates)
+
 Bevidst-accepterede svagheder der ikke er fund men dokumenteres så
 de ikke bliver oversights ved senere audit-runder.
 

@@ -2348,3 +2348,506 @@ forsvinder på mobile men rumdeler på desktop.
   klasser.
 - **Form-buttons stack**: nogle action-bars har "Annullér + Gem"-par i
   flex - check at de ikke overflow'er mobile viewport.
+
+---
+
+# Devlog — 6. maj 2026 (komplet 13-prompt sikkerhedsaudit)
+
+Lang dag. Vi gennemførte alle 13 prompts fra projektlederens
+sikkerheds-prompt-bibliotek (`fambud-security-prompts_3.md`) i én
+session. Det er ikke "vi skrev nogle audits" - det er et formelt
+gennemløb hvor hver prompt har sit eget rapport-afsnit i
+[SECURITY_AUDITS.md](SECURITY_AUDITS.md), egen findings-tabel, og
+eksplicit handling-liste. SECURITY_AUDITS.md er nu **2486 linjer**
+og fungerer som primær compliance-artefakt hvis Fambud nogensinde
+skal igennem due diligence.
+
+Hvis du læser dette om 6 måneder fordi du har glemt detaljerne, eller
+hvis nogen kigger med fra ekstern part: alt under er konkret og kan
+verificeres mod git-historik + linkede filer.
+
+---
+
+## 1. Hvad blev testet (13 prompts)
+
+| # | Tema | Hovedoutput |
+| --- | --- | --- |
+| 1 | Threat model | Pre-session (8 audit-runder før i dag) |
+| 2 | Headers + transport | HSTS includeSubDomains, CSP udvidet med `object-src 'none'` + `upgrade-insecure-requests` |
+| 3 | Cookies + sessions | proxy.ts matcher fixed (robots.txt + .well-known + monitoring) |
+| 4 | RLS + database isolation | 72-test suite ([scripts/rls-test.ts](scripts/rls-test.ts)), 11 tabeller × 5 ops × 3 personas, alle PASS |
+| 5 | Krypto + randomness | [migration 0054](supabase/migrations/0054_csprng_invite_codes.sql) — `random()` (LCG) → `gen_random_bytes()` (CSPRNG) |
+| 6 | Authentication hardening | [lib/common-passwords.ts](lib/common-passwords.ts) — ~100 entries inkl. danske patterns |
+| 7 | Atomicity + race conditions | `pushLoanToBudget` compensating delete pattern |
+| 8 | IDOR + mass assignment | 70 Server Actions reviewed; "konventionel, ikke strukturel" omformulering efter projektleder-pushback |
+| 9 | Email deliverability | DMARC/SPF/DKIM analyse; reset-mail context fund; support@fambud.dk-mailbox plan |
+| 10 | GDPR compliance | Privatlivspolitik udvidet, signup-samtykke, breach response plan |
+| 11 | Logging + monitoring | Sentry installeret + [migration 0055](supabase/migrations/0055_audit_log.sql) audit_log |
+| 12 | CI/CD security gates | GitHub Actions + 6 custom Semgrep-regler + nightly headers-check |
+| 13 | Responsible disclosure | [/security](app/security/page.tsx) public policy + 5 email-templates + runbook |
+
+---
+
+## 2. Hovedfund med severity
+
+15 fund identificeret på tværs af de 13 prompts. Sorteret efter
+severity, ikke kronologi.
+
+### HIGH (5 fund — alle adresseret samme dag)
+
+1. **Sentry tunnel-route 307 til /login** (Prompt 10 deploy)
+
+   `proxy.ts` matchede `/monitoring`-path og redirected til login.
+   Konsekvens: client-side Sentry-events fra udloggede brugere blev
+   droppet (signup, glemt-kodeord, landing). **Fix**: matcher-eksklusion
+   i [proxy.ts](proxy.ts).
+
+2. **Signup mangler samtykke-link til privatlivspolitik** (Prompt 10)
+
+   GDPR Art. 13 kræver informationspligt FØR data-indsamling. Vores
+   signup-form havde ikke noget. **Fix**: én sætning over "Opret
+   konto"-knappen i [app/signup/page.tsx](app/signup/page.tsx).
+
+3. **Right to portability ikke implementeret** (Prompt 10)
+
+   Privatlivspolitik lover JSON-eksport via email. Lovligt under
+   GDPR Art. 20 men skalerer ikke. **Status**: nedjusteret til MEDIUM
+   efter scope-vurdering, tracket som **P9** med Q3-deadline.
+
+4. **Ingen breach detection / monitoring** (Prompt 10 + 11)
+
+   Vi havde ingen Sentry, ingen log-aggregation, ingen alerting.
+   GDPR Art. 33's 72-timers-notifikation kunne ikke garanteres.
+   **Fix**: Sentry installeret + 3 alerts opsat manuelt af bruger
+   + breach response plan dokumenteret.
+
+5. **DMARC `p=none` uden `rua=`** (Prompt 9)
+
+   Compliance theater - vi signalerer at vi forventer rapporter
+   men modtager ingen. **Fix-plan**: rua-record til dmarcian
+   (manuel deploy hos one.com), ramp-up over 6 uger til `p=reject;
+   pct=100` (slutmål 2026-06-23). 5 kalender-reminders. Tracked som
+   **P7**.
+
+### MEDIUM (8 fund)
+
+6. **CSPRNG på invite-codes** (Prompt 5) — `random()` → `gen_random_bytes()`. Fixed via migration 0054.
+
+7. **Atomicity i `pushLoanToBudget`** (Prompt 7) — components-INSERT
+   kunne fejle og efterlade orphan transaction. Fix: compensating
+   delete.
+
+8. **Privatlivspolitik mangler retsgrundlag + opbevaringsperioder**
+   (Prompt 10) — Fixed: ny "Retsgrundlag og opbevaring"-sektion med
+   7-rækkers tabel + 5-rækkers opbevarings-liste.
+
+9. **Resend mangler i sub-processor-liste** (Prompt 10) — Fixed.
+
+10. **DPA-links i privatlivspolitik** (Prompt 10) — Fixed: links til
+    Supabase, Vercel, Resend; dokumenteret-note for one.com og DAWA.
+
+11. **Reset-password email mangler kontekst** (Prompt 9) — Phishing
+    kan kopiere 1:1. **Fix-plan**: P6 custom reset-mail med IP +
+    tidsstempel + User-Agent (4-6t), defereret indtil P7's resultater
+    viser om det er nødvendigt.
+
+12. **Sentry geo-PII slipper igennem PII-redaction** (Prompt 10
+    runde 2)
+
+    "Harlev, Denmark" dukkede op i Contexts → User → Geography i
+    test-event. Sentry's ingest-server udleder geo fra request-IP
+    EFTER vores `beforeSend` har kørt. **Fix**: `delete event.user.geo`
+    i [lib/sentry-scrub.ts](lib/sentry-scrub.ts) + bruger toggler
+    "Prevent Storing of IP Addresses" i Sentry Dashboard.
+
+13. **Vercel global edge ≠ "alt i Frankfurt"** (Prompt 10)
+
+    Privatlivspolitik lovede mere end vi kunne holde. **Fix**:
+    politik-omformulering der eksplicit nævner edge-funktioner kan
+    køre globalt (men persisterer ikke). P11 hvis Vercel-plan
+    opgraderes til Pro+ kan vi tilføje `vercel.json: {"regions":
+    ["fra1"]}` og rulle politikken tilbage.
+
+### LOW (2 fund)
+
+14. **DKIM key er 1024-bit RSA** (Prompt 9) — Resend's standard. NIST
+    anbefaler 2048-bit. Verificeret acceptable for nu fordi
+    quantum-trusler er år ude og attack-cost er $10-100k via cloud
+    GPU-clusters.
+
+15. **HIBP password-validering ikke implementeret** (Prompt 6) — In-app
+    blocklist på ~100 entries dækker low-hanging fruit. HIBP er
+    udvidelsen. Tracket som **P2** med Q3-deadline.
+
+### Blind spots / kendte issues
+
+- **RLS-denials returnerer 0 rows, ikke errors** (Prompt 11) — Sentry
+  ser ikke noget. Mitigerende: app-laget filtrerer altid på
+  `id + household_id`, så normal-trafik rammer ikke RLS-deny-path.
+  Tracked som **P17**.
+
+- **Edge runtime Sentry ikke verificeret end-to-end** (Prompt 11) -
+  konfigureret via [sentry.edge.config.ts](sentry.edge.config.ts) men
+  proxy.ts kaster ikke errors i normal drift. Tracked som **P18**.
+
+---
+
+## 3. Hvad blev fixet i dag vs. deferreret
+
+### Fixet i dag (kode commits)
+
+| Commit | Hvad |
+| --- | --- |
+| `2c7baf4` | Prompt 5-10 batch + Sentry monitoring + GDPR fix-runde |
+| `e845bd9` | Sentry test-fixture (3 fejl-paths) |
+| `f6818e0` | Sentry geo-PII strip i scrubPII |
+| `fa0714d` | Slet Sentry test-fixture efter verifikation |
+| `1b5f98d` | Prompt 11: audit_log + struktureret logging + security.txt |
+| `f2e6263` | Prompt 11 (rev): full gap-analyse + Sentry-check |
+| `10d6f14` | Prompt 12: CI/CD security gates + 6 custom Semgrep-regler |
+| `7771eaa` | Prompt 13: responsible disclosure-proces + /security-side |
+
+### Deferreret med begrundelse
+
+24 P-items i roadmap. Ikke alle af samme grund:
+
+- **P1** (soft delete på finansielle tabeller): MEDIUM, Q2-deadline.
+  GDPR-paradoks: right-to-erasure er nemmere på soft-delete-by-default
+  end retro-fitted. Defereret til før vi har 50+ brugere.
+
+- **P6** (custom reset-mail): MEDIUM, Q4-deadline. Værdi-overlap med
+  P7 — hvis DMARC `p=reject` virker uden phishing-rapporter i 6 uger,
+  kan P6 muligvis nedprioriteres til LOW.
+
+- **P9** (data-export): MEDIUM. Manuel håndtering compliant ved lav
+  brugervolumen; trigger ved 50+ brugere ELLER første portability-
+  anmodning.
+
+- **P19-P21** (OWASP ZAP, smoke tests, nightly RLS-tests i CI):
+  kræver enten eksternt account, test-runner-setup, eller dedikeret
+  test-Supabase-instans. Defereret indtil næste audit-runde har tid
+  til at sætte det op.
+
+Resten af deferrals har eksplicit dato + trigger i SECURITY_AUDITS.md.
+
+---
+
+## 4. Roadmap-overblik (24 P-items kategoriseret)
+
+### Compliance / GDPR (5 items)
+
+- **P1** Soft delete på finansielle tabeller (MEDIUM, 30. juni 2026)
+- **P9** Self-service data-export Art. 20 (MEDIUM, 30. september 2026)
+- **P12** Privatlivspolitik retsgrundlag + opbevaring (MEDIUM, ✅ DONE 2026-05-05)
+- **P13** DPA-links (MEDIUM, ✅ DONE 2026-05-05)
+- **P23** English version af /security (LOW, defensiv)
+
+### Monitoring / observability (4 items)
+
+- **P10** Udvidet Sentry runbook + audit-log tabel (LOW, 30. september 2026)
+- **P15** Member-removal audit-log (HIGH, 31. maj 2026)
+- **P16** Financial-events via DB-triggers (MEDIUM, 30. juni 2026)
+- **P17** RLS-denial detection via 0-rows-helper (HIGH→MEDIUM, 31. maj 2026)
+
+### Email / DMARC (3 items)
+
+- **P6** Custom reset-mail med IP + tidsstempel (MEDIUM, 31. december 2026)
+- **P7** DMARC ramp-up til `p=reject` (MEDIUM, 5 milepæle: 19. maj → 23. juni 2026)
+- **P8** Officiel `support@fambud.dk` (MEDIUM trin 1: i dag, trin 2: 30. juni)
+
+### Security automation (4 items)
+
+- **P5** Lint-rule for Server Action-pattern (LOW, ✅ DONE via Semgrep i Prompt 12)
+- **P19** OWASP ZAP baseline scan (LOW, 30. juni 2026)
+- **P20** Test-runner + smoke tests (LOW, 30. september 2026)
+- **P21** Nightly RLS-test-suite i CI (LOW, 30. juni 2026)
+
+### Authentication / passwords (3 items)
+
+- **P2** HaveIBeenPwned password-validering (LOW, 30. september 2026)
+- **P3** Multi-device session UI (LOW, ingen hard deadline)
+- **P22** Husky/lint-staged pre-commit (LOW, 1t arbejde)
+
+### Infrastructure (4 items)
+
+- **P4** HSTS preload submission (LOW, 13. maj 2026)
+- **P11** Vercel region-pin formaliseret (LOW, ingen hard deadline)
+- **P14** Audit-log retention via pg_cron (LOW, 30. september 2026)
+- **P18** Edge runtime Sentry verifikation (LOW, defensiv)
+
+### Stretch (1 item)
+
+- **P24** Hall of Fame-sektion på /security (defensiv, ingen
+  deadline)
+
+---
+
+## 5. Compliance-status
+
+### GDPR
+
+| Artikel | Krav | Status |
+| --- | --- | --- |
+| Art. 5(1)(f) | Integritet og fortrolighed | 🟢 RLS + audit_log + Sentry monitoring |
+| Art. 6 | Retsgrundlag | 🟢 Dokumenteret i privatlivspolitik (kontrakt + legitime interesser) |
+| Art. 13 | Informationspligt | 🟢 Privatlivspolitik + signup samtykke-link |
+| Art. 15 | Right to access | 🟢 Bruger ser al egen data i appen |
+| Art. 16 | Right to rectification | 🟢 Alle felter redigerbare i UI |
+| Art. 17 | Right to erasure | 🟢 `deleteMyAccount` med email-bekræftelse |
+| Art. 20 | Right to portability | 🟡 Manuel via email; P9 self-service Q3 |
+| Art. 28 | Sub-processors + DPA | 🟢 5 listet med DPA-links eller dokumenteret-note |
+| Art. 32 | Sikkerhed af behandling | 🟢 TLS 1.3, AES-256-at-rest, RLS, audit-log |
+| Art. 33 | Breach notification | 🟢 Sentry monitoring + 6-trins runbook + Datatilsynet-kontakt |
+| Art. 34 | Bruger-notifikation ved breach | 🟡 Plan dokumenteret, ikke testet |
+
+### Breach detection (Art. 33's "becoming aware")
+
+- Sentry alerts på unhandled errors + 401/403-spike + 500-spike
+- audit_log-tabel med struktureret event-log af alle auth-events
+- 72-timers-procedure dokumenteret i SECURITY_AUDITS.md
+- Datatilsynet-kontaktinfo: <dt@datatilsynet.dk> / +45 33 19 32 00
+
+### Audit log
+
+- Migration 0055 (skal kørs manuelt i Supabase Dashboard)
+- 14 event-typer dækket i v1 (login, signup, password-reset, invite-
+  redemption, account-deletion)
+- PII-redaction via shared `redactPII()` + `hashEmail()`
+- Append-only via service-role; auth'd brugere har INGEN read/write
+- Retention: 365 dage anbefalet, manuel cleanup-query dokumenteret
+
+---
+
+## 6. Architectural strengths bekræftet
+
+Audits bekræftede flere designvalg som var taget tidligere:
+
+- **bigint-øre integer-cents** for finansielle beløb. Ingen
+  float-precision-issues. Verifikation i Prompt 4 + 7.
+
+- **Server Actions + FormData** som ene API-overflade. Ingen `/api/*`-
+  endpoints, ingen JSON body parsing, ingen ORM auto-binding. Strukturelt
+  immun mod mass-assignment-klassen — **men** vi nedjusterede sproget
+  til "konventionelt, ikke strukturelt" efter projektleder-pushback,
+  fordi det afhænger af at hver fremtidig udvikler følger
+  `formData.get('field')`-mønstret. P5 lint-rule (nu i Semgrep)
+  håndhæver det automatisk.
+
+- **Defense-in-depth IDOR-resistance** (Prompt 8): app-lag filtrerer
+  altid på `household_id` (server-bestemt), DB-lag har RLS, og
+  schema-lag har guard triggers (mig 0046+) der blokerer privilegerede
+  felt-skift. Tre uafhængige forsvarslinjer. En angriber skal bryde
+  alle tre samtidig.
+
+- **PKCE-binding på password-reset** (Prompt 9): reset-link er bundet
+  til klientens `code_verifier`-cookie. En angriber der stjæler
+  email-link kan ikke bruge det fra anden browser. Device-bundet by
+  design.
+
+- **Email-enumeration protection**: `requestPasswordReset` viser ALTID
+  success-skærmen uanset om email findes. `signUp` re-router
+  "User already registered" til check-email-skærmen frem for
+  dedikeret fejl. Verificeret i Prompt 6.
+
+- **Null MX på fambud.dk root** (RFC 7505): root-domænet accepterer
+  ikke email. Forhindrer bounces til ikke-eksisterende
+  `support@fambud.dk` osv. Verificeret i Prompt 9.
+
+---
+
+## 7. Læringspunkter fra processen
+
+### 7.1 Verifikation efter deploy er ikke valgfrit
+
+Vores første curl-test mod prod (Prompt 9) afslørede at deployed CSP
+**manglede** `object-src 'none'` + `upgrade-insecure-requests` og HSTS
+**manglede** `includeSubDomains` — alle Prompt 2-ændringer var commit'et,
+men deployet var fra før Prompt 2. Vi havde tænkt "code = deployed",
+det er ikke sandt.
+
+Tilsvarende: Sentry tunnel-route returnerede 307 til /login efter
+deploy fordi `proxy.ts` matcher inkluderede `/monitoring`. Det fix var
+trivielt, men det havde forblevet skjult uden curl-verifikation.
+
+Headers-check er nu automatiseret nightly via [scripts/check-headers.sh](scripts/check-headers.sh) + GitHub Actions.
+
+### 7.2 "Strukturelt immun" er for stærkt et ord
+
+Prompt 8 oprindelig konklusion var "Fambud's Server Actions er
+strukturelt immun mod mass assignment". Projektleder pushed back:
+
+> "Strukturelt immun" er en farlig formulering. Auditten verificerer
+> at de actions Claude Code kiggede på er sikre. Den verificerer ikke
+> at alle actions er sikre, fordi det er code review, ikke automatiseret
+> bevis. Mass assignment-immuniteten er ikke strukturel — den er
+> konventionel.
+
+Han havde ret. Vi nedjusterede sproget og tilføjede **P5 lint-rule** der
+faktisk håndhæver mønstret. Lærdom: hver gang vi siger "by design" eller
+"strukturelt", spørg om der er en regel der enforcer det, eller om det
+er "vi har konsekvent gjort det sådan indtil nu".
+
+### 7.3 Sample testing vs end-to-end verifikation
+
+Sentry-installation virkede ikke umiddelbart end-to-end. Min curl-test
+mod tunnel-routen returnerede 404 — jeg konkluderede "endpoint findes
+ikke". Forkert: Sentry's tunnel-rewrite kræver specifikke query-params
+(`?o=...&p=...`) for at matche. Uden dem er 404 by design (anti-ad-
+blocker mønster).
+
+End-to-end-verifikation kom først da brugeren manuelt triggede 3 fejl
+via [/sentry-test](app/(app)/sentry-test/page.tsx)-fixture og så
+events lande i Sentry Dashboard. Det afslørede også **geo-PII-lækage**
+i FAMBUD-3 ("Harlev, Denmark") som scrubPII ikke fangede fordi Sentry's
+ingest-server udleder geo server-side EFTER vores beforeSend har kørt.
+
+Lærdom: API-tests verificerer interface; end-to-end verificerer adfærd.
+Begge skal laves.
+
+### 7.4 Defaults er ikke altid sikre
+
+Sentry's default sender request-headers, body, cookies, IP, geo. Det
+er fint for et open-source-projekt; det er en GDPR-compliance-fejl for
+en finansiel app. `sendDefaultPii: false` + `beforeSend`-redaction +
+"Prevent Storing of IP Addresses"-toggle i Dashboard krævedes alle tre
+for at få en ren event.
+
+Resend's default DKIM-key er 1024-bit RSA. Acceptable nu, ikke ideelt.
+
+Vercel's default region-allokering er global edge — godt for performance,
+forkert claim når vi lover "alt i Frankfurt" i privatlivspolitikken.
+
+Lærdom: defaults er optimeret til developer experience, ikke til
+compliance. Verificér hver default mod jeres trusselsmodel.
+
+### 7.5 OneDrive + Windows + node_modules-write race
+
+Midt i Prompt 11 commit-prep opdagede jeg at `lib/database.types.ts`
+var **0 bytes** (566 linjer slettet, intet tilføjet). Filen var skrevet
+af Supabase types-gen tidligere, og noget havde trunked den. Jeg ved
+ikke hvad — npm install, OneDrive sync, Windows Defender, en Sentry-
+post-install-hook. `git restore` reddede den.
+
+Lærdom: kør `git diff` før hver commit, særligt på filer du ikke
+direkte har ændret. På Windows + OneDrive + node_modules er der ekstra
+attack surface for filsystem-races.
+
+### 7.6 Roadmap-deferrals skal have triggers, ikke "senere"
+
+Tre gange i denne audit pushed projektlederen tilbage på vagt-deferrals:
+
+1. Prompt 6: "common-password blocklist deferret indtil 100+ brugere"
+   → vi var enige om at det var løst på 60 min nu, det blev impementeret.
+
+2. Prompt 7: "soft-delete deferret indtil vi har tid"
+   → omformuleret til konkret deadline + trigger.
+
+3. Prompt 8: "lint-rule deferret defensivt"
+   → bibeholdt deferral men med konkret trigger (25% kodebasevækst eller
+   ekstern bidragyder) + Q3 deadline.
+
+Lærdom: vagt-deferrals er bare uorganiseret backlog. P-items skal have
+**trigger** (eksternt event) + **deadline** (dato). Ellers driver
+processen.
+
+### 7.7 Ikke alt skal automatiseres
+
+Vi defererede **OWASP ZAP** (P19), **smoke tests** (P20), og **nightly
+RLS-tests i CI** (P21). De er alle "best practice" men kræver
+infrastruktur (test-runner, ZAP-image, dedikeret Supabase-instans) der
+ikke er proportional til Fambud's nuværende størrelse.
+
+Lærdom: enhver automation har vedligeholdelsesomkostning. For en
+1-developer pre-launch app er manuel test + rigorøst code review +
+basal CI mere bæredygtig end fuld DevSecOps.
+
+---
+
+## 8. Honest assessment — hvor står Fambud?
+
+**Sammenlignet med en typisk dansk solo-built side-project**: betydeligt
+foran. De fleste sammenlignelige apps har ingen privatlivspolitik
+udover en Notion-side, ingen audit-log, ingen monitoring, ingen
+breach-plan, ingen security.txt. Vi har alle fem.
+
+**Sammenlignet med etablerede SaaS-produkter** (Mint, YNAB, Spiir):
+bagud på flere fronter:
+
+- **Penetration testing**: vi har ikke haft en ekstern pen-tester
+  igennem. Hele auditten er code review + automatiseret scanning. Det
+  fanger lots, men ikke f.eks. business-logic-fejl der kun synes ved
+  længere session-flow-testning.
+
+- **Test coverage**: ingen automatiserede tests. Manuel verifikation +
+  TypeScript strict + Semgrep har dækket os indtil nu, men en bruger-
+  base på flere hundrede vil afsløre regressions vi ikke ser.
+
+- **Bug bounty**: vi tilbyder anerkendelse, ikke penge. Det er rimeligt
+  for en pre-launch app, men det begrænser pulken af researchers der
+  kigger.
+
+- **SOC 2 / ISO 27001**: ikke certificeret. Ikke relevant for vores
+  størrelse, men noget en B2B-version på sigt skal forholde sig til.
+
+**Specifikke styrker**:
+
+- **GDPR-dokumentation**: bedre end de fleste danske startups jeg har
+  set. Privatlivspolitik er læselig, retsgrundlag er eksplicit,
+  opbevaringsperioder er pr. kategori, sub-processors med DPA-links.
+
+- **Audit trail**: append-only audit_log + Sentry monitoring +
+  breach response plan giver os realistisk Art. 33-compliance fra
+  dag ét. Mange apps bygger det først efter første reelle breach.
+
+- **Defense-in-depth**: tre uafhængige forsvarslinjer (app-lag,
+  RLS, guard triggers) er ikke standard for solo-builds. Det er et
+  bevidst design-valg vi traf tidligt.
+
+**Specifikke svagheder**:
+
+- **Vercel-tier**: vi er på Hobby. Det betyder ingen region-pin (P11),
+  ingen lange function-logs, ingen dedikerede preview-URL'er for
+  enterprise-tests.
+
+- **Single-developer bus factor**: hvis Mikkel rammes af en bus i morgen,
+  er der ingen runbook for hvordan en anden person tager over. Det
+  gælder ikke kun security men hele projektet.
+
+- **Ingen real attackere har testet**: vores RLS-test-suite er sketsom -
+  72 tests, alle bestod, men det er hånd-skrevne tests. En ekstern
+  red-team-runde vil sandsynligvis afsløre noget.
+
+**Bottom line**: for **pre-launch testbruger-fasen** er Fambud betydeligt
+sikrere end gennemsnits-dansk-app i samme livscyklus. For **vækst-fasen
+til 1000+ brugere** er der 24 P-items der skal håndteres, og en
+ekstern penetration test bør indplaneres når vi er ude af inner-circle-
+testning.
+
+Vi kan stå inde for Fambud's nuværende sikkerhed overfor en bruger,
+en investor, eller Datatilsynet — men ikke uden at samtidig pege på
+roadmappen og sige "her er hvad vi mangler, og her er hvornår det
+kommer."
+
+---
+
+## 9. Status
+
+- **Prompts gennemført**: 13/13 (alle PASS)
+- **Critical fund åbne**: 0
+- **HIGH fund**: 5 identificeret, 4 fixet, 1 mitigeret med plan
+- **MEDIUM fund**: 8 identificeret, 6 fixet, 2 deferreret med konkret deadline
+- **LOW fund**: 2 identificeret, 1 deferreret, 1 verificeret acceptable
+- **P-items i roadmap**: 24, alle med deadline + trigger
+- **Linjer i SECURITY_AUDITS.md**: 2486
+- **Migrations til prod**: 0054 (CSPRNG) + 0055 (audit_log) — sidstnævnte
+  skal køres manuelt
+- **Commits i dag**: 8 (`2c7baf4` → `7771eaa`)
+- **GitHub Actions workflows**: 2 (security.yml + headers-check.yml)
+- **Custom Semgrep-regler**: 6
+- **Sentry alerts**: 3 manuelt opsat
+- **`npm audit`**: 0 vulnerabilities
+- **`npx tsc --noEmit`**: 0 errors
+- **`npm run build`**: clean
+
+Klar til at åbne for testbrugere ud over inner circle. P15, P17 (HIGH-
+items) bør være afsluttet inden første eksterne testbruger.

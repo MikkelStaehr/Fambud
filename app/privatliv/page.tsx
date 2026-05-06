@@ -708,6 +708,9 @@ function Footer() {
           <Link href="/privatliv" className="text-neutral-600 hover:text-neutral-900">
             Privatliv & data
           </Link>
+          <Link href="/security" className="text-neutral-600 hover:text-neutral-900">
+            Sikkerhed
+          </Link>
         </div>
         <div>
           © {new Date().getFullYear()} · En del af{' '}

@@ -2747,6 +2747,256 @@ account-friction, og fri brug.
 
 Klar til **Prompt 13** (bug bounty / responsible disclosure).
 
+---
+
+## 2026-05-06 — Prompt 13: Responsible disclosure-proces
+
+**Tid (start)**: 14:30 CEST
+**Tid (afsluttet)**: 15:30 CEST
+**Auditor**: Claude Code (Opus 4.7)
+**Scope**: Public-facing /security-side, email-templates, internal
+runbook + SLA, test-flow.
+
+### Resultat: 🟢 PASS — public policy + 5 templates + runbook deployet
+
+FamBud har nu en komplet responsible disclosure-process med
+public-facing policy på fambud.dk/security, email-templates til de
+4 standard-scenarier + 1 edge case, og dokumenteret runbook + SLA i
+denne fil.
+
+### Findings-tabel
+
+| # | Område | Status |
+| --- | --- | --- |
+| 1 | /.well-known/security.txt (RFC 9116) | 🟢 PASS (Prompt 11, verificeret 200 OK) |
+| 2 | Public /security-side på dansk | ✅ DONE — [app/security/page.tsx](app/security/page.tsx) |
+| 3 | English version af /security | 🟡 IKKE LAVET — kan deferres til P-item; danske brugere er primær audience |
+| 4 | In-scope-liste | ✅ DONE — fambud.dk + subdomæner, cross-household, privilegie-eskalering, classic web vulns, data-eksponering |
+| 5 | Out-of-scope-liste | ✅ DONE — DoS, social engineering, fysisk, third-party, selv-XSS, kosmetisk |
+| 6 | Disclosure-tidsfrist | ✅ DONE — 90 dage eller efter fix-deploy, hvad end først |
+| 7 | Hall of Fame / anerkendelse | ✅ DONE — sektion på /security-siden |
+| 8 | "Ingen pengebelønninger pt." | ✅ DONE — eksplicit nævnt med begrundelse |
+| 9 | Safe harbor-klausul | ✅ DONE — vi forfølger ikke juridisk + ikke politianmelder |
+| 10 | support@fambud.dk live | 👤 USER — afventer P8 trin 1-deploy (mail-forwarder hos one.com) |
+| 11 | Test-disclosure-email | 👤 USER — kan først testes når support@fambud.dk er live |
+| 12 | Gmail-filter "security-disclosure" | 👤 USER — manuel konfig efter test-mail |
+| 13 | Email-templates som markdown | ✅ DONE — [docs/security-disclosure-templates.md](docs/security-disclosure-templates.md) (5 templates) |
+| 14 | SLA-tabel for response/fix | ✅ DONE — synlig på /security + dokumenteret nedenfor |
+| 15 | Runbook for proces | ✅ DONE — denne sektion |
+
+### Public /security-side struktur
+
+[app/security/page.tsx](app/security/page.tsx) — designet matcher
+[/privatliv](app/privatliv/page.tsx) (samme `Section`/`List`-mønster
++ samme footer/topnav). 8 sektioner:
+
+1. Hero + tilbage-link
+2. Sådan rapporterer du (email + hvad-skal-med)
+3. Hvad er in-scope (6 punkter)
+4. Hvad er ikke in-scope (5 punkter)
+5. Hvad du kan forvente fra os (SLA-tabel)
+6. Safe harbor (3 løfter + 4 forventninger)
+7. Anerkendelse (HOF + reference + tak)
+8. Spørgsmål (kontakt-info + security.txt-link)
+
+Linket fra:
+
+- [app/page.tsx](app/page.tsx) footer (landing)
+- [app/privatliv/page.tsx](app/privatliv/page.tsx) footer
+- /.well-known/security.txt peger på support@fambud.dk
+
+### SLA — formel
+
+| Trin | Tidsfrist |
+| --- | --- |
+| Acknowledgment af modtagelse | Inden for **48 timer** |
+| Initial vurdering + plan | Inden for **7 dage** |
+| Fix — Critical | **24 timer** |
+| Fix — High | **7 dage** |
+| Fix — Medium | **30 dage** |
+| Fix — Low | **90 dage** |
+
+**Severity-definition**:
+
+- **Critical**: aktiv exploit i prod ELLER PII-eksponering ELLER
+  uautoriseret adgang til finansielle data
+- **High**: privilegie-eskalering, authentication-bypass,
+  pre-auth-RCE, sensitive data-eksponering uden aktiv exploit
+- **Medium**: IDOR uden følsom data-impact, XSS i auth'd-only-context,
+  CSRF, info-disclosure af interne strukturer
+- **Low**: defense-in-depth-gaps, kosmetiske security-issues, missing
+  headers uden direkte impact, security misconfiguration på
+  ikke-kritiske paths
+
+### Internal runbook — sådan håndteres en ny rapport
+
+**Trin 1: Modtagelse (T+0)**
+
+1. Email lander i `support@fambud.dk` → forwarded til admin (P8 trin 1)
+2. Tjek emnefelt for "Security disclosure" eller lignende keywords
+3. Marker email med Gmail-label **"security-disclosure"** (manuel
+   konfig — opsæt filter første gang det sker)
+4. Opret intern note (notesblok / Notion / hvor du har den slags) med:
+   - Modtaget-tidsstempel
+   - Researcher-navn / pseudonym
+   - Initial severity-gæt
+
+**Trin 2: Acknowledgment (T+0 til T+48h)**
+
+1. Læs rapporten igennem
+2. Hvis det er åbenlyst out-of-scope: send template 4
+   ([docs/security-disclosure-templates.md](docs/security-disclosure-templates.md))
+3. Hvis det ser legitimt ud: send template 1 (acknowledgment)
+4. Hvis det er afpresnings-tone: send template 5
+
+**Trin 3: Vurdering (T+0 til T+7 dage)**
+
+1. Forsøg at reproducere rapporten
+2. Hvis ikke reproducerbar: skriv tilbage og bed om mere info
+3. Hvis reproducerbar:
+   - Vurder severity per skala ovenfor
+   - Notér i SECURITY_AUDITS.md som "🚨 Aktiv disclosure: [navn]"
+   - Send template 2 (status-opdatering) med plan + deadline
+
+**Trin 4: Fix (deadline per severity)**
+
+1. Lav PR med fix
+2. CI fra Prompt 12 skal være grøn
+3. Merge → deploy
+4. Verificér fix virker (bekræft sårbarheden ikke længere kan
+   reproduceres)
+5. Hvis Critical: kør også `bash scripts/check-headers.sh` for at
+   bekræfte intet andet er gået i stykker
+
+**Trin 5: Disclosure-completion (samme dag som fix-deploy)**
+
+1. Send template 3 til researcher
+2. Hvis researcher har bedt om Hall of Fame: tilføj til /security-side
+   (manuel kode-ændring + commit)
+3. Opdatér SECURITY_AUDITS.md med ny entry under "Resolved disclosures"
+4. Hvis severity var Critical: postmortem indenfor 7 dage
+
+**Trin 6: Postmortem (Critical only, T+7 dage)**
+
+1. Skriv postmortem i SECURITY_AUDITS.md med:
+   - Timeline (rapport til fix)
+   - Root cause analyse
+   - Hvilke automation-gaps fandt det ikke
+   - Eventuelle nye P-items (lint-rule, test, etc.)
+2. Hvis det er GDPR-relevant breach: følg breach response-plan fra
+   Prompt 10 (72-timers Datatilsynet-notifikation)
+
+### Email-templates (oversigt)
+
+5 templates dokumenteret i
+[docs/security-disclosure-templates.md](docs/security-disclosure-templates.md):
+
+1. **Initial acknowledgment** — sendes T+0 til T+48h
+2. **Status-opdatering** — sendes T+0 til T+7 dage hvis fix ikke deployet
+3. **Disclosure-completion** — sendes når fix er deployet
+4. **Out-of-scope-svar** — sendes T+0 til T+48h hvis rapport ikke er in-scope
+5. **Ekstortion / uautoriseret access** — special-case, kun ved
+   tydelige tegn på afpresning
+
+Alle templates er på dansk; svar på engelsk hvis researcher skriver
+på engelsk.
+
+### Test-flow (👤 USER manuel verifikation)
+
+**Forudsætning**: P8 trin 1 (mail-forwarder hos one.com for
+support@fambud.dk → admin's monitorerede mail) skal være deployet.
+
+**Test-procedure**:
+
+1. Send test-email fra en alternativ adresse (Gmail, etc.) til
+   `support@fambud.dk` med subject "Security disclosure - test"
+2. Bekræft email lander i admin's primære indbakke inden for 5 min
+3. Hvis ikke: tjek one.com mail-forwarder-konfig + spam-folder
+4. Lav Gmail-filter:
+   - Hvis emne indeholder "Security disclosure" → label
+     "security-disclosure" + Star
+   - Hvis afsender er auto-Sentry/Datadog → label "monitoring"
+5. Slet test-email
+6. Dokumenter resultatet i SECURITY_AUDITS.md som ny entry under
+   denne audit-runde
+
+**Forventet resultat**: end-to-end forsendelse under 30 sek;
+Gmail-label sikrer at fremtidige reports er let identificerbare.
+
+### Resolved disclosures
+
+Ingen rapporter modtaget endnu (FamBud er pre-launch). Sektion
+holdes klar til når den første kommer.
+
+| Dato | Researcher | Severity | Resolution-tid |
+| --- | --- | --- | --- |
+| (ingen endnu) | | | |
+
+### Konklusion
+
+FamBud har nu en komplet responsible disclosure-stak:
+
+1. **/.well-known/security.txt** — automatisk discovery (Prompt 11)
+2. **/security** — public policy med safe harbor (Prompt 13)
+3. **support@fambud.dk** — kanal (P8 trin 1, afhænger af manuel deploy)
+4. **5 email-templates** — standardiserede svar (Prompt 13)
+5. **Runbook** — step-by-step proces (denne sektion)
+6. **SLA** — eksplicit tidsfrist på response + fix per severity
+
+Researchers har en klar kanal, vi har en klar proces.
+
+### Filer ændret
+
+**Nye**:
+
+- [app/security/page.tsx](app/security/page.tsx)
+- [docs/security-disclosure-templates.md](docs/security-disclosure-templates.md)
+
+**Ændrede**:
+
+- [app/page.tsx](app/page.tsx) — footer-link til /security
+- [app/privatliv/page.tsx](app/privatliv/page.tsx) — footer-link til /security
+
+### Næste skridt
+
+**Manuel handling efter deploy**:
+
+- [ ] Verificér /security renderer korrekt på prod (curl + browser-check)
+- [ ] Verificér support@fambud.dk er live (P8 trin 1)
+- [ ] Send test-email til support@fambud.dk per test-flow ovenfor
+- [ ] Opsæt Gmail-filter "security-disclosure"
+- [ ] Dokumentér test-resultatet her i SECURITY_AUDITS.md
+
+**Roadmap**:
+
+- **P23** — English version af /security (estimat 1-2t, deadline når
+  første ikke-dansk-talende researcher rapporterer)
+- **P24** — Hall of Fame-sektion på /security der dynamisk renderer
+  fra en data-fil (vs. manuel kode-ændring per kontribution)
+
+### Status efter denne audit
+
+**Alle 13 sikkerhedsaudits gennemført**:
+
+| Prompt | Tema | Resultat |
+| --- | --- | --- |
+| 1 | Threat model | 🟢 PASS |
+| 2 | Headers + transport | 🟢 PASS |
+| 3 | Cookies + sessions | 🟢 PASS |
+| 4 | RLS + database isolation | 🟢 PASS |
+| 5 | Krypto + randomness | 🟢 PASS |
+| 6 | Authentication hardening | 🟢 PASS |
+| 7 | Atomicity + race conditions | 🟢 PASS |
+| 8 | IDOR + mass assignment | 🟢 PASS |
+| 9 | Email deliverability | 🟢 PASS |
+| 10 | GDPR compliance | 🟢 PASS |
+| 11 | Logging + monitoring | 🟢 PASS |
+| 12 | CI/CD security gates | 🟢 PASS |
+| 13 | Responsible disclosure | 🟢 PASS |
+
+**0 kritiske fund åbne**. **24 P-items** i roadmap (P1-P24) med konkrete
+deadlines og triggers. Klar til at åbne FamBud for testbrugere.
+
 Bevidst-accepterede svagheder der ikke er fund men dokumenteres så
 de ikke bliver oversights ved senere audit-runder.
 

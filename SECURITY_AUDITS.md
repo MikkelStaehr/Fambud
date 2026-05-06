@@ -2140,7 +2140,255 @@ logges som ny entry i SECURITY_AUDITS.md med:
 
 ---
 
-## Accepted risks / planlagt forbedring
+## 2026-05-06 — Prompt 11: Logging, monitoring og incident response
+
+**Tid (start)**: 09:30 CEST
+**Tid (afsluttet)**: 11:00 CEST
+**Auditor**: Claude Code (Opus 4.7)
+**Tested**: kortlægning af eksisterende logging-stak; design + implementering af audit_log; integration i auth-actions; security.txt deployment
+**Scope**: GDPR Art. 33 (breach detection), Art. 5(1)(f) (integritet og fortrolighed), audit-trail-bevisførelse, responsible disclosure-kanal
+
+### Resultat: 🟢 PASS — basal observability + audit-log på plads
+
+Prompt 11 byggede oven på Prompt 10's Sentry-installation. Vi har nu:
+
+- **Sentry** (Prompt 10): error-tracking + 3 alerts + PII-redaction
+- **audit_log-tabel** (Prompt 11): append-only sikkerhedshændelses-log,
+  service-role only, auth-actions integreret
+- **security.txt** (Prompt 11): responsible disclosure-kanal under
+  RFC 9116-format
+- **Breach response plan** (Prompt 10): trigger-liste + 6-trins
+  procedure + Datatilsynet-kontaktinfo
+
+Tilbageværende: ekstra alerts (failed-login-spike, invite-spike) skal
+opsættes som DB-baserede thresholds — tracket som P12.
+
+### Findings-tabel
+
+| # | Område | Status |
+| --- | --- | --- |
+| 1 | Vercel logs | 🟡 default 1-3 dages retention på Hobby; ingen søgbar history |
+| 2 | Supabase logs | 🟢 indbygget; auth-events + DB queries |
+| 3 | Custom struktureret logging | ✅ DONE — [lib/audit-log.ts](lib/audit-log.ts) |
+| 4 | Error tracking (Sentry) | 🟢 PASS (Prompt 10) |
+| 5 | Uptime monitoring | 🟠 ikke opsat — anbefales gratis service (UptimeRobot, Better Uptime) |
+| 6 | Security event logging | ✅ DONE — audit_log + integration i 5 actions |
+| 7 | PII redaction i logs | ✅ DONE — `redactPII` + `hashEmail` i lib/audit-log.ts |
+| 8 | audit_log tabel + RLS | ✅ DONE — [migration 0055](supabase/migrations/0055_audit_log.sql) |
+| 9 | security.txt | ✅ DONE — [public/.well-known/security.txt](public/.well-known/security.txt) |
+| 10 | Status page | 🟡 ikke implementeret (forslag: Vercel + Supabase status-sider) |
+
+### audit_log-tabel design
+
+Migration: [supabase/migrations/0055_audit_log.sql](supabase/migrations/0055_audit_log.sql)
+
+**Schema**:
+
+```sql
+audit_log (
+  id              bigserial primary key,
+  occurred_at     timestamptz default now(),
+  user_id         uuid references auth.users(id) on delete set null,
+  household_id    uuid references households(id) on delete set null,
+  action          text not null,         -- 'login.failure', etc.
+  resource        text,                  -- 'invite_code:ABC12345'
+  result          text in ('success', 'failure', 'denied'),
+  ip              text,
+  user_agent      text,
+  metadata        jsonb default '{}'
+)
+```
+
+**Sikkerhedsmodel**:
+
+- `alter table audit_log enable row level security` UDEN policies =
+  DENY ALL for authenticated/anon
+- `revoke all on audit_log from authenticated, anon` = ingen
+  base-privileges selv hvis RLS droppes
+- Service-role omgår RLS; app-koden bruger `createAdminClient()` til
+  at indkalde events
+- Konsekvens: en kompromitteret bruger-konto kan **ikke** slette sin
+  egen audit-trail, og kan ikke se andre brugeres logs
+
+**Indexes**: 4 stk. til de hyppige queries (occurred_at DESC for
+"sidste døgn", user_id partial for "hvad har user X gjort", action
++ result for "antal failed logins", ip partial for "mistænkelig
+IP-aktivitet").
+
+**Retention**: 365 dage anbefalet, manuel cleanup-query dokumenteret
+i migration. pg_cron-automation deferret til P12.
+
+### TypeScript-helper med PII-redaction
+
+[lib/audit-log.ts](lib/audit-log.ts) eksponerer:
+
+- `logAuditEvent(params)` — best-effort logger; fejl må ALDRIG break
+  user-flow (audit-log-fejl logges til console/Sentry og fortsætter)
+- `hashEmail(email)` — SHA-256 truncated til 16 tegn; bruges til
+  korrelation af failed logins fra samme email uden at gemme rå email
+
+**Action-typer** (TypeScript-union):
+
+```ts
+'login.success' | 'login.failure' | 'logout'
+| 'signup.success' | 'signup.failure'
+| 'password.reset_requested' | 'password.reset_completed'
+| 'invite.created' | 'invite.redeemed' | 'invite.redemption_failed'
+| 'member.added' | 'member.removed' | 'member.role_changed'
+| 'account.deleted'
+```
+
+**PII-redaction i metadata**:
+
+- Direkte nøgle-match: `email|password|token|secret|key|cpr|phone|tlf|adgangskode|kodeord|api_key|jwt|bearer` → `[redacted]`
+- Email-pattern i string-værdier (catches misnamed fields som
+  `username` der indeholder email) → `[redacted-email]`
+- Recursive på nested objects og arrays
+- Kombinationen sikrer at en udvikler ikke ved et uheld kan logge
+  rå PII via `metadata: { email: user.email }` — den vil blive
+  strippet automatisk
+
+**Request-context auto-læsning**: `ip` og `user_agent` læses fra
+Next.js `headers()` hvis ikke passet ind. `x-forwarded-for` tager
+højremost værdi (Vercel-pattern, samme som lib/rate-limit.ts).
+User-Agent capped til 500 tegn.
+
+### Integrationer i auth-actions
+
+Audit-events tilføjet i:
+
+| Fil | Events |
+| --- | --- |
+| [app/login/actions.ts](app/login/actions.ts) | `login.success`, `login.failure` |
+| [app/signup/actions.ts](app/signup/actions.ts) | `signup.success`, `signup.failure`, `invite.redeemed`, `invite.redemption_failed` |
+| [app/glemt-kodeord/actions.ts](app/glemt-kodeord/actions.ts) | `password.reset_requested` |
+| [app/nyt-kodeord/actions.ts](app/nyt-kodeord/actions.ts) | `password.reset_completed` |
+| [app/(app)/indstillinger/actions.ts](app/(app)/indstillinger/actions.ts) | `account.deleted` (med `was_owner` + `household_also_deleted` metadata) |
+
+**Bevidst undladt** (defereret til P12):
+
+- `member.added`, `member.removed`, `member.role_changed` —
+  membership-changes i indstillinger/wizard. Mindre kritisk fordi
+  `family_members`-guard-trigger (mig 0046+) allerede blokerer
+  rolleskift på DB-niveau.
+- `logout` — ingen security-værdi i happy-path-logout; sletning
+  via `signOut(scope: 'others')` efter password-reset er allerede
+  dækket af `password.reset_completed`-eventet.
+- `invite.created` — invitations oprettes via `createInvite()` i
+  indstillinger; vi kan se dem direkte i `household_invites`-tabellen
+  med `created_at` allerede.
+
+### security.txt (RFC 9116)
+
+Deployet på `https://www.fambud.dk/.well-known/security.txt`:
+
+```text
+Contact: mailto:support@fambud.dk
+Expires: 2027-05-06T00:00:00.000Z
+Preferred-Languages: da, en
+Canonical: https://www.fambud.dk/.well-known/security.txt
+```
+
+**Hvorfor det her er værd at have nu**:
+
+- Security researchers kan finde rapport-kanal uden at skulle gætte
+- `Expires`-feltet sikrer at kontakt-info refreshes (skal opdateres
+  før 2027-05-06 — føj til kalender)
+- Peger på `support@fambud.dk` der er forwarder fra P8 trin 1
+- `.well-known/`-stien er allerede ekskluderet fra proxy.ts-matcher
+  (Prompt 3-fix), så filen serveres som plain text uden middleware
+
+### PASS-fund (Vercel + Supabase logs)
+
+Vercel deployment-logs og Supabase auth/DB-logs er aktive uden vi
+gør noget ekstra. De er **ikke** vores primære observability — de er
+fallback. Hvis Sentry går ned eller audit_log fejler, har vi stadig:
+
+- Vercel function logs (1-3 dages retention på Hobby; 30 dage på Pro+)
+- Supabase Postgres logs (auto-retention afhænger af plan)
+- Supabase Auth logs (login attempts, password reset RPC calls)
+
+Vi bygger ovenpå dem, ikke bort fra dem.
+
+### Alerts — opsætning
+
+3 alerts opsat manuelt af bruger i Sentry Dashboard (Prompt 10):
+
+1. **Unhandled errors** — instant email
+2. **401/403-spike** — `>10` events / 5 min
+3. **500-spike** — `>5` events / 5 min
+
+**Anbefalede ekstra alerts** (tracket som P12):
+
+| Alert | Hvor |
+| --- | --- |
+| `>10` failed logins fra samme IP / 5 min | Supabase: SQL-query mod audit_log + cron eller pg_notify-trigger |
+| `>50` invite-redemption-forsøg / time / IP | Samme — query mod `audit_log` WHERE action='invite.redemption_failed' |
+| Database error rate >X | Sentry: brug `event.tag.handler` filter + transaction-name |
+| Stripe webhook failures | N/A — Stripe ikke i brug pt. |
+
+DB-baserede alerts kræver enten:
+
+- (a) pg_cron job der kører query og kalder Resend hvis threshold overskredet
+- (b) Supabase Database Webhooks der pinger en Vercel Server Action ved hver row-insert
+- (c) Periodisk Server Action (cron via Vercel) der querier audit_log
+
+Tracket som **P12 trin 1**: pg_cron-baseret alerting på audit_log
+metrics. Estimat 2-3 timer.
+
+### Konklusion
+
+FamBud har nu **trelagsstruktureret observability**:
+
+1. **Sentry** for application-level errors (Prompt 10)
+2. **audit_log** for sikkerhedshændelser med PII-redaction (Prompt 11)
+3. **Vercel + Supabase logs** som fallback
+
+Combined med breach response plan (Prompt 10) opfylder vi GDPR Art.
+33's "becoming aware"-krav: vi har monitoring, struktureret event-log
+og 72-timers-procedure dokumenteret. Eksterne sikkerhedsforskere har
+kanal via security.txt.
+
+### Filer ændret
+
+**Nye**:
+
+- [supabase/migrations/0055_audit_log.sql](supabase/migrations/0055_audit_log.sql)
+- [lib/audit-log.ts](lib/audit-log.ts)
+- [public/.well-known/security.txt](public/.well-known/security.txt)
+
+**Ændrede**:
+
+- [app/login/actions.ts](app/login/actions.ts) — login.success/failure
+- [app/signup/actions.ts](app/signup/actions.ts) — signup.success/failure, invite.redeemed/failed
+- [app/glemt-kodeord/actions.ts](app/glemt-kodeord/actions.ts) — password.reset_requested
+- [app/nyt-kodeord/actions.ts](app/nyt-kodeord/actions.ts) — password.reset_completed
+- [app/(app)/indstillinger/actions.ts](app/(app)/indstillinger/actions.ts) — account.deleted
+
+### Næste skridt
+
+**Manuel handling efter deploy**:
+
+- [ ] Kør migration 0055 i Supabase Dashboard (eller `supabase db push`)
+- [ ] Kør `npm run db:types` for at regenerere database.types.ts
+      med audit_log-typen — derefter kan vi fjerne `as never`-casts
+      i lib/audit-log.ts
+- [ ] Verificér første audit-event lander i tabellen: log ind med
+      bevidst forkert password, queryer `select * from audit_log
+      where action = 'login.failure' order by occurred_at desc limit 1`
+- [ ] Tjek at security.txt serveres efter deploy:
+      `curl https://www.fambud.dk/.well-known/security.txt`
+
+**Roadmap**:
+
+- **P12** — DB-baserede alerts (failed-login-spike, invite-spike)
+  samt udvidet member-changes-logging
+- **P13** — Status page (Vercel + Supabase status embeds eller
+  betalt service som Better Uptime / Statuspage)
+- **P14** — Audit-log retention automation via pg_cron (slet rows
+  ældre end 365 dage hver nat)
+
+Klar til **Prompt 12** (CI/CD security gates).
 
 Bevidst-accepterede svagheder der ikke er fund men dokumenteres så
 de ikke bliver oversights ved senere audit-runder.

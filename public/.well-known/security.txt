@@ -1,0 +1,8 @@
+# FamBud sikkerhedskontakt - format: https://securitytxt.org/
+# Hvis du har fundet en sårbarhed, så send os en email - vi
+# bekræfter modtagelse inden for 5 hverdage.
+
+Contact: mailto:support@fambud.dk
+Expires: 2027-05-06T00:00:00.000Z
+Preferred-Languages: da, en
+Canonical: https://www.fambud.dk/.well-known/security.txt

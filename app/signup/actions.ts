@@ -7,6 +7,7 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { setAuthStepCookie } from '@/lib/auth-step';
 import { isCommonPassword } from '@/lib/common-passwords';
+import { logAuditEvent, hashEmail } from '@/lib/audit-log';
 
 // Map a few common Supabase / Postgres error messages to Danish copy.
 // Anything we don't recognise falls through verbatim.
@@ -99,14 +100,45 @@ export async function signup(formData: FormData) {
   // en mail" (Supabase re-sender også selv mailen til den eksisterende
   // konto, så der er ingen reel handlings-forskel).
   if (error?.message.includes('User already registered')) {
+    await logAuditEvent({
+      action: 'signup.failure',
+      result: 'failure',
+      metadata: {
+        reason: 'duplicate_email',
+        email_hash: hashEmail(email),
+        had_invite_code: !!inviteCode,
+      },
+    });
     await setAuthStepCookie({ step: 'check-email', email });
     redirect('/signup');
   }
 
   if (error || !data.user) {
+    const isInviteError = error?.message.includes('Invalid or expired invite code');
+    await logAuditEvent({
+      action: isInviteError ? 'invite.redemption_failed' : 'signup.failure',
+      result: 'failure',
+      metadata: {
+        email_hash: hashEmail(email),
+        had_invite_code: !!inviteCode,
+        reason: error?.message ? error.message.slice(0, 100) : 'unknown',
+      },
+    });
     const msg = localiseError(error?.message ?? 'Kunne ikke oprette bruger');
     redirect(`${errorBase}?error=` + encodeURIComponent(msg));
   }
+
+  // Signup-succes. Hvis invite_code var sat, claimede handle_new_user-
+  // trigger den under signUp - log det som invite.redeemed.
+  await logAuditEvent({
+    action: inviteCode ? 'invite.redeemed' : 'signup.success',
+    result: 'success',
+    user_id: data.user.id,
+    metadata: {
+      email_hash: hashEmail(email),
+      had_invite_code: !!inviteCode,
+    },
+  });
 
   // Email-confirmation flow: signUp returns user but no session.
   if (!data.session) {

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { SESSION_ONLY_COOKIE } from '@/lib/supabase/session-flag';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
+import { logAuditEvent, hashEmail } from '@/lib/audit-log';
 
 export async function login(formData: FormData) {
   const email = capLength(String(formData.get('email') ?? '').trim(), TEXT_LIMITS.mediumName);
@@ -43,10 +44,23 @@ export async function login(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    // Audit-log før redirect så vi har failed-login-trail uafhængigt
+    // af om brugeren faktisk eksisterer (vi kan ikke skelne her).
+    await logAuditEvent({
+      action: 'login.failure',
+      result: 'failure',
+      metadata: { email_hash: hashEmail(email) },
+    });
     redirect('/login?error=' + encodeURIComponent('Forkert email eller adgangskode'));
   }
+
+  await logAuditEvent({
+    action: 'login.success',
+    result: 'success',
+    user_id: data.user?.id ?? null,
+  });
 
   revalidatePath('/', 'layout');
   redirect('/dashboard');

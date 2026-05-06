@@ -6,6 +6,7 @@ import { getHouseholdContext, getMyMembership, resetAllTours } from '@/lib/dal';
 import type { CategoryKind } from '@/lib/database.types';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAuditEvent } from '@/lib/audit-log';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
@@ -463,6 +464,21 @@ export async function deleteMyAccount(formData: FormData) {
       );
     }
   }
+
+  // Audit-log FØR auth-delete så vi har user_id mens FK stadig
+  // matcher. Efter auth.users-row er væk, ville logAuditEvent stadig
+  // virke (FK er ON DELETE SET NULL) men vi vil gerne have det
+  // explicit i logsen for GDPR-bevisførelse.
+  await logAuditEvent({
+    action: 'account.deleted',
+    result: 'success',
+    user_id: userId,
+    household_id: householdId,
+    metadata: {
+      was_owner: isOwner,
+      household_also_deleted: isOwner && !hasOtherActiveMembers,
+    },
+  });
 
   // Slet auth.users-rækken. Sætter user_id = null på feedback (ON DELETE
   // SET NULL) - vi beholder feedback-data så admin kan se den selv efter

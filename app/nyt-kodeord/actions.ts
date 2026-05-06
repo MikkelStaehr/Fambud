@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { isCommonPassword } from '@/lib/common-passwords';
+import { logAuditEvent } from '@/lib/audit-log';
 
 export async function setNewPassword(formData: FormData) {
   const password = String(formData.get('password') ?? '');
@@ -56,6 +57,11 @@ export async function setNewPassword(formData: FormData) {
     } catch (e) {
       console.error('signOut(others) after password change failed:', e);
     }
+    await logAuditEvent({
+      action: 'password.reset_completed',
+      result: 'success',
+      user_id: user.id,
+    });
   }
   if (error) {
     // SECURITY: Vi viser ikke raw Supabase-fejlen - den kan lække

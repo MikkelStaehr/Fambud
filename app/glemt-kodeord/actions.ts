@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { resolveSiteOrigin } from '@/lib/site-url';
 import { setAuthStepCookie } from '@/lib/auth-step';
+import { logAuditEvent, hashEmail } from '@/lib/audit-log';
 
 export async function requestPasswordReset(formData: FormData) {
   const email = capLength(String(formData.get('email') ?? '').trim(), TEXT_LIMITS.mediumName);
@@ -42,6 +43,15 @@ export async function requestPasswordReset(formData: FormData) {
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=/nyt-kodeord`,
+  });
+
+  // Audit-log: vi tracker BÅDE eksisterende og ikke-eksisterende emails
+  // som "requested" så vi kan se mistænkelig pattern-aktivitet (samme
+  // IP der prøver mange emails). Vi gemmer email-hash, ikke rå email.
+  await logAuditEvent({
+    action: 'password.reset_requested',
+    result: 'success',
+    metadata: { email_hash: hashEmail(email) },
   });
 
   // Vi viser ALTID success-skærmen - også hvis emailen ikke findes.

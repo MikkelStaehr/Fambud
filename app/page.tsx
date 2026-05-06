@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { HeroDemoMockup } from '@/app/_components/HeroDemoMockup';
+import { DemoStripMockup } from '@/app/_components/DemoStripMockup';
 
 const FAMBUD_FONT = 'var(--font-zt-nature), system-ui, sans-serif';
 
@@ -223,20 +224,7 @@ function DemoStrip() {
     <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
       <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
         <div className="order-2 lg:order-1">
-          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-neutral-300/30">
-            <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3">
-              <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                Udgifter pr. gruppe - Fælles
-              </span>
-            </div>
-            <div className="space-y-2.5 p-4">
-              <BudgetBar label="Bolig & lån" pct={43} amount="16.378 kr" color="#7c3aed" />
-              <BudgetBar label="Forsyning & forsikring" pct={22} amount="8.352 kr" color="#0891b2" />
-              <BudgetBar label="Børn" pct={18} amount="6.823 kr" color="#eab308" />
-              <BudgetBar label="Mad" pct={12} amount="4.500 kr" color="#16a34a" />
-              <BudgetBar label="Underholdning" pct={5} amount="1.890 kr" color="#9333ea" />
-            </div>
-          </div>
+          <DemoStripMockup />
         </div>
 
         <div className="order-1 lg:order-2">
@@ -258,57 +246,20 @@ function DemoStrip() {
           <ul className="mt-6 space-y-2 text-sm text-neutral-700">
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-              <span>9 tematiske grupper - Bolig, Transport, Børn, Mad...</span>
+              <span>9 tematiske grupper: Bolig, Transport, Børn, Mad...</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-              <span>Andele af det samlede budget - find de store sten</span>
+              <span>Andele af det samlede budget, så du finder de store sten</span>
             </li>
             <li className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-              <span>Hierarkisk drill-down til hver enkelt post</span>
+              <span>Klik en gruppe for at se de enkelte poster</span>
             </li>
           </ul>
         </div>
       </div>
     </section>
-  );
-}
-
-function BudgetBar({
-  label,
-  pct,
-  amount,
-  color,
-}: {
-  label: string;
-  pct: number;
-  amount: string;
-  color: string;
-}) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="inline-flex items-center gap-2">
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: color }}
-            aria-hidden
-          />
-          <span className="text-neutral-900">{label}</span>
-          <span className="text-xs text-neutral-400">{pct}%</span>
-        </span>
-        <span className="tabnum font-mono text-sm text-neutral-700">
-          {amount}
-        </span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-100">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-    </div>
   );
 }
 

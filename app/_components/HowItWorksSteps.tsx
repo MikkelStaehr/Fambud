@@ -17,12 +17,18 @@
 // positioned div i hver step's relative wrapper. Sidste step har
 // ingen linje.
 
+import { useRef } from 'react';
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useInView, useReducedMotion } from 'motion/react';
 
-const FADE_DURATION = 0.4;
+const FADE_DURATION = 0.55;
+const LINE_DURATION = 0.5;
 const STAGGER = 0.15;
 const EASE = [0.16, 1, 0.3, 1] as const;
+// amount: 0.15 fyrer animationen så snart 15% af elementet er i viewport.
+// Lavere end 0.3 fordi steps er høje (især med mockups på desktop), og vi
+// vil have at animationen starter når brugeren først får øje på elementet.
+const VIEWPORT_OPTIONS = { once: true, amount: 0.15 } as const;
 
 export function HowItWorksSteps() {
   return (
@@ -97,14 +103,31 @@ function Step({
 }) {
   const reducedMotion = useReducedMotion() ?? false;
 
+  // Eksplicit useInView via ref. whileInView som vi havde før kunne
+  // i nogle viewport-kombinationer fyre uden at give synlig animation
+  // (især hvis brugeren rammer sektion direkte fra anchor-link). Med
+  // ref-baseret useInView har vi fuld kontrol og kan også reuse'e
+  // staten til connector-line-animation.
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, VIEWPORT_OPTIONS);
+
+  // Hvis reducedMotion ELLER elementet er i viewport, vis i sin endelige
+  // synlige tilstand. Ellers initial-skjult med 24px Y-offset.
+  const stepDelay = (n - 1) * STAGGER;
+  const lineDelay = stepDelay + 0.18; // line vokser ind lige efter step lander
+
   return (
     <motion.div
-      initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
+      ref={ref}
+      initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+      animate={
+        isInView || reducedMotion
+          ? { opacity: 1, y: 0 }
+          : { opacity: 0, y: 24 }
+      }
       transition={{
         duration: reducedMotion ? 0 : FADE_DURATION,
-        delay: reducedMotion ? 0 : (n - 1) * STAGGER,
+        delay: reducedMotion ? 0 : stepDelay,
         ease: EASE,
       }}
       // Mobile (<sm): 2-kolonne grid (badge | tekst), mockup på row 2
@@ -113,11 +136,22 @@ function Step({
         isLast ? '' : 'pb-10 sm:pb-12'
       }`}
     >
-      {/* Vertikal forbindelseslinje. Ligger absolut bag badge-kolonnen.
-          Starter under badge (top: 40px) og strækker til bund af step. */}
+      {/* Vertikal forbindelseslinje. Animeres med scaleY 0->1 fra top
+          så den "vokser ned" fra badge til næste trin. transform-origin
+          top sikrer at den ikke vokser begge veje. Delay synced så
+          linjen kommer ind LIGE efter step-content lander. */}
       {!isLast && (
-        <div
-          className="absolute left-5 top-10 bottom-0 w-0.5 -translate-x-1/2 bg-emerald-200"
+        <motion.div
+          className="absolute left-5 top-10 bottom-0 w-0.5 origin-top -translate-x-1/2 bg-emerald-200"
+          initial={reducedMotion ? { scaleY: 1 } : { scaleY: 0 }}
+          animate={
+            isInView || reducedMotion ? { scaleY: 1 } : { scaleY: 0 }
+          }
+          transition={{
+            duration: reducedMotion ? 0 : LINE_DURATION,
+            delay: reducedMotion ? 0 : lineDelay,
+            ease: EASE,
+          }}
           aria-hidden
         />
       )}
@@ -253,33 +287,49 @@ function ExpensesMockup() {
 // Mockup 4: Forecast bar-chart
 // ----------------------------------------------------------------
 function ForecastMockup() {
-  // Heights er procent-baserede. Juni er amber (advarsel), resten emerald.
+  // Heights er procent-baserede. Juni er amber (advarsel) som signaler
+  // "pas på i denne måned" - matcher samme amber-pattern som
+  // HeroDemoMockup's underskuds-frame.
+  //
+  // Tidligere version brugte nested flex-col med flex-1, hvilket gav
+  // ingen pixel-context for height: % beregning - bars renderede med
+  // 0px højde. Nu bruger vi grid-cols-5 + items-end så hver bar har en
+  // klar parent-højde at regne mod.
   const months = [
-    { label: 'Maj', heightPct: 70, fill: 'bg-emerald-600' },
+    { label: 'Maj', heightPct: 65, fill: 'bg-emerald-600' },
     { label: 'Juni', heightPct: 30, fill: 'bg-amber-500' },
-    { label: 'Juli', heightPct: 80, fill: 'bg-emerald-600' },
-    { label: 'Aug', heightPct: 65, fill: 'bg-emerald-600' },
-    { label: 'Sep', heightPct: 75, fill: 'bg-emerald-600' },
+    { label: 'Juli', heightPct: 85, fill: 'bg-emerald-600' },
+    { label: 'Aug', heightPct: 75, fill: 'bg-emerald-600' },
+    { label: 'Sep', heightPct: 50, fill: 'bg-emerald-600' },
   ];
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm">
       <div className="mb-3 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
         Forecast
       </div>
-      <div className="flex h-24 items-end gap-2">
+      {/* Bars: 5-kolonne grid med fast container-højde (h-24 = 96px) +
+          items-end for at justere bars til bunden. Inde i hver kolonne
+          har bar w-full + height i pct af de 96px. */}
+      <div className="grid h-24 grid-cols-5 items-end gap-2">
         {months.map((m) => (
           <div
             key={m.label}
-            className="flex flex-1 flex-col items-center gap-1.5"
+            className={`w-full rounded-t-sm ${m.fill}`}
+            style={{ height: `${m.heightPct}%` }}
+            aria-hidden
+          />
+        ))}
+      </div>
+      {/* Labels i separat grid med samme 5-kolonne struktur så de
+          ligger præcis under hver bar uden at påvirke bar-layouten. */}
+      <div className="mt-1.5 grid grid-cols-5 gap-2">
+        {months.map((m) => (
+          <span
+            key={m.label}
+            className="text-center text-[10px] text-neutral-500"
           >
-            <div className="flex w-full flex-1 items-end">
-              <div
-                className={`w-full rounded-t-sm ${m.fill}`}
-                style={{ height: `${m.heightPct}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-neutral-500">{m.label}</span>
-          </div>
+            {m.label}
+          </span>
         ))}
       </div>
     </div>
@@ -291,15 +341,23 @@ function ForecastMockup() {
 // ----------------------------------------------------------------
 function CtaBlock() {
   const reducedMotion = useReducedMotion() ?? false;
+  // CTA-blok fader ind som én enhed (ingen child-stagger). Egen
+  // useInView så den triggeres uafhængigt af steps - hvis brugeren
+  // hopper direkte til bunden af sektionen, ser de stadig CTA komme ind.
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, VIEWPORT_OPTIONS);
 
   return (
     <motion.div
-      initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
+      ref={ref}
+      initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+      animate={
+        isInView || reducedMotion
+          ? { opacity: 1, y: 0 }
+          : { opacity: 0, y: 24 }
+      }
       transition={{
         duration: reducedMotion ? 0 : FADE_DURATION,
-        delay: reducedMotion ? 0 : 4 * STAGGER,
         ease: EASE,
       }}
       className="mt-16 text-center sm:mt-20"

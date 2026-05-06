@@ -13,8 +13,15 @@ export default async function LoginPage({
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Fambud</h1>
-          <p className="mt-1 text-sm text-neutral-500">Log ind på din konto</p>
+          <Link
+            href="/"
+            aria-label="Tilbage til forsiden"
+            className="inline-block text-5xl tracking-tight text-neutral-900 transition hover:text-emerald-800 sm:text-6xl"
+            style={{ fontFamily: 'var(--font-zt-nature), system-ui, sans-serif' }}
+          >
+            fambud
+          </Link>
+          <p className="mt-3 text-sm text-neutral-500">Log ind på din konto</p>
         </div>
 
         <form action={login} className="mt-8 space-y-4">

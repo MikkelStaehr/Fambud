@@ -30,7 +30,7 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history for fuld scan på push
       - uses: gitleaks/gitleaks-action@v2
@@ -46,7 +46,7 @@ jobs:
     name: Dependency CVEs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -81,7 +81,7 @@ jobs:
     name: TypeScript + build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -117,7 +117,7 @@ jobs:
     container:
       image: returntocorp/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Semgrep scan
         run: |

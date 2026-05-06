@@ -19,6 +19,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { HeroDemoMockup } from '@/app/_components/HeroDemoMockup';
 import { DemoStripMockup } from '@/app/_components/DemoStripMockup';
+import { HowItWorksSteps } from '@/app/_components/HowItWorksSteps';
 
 const FAMBUD_FONT = 'var(--font-zt-nature), system-ui, sans-serif';
 
@@ -35,7 +36,7 @@ export default async function LandingPage() {
       <Hero />
       <Features />
       <DemoStrip />
-      <HowItWorks />
+      <HowItWorksSteps />
       <FAQ />
       <FinalCTA />
       <Footer />
@@ -260,52 +261,6 @@ function DemoStrip() {
         </div>
       </div>
     </section>
-  );
-}
-
-function HowItWorks() {
-  return (
-    <section className="border-y border-neutral-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-        <div className="text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-            Sådan kommer du i gang
-          </p>
-          <h2
-            className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
-            style={{ fontFamily: FAMBUD_FONT }}
-          >
-            4 trin til overblik
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-neutral-600">
-            Hele opsætningen tager ca. 10 minutter. Du behøver ikke have alt
-            klar fra starten - Fambud guider dig igennem.
-          </p>
-        </div>
-
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <Step n={1} title="Opret konto" body="Email, navn og adresse. 30 sekunder." />
-          <Step n={2} title="Tilføj løn" body="3 lønsedler er nok til pålideligt forecast." />
-          <Step n={3} title="Faste udgifter" body="Husleje, lån, forsikringer, abonnementer." />
-          <Step n={4} title="Få overblik" body="Cashflow, advarsler, og strategiske anbefalinger." />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Step({ n, title, body }: { n: number; title: string; body: string }) {
-  return (
-    <div className="relative rounded-lg border border-neutral-200 bg-stone-50/50 p-6">
-      <div
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-800 text-sm font-semibold text-white"
-        style={{ fontFamily: FAMBUD_FONT }}
-      >
-        {n}
-      </div>
-      <h3 className="mt-4 text-base font-semibold text-neutral-900">{title}</h3>
-      <p className="mt-1 text-sm text-neutral-600">{body}</p>
-    </div>
   );
 }
 

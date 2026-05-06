@@ -14,7 +14,7 @@
 //
 // Tilgængelighed:
 // - useReducedMotion(): hvis OS-flag er sat, fade-varighed = 0, ingen
-//   stagger, ingen interval — kortet vises som statisk frame 0.
+//   stagger, ingen interval, kortet vises som statisk frame 0.
 // - IntersectionObserver: pause cykling når kortet er ude af viewport.
 // - aria-live=polite på de skiftende felter.
 
@@ -35,7 +35,7 @@ type Frame = {
 };
 
 // Tre måneder. Indtægter holdes konstant (29.747,00) så ændringen i
-// netto matematisk skyldes udgifterne — det illustrerer "nogle måneder
+// netto matematisk skyldes udgifterne, det illustrerer "nogle måneder
 // er bare dyrere" frem for "lønnen svinger".
 const FRAMES: readonly Frame[] = [
   {

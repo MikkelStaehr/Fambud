@@ -233,7 +233,7 @@ export function BudgetTable({ rows }: Props) {
   // billede af hvordan ens budget er fordelt.
   const scopeTotal = scope === 'shared' ? sharedTotal : privateTotal;
   const sharePct = (val: number): string => {
-    if (scopeTotal <= 0) return '—';
+    if (scopeTotal <= 0) return '–';
     const pct = (val * 100) / scopeTotal;
     if (pct > 0 && pct < 1) return '<1%';
     return `${Math.round(pct)}%`;

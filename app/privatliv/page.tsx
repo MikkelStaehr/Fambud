@@ -261,7 +261,7 @@ export default function PrivacyPage() {
 
         <Section
           icon={<Lock className="h-5 w-5" />}
-          title="Cookies — kun det nødvendige"
+          title="Cookies, kun det nødvendige"
         >
           <p>
             Vi bruger ingen marketing-cookies, ingen tracking, ingen

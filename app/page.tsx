@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   ArrowRight,
+  BarChart3,
   Check,
   ChevronDown,
+  Home,
+  LineChart,
   PiggyBank,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
   Users,
@@ -82,12 +84,12 @@ function Hero() {
             className="mt-5 text-4xl leading-tight tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl"
             style={{ fontFamily: FAMBUD_FONT }}
           >
-            Se hvor pengene løber hen — før de gør det
+            Se hvor pengene løber hen, før de gør det
           </h1>
           <p className="mt-5 max-w-lg text-base text-neutral-600 sm:text-lg">
             Fambud hjælper dig med at sætte din økonomi i system. Du fortæller
             os hvad der kommer ind, hvad der går ud, og hvad du gerne vil
-            spare op. Vi viser dig hvordan månederne kommer til at se ud — og
+            spare op. Vi viser dig hvordan månederne kommer til at se ud, og
             hvor du kan justere, før overraskelserne indtræffer.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -143,45 +145,47 @@ function Features() {
             className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
             style={{ fontFamily: FAMBUD_FONT }}
           >
-            Bygget til familier - ikke til bogholderi
+            Lavet til hverdagen, ikke regnearket
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-neutral-600">
-            De fleste budget-apps regner som om du er alene. Fambud forstår
-            at jeres økonomi har fælles udgifter, private udgifter og
-            forskellige indkomster - og holder styr på det hele.
+            De fleste banker antager at økonomi er simpelt. Det er det
+            sjældent. Fambud er bygget til at håndtere det rigtige billede
+            med fælles og private udgifter, forskellige indkomster,
+            opsparinger med formål, og alt det der ikke passer ind i en
+            standard-skabelon.
           </p>
         </div>
 
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
             icon={<Users className="h-5 w-5" />}
-            title="Familie-økonomi indbygget"
-            body="Fælles vs. private udgifter holdes adskilt automatisk. Per-bruger andele af fælles-konti viser præcis hvor meget hver bidrager. Inviter din partner med ét klik."
+            title="Til dig, og dem du deler med"
+            body="Bor du alene, holder Fambud styr på dine indtægter, udgifter og opsparing. Bor du sammen med nogen, holder den styr på hvem der bidrager med hvad til de fælles udgifter, og hvad der er jeres eget. Inviter din partner med ét klik når det giver mening."
           />
           <FeatureCard
             icon={<TrendingUp className="h-5 w-5" />}
-            title="Forecast fra faktiske lønsedler"
-            body="Registrer 3 lønudbetalinger og vi beregner et glidende gennemsnit som forecast. Fanger overtid, ferietillæg og bonus uden at du skal indtaste det manuelt."
+            title="Forecast der ved hvad du tjener"
+            body="De fleste apps får dig til at gætte din indkomst. Fambud bruger dine sidste tre lønudbetalinger og fanger overtid, ferietillæg og bonus automatisk. Du indtaster ikke månedlige skøn, vi regner det ud fra det der faktisk er kommet ind."
           />
           <FeatureCard
             icon={<PiggyBank className="h-5 w-5" />}
-            title="Strategisk opsparing"
-            body="Bufferfond (3-6 mdr af jeres faste udgifter) og forudsigelige uforudsete (tandlæge, bil, gaver) som strukturerede koncepter - ikke bare en tom konto."
+            title="Opsparing med formål, og i system"
+            body="En bufferfond på 3-6 måneders faste udgifter. En pulje til tandlægen, bilen og julegaver. Fambud strukturerer det så du ved hvad pengene er der til, og hvor meget der mangler."
           />
           <FeatureCard
-            icon={<Sparkles className="h-5 w-5" />}
-            title="Cashflow-rådgiver"
-            body="Sankey-graf der viser hvordan pengene flyder - først dig selv, så fælles, så opsparing. Aktive advarsler hvis en konto er underdækket, med ét-kliks-løsning."
+            icon={<BarChart3 className="h-5 w-5" />}
+            title="Se hvor pengene rent faktisk ender"
+            body="En graf der viser hvordan din løn fordeler sig: hvor meget der går til faste udgifter, hvor meget til fælles, hvor meget til opsparing, og hvor meget der er tilbage. Hvis en konto er ved at være underdækket, får du besked i god tid."
           />
           <FeatureCard
-            icon={<ShieldCheck className="h-5 w-5" />}
-            title="Privatliv som standard"
-            body="Private konti er reelt private - din partner ser dem ikke. RLS på databaseniveau, ikke bare et UI-flag. Du bestemmer hvad der er fælles."
+            icon={<Home className="h-5 w-5" />}
+            title="Realkredit der regnes som realkredit"
+            body="Et realkreditlån har rente, afdrag, bidragssats og eventuelle rabatter. Det skal regnes hver for sig, ikke smides i én pose som 'boliglån: 12.000 kr'. Fambud viser dig hvad der faktisk går til hvad, så du kan se effekten af en omlægning eller en ekstra afdragsfri periode."
           />
           <FeatureCard
-            icon={<Check className="h-5 w-5" />}
-            title="Lån + pension forstået"
-            body="Realkredit med rente, afdrag, bidrag og rabat-breakdown. Pension med egen og firma-procent. Ikke en feature-mangel der bare ignoreres som i andre apps."
+            icon={<LineChart className="h-5 w-5" />}
+            title="Pension med både din og firmaets andel"
+            body="Din pensionsindbetaling er ikke bare ét tal. Der er din egen procent og firmaets procent, og det skal med i billedet hvis du skal forstå hvad du faktisk sparer op. Fambud regner det rigtigt, også når du skifter job eller justerer din egen procent."
           />
         </div>
       </div>

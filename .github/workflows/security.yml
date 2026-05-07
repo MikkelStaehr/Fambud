@@ -63,8 +63,11 @@ jobs:
 
       # OSV-Scanner fanger bredere CVE-database end npm audit.
       # Officielt Google-supported, ingen ekstern API-key krævet.
+      # Action har ingen major-version-alias (@v2 findes ikke), så vi
+      # pinner til konkret version. Dependabot opdaterer den ved næste
+      # release.
       - name: OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.5
         with:
           scan-args: |-
             --recursive

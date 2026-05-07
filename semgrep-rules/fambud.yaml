@@ -49,11 +49,13 @@ rules:
     pattern-either:
       - pattern: Object.fromEntries(formData)
       - pattern: Object.fromEntries(formData.entries())
-      - pattern: Object.fromEntries($X)
-        # Filtrer til kun formData-lignende sources.
-        metavariable-regex:
-          metavariable: $X
-          regex: '.*[Ff]orm[Dd]ata.*'
+      # Combineret pattern + metavariable-regex skal wrappes i 'patterns'-
+      # block for at semgrep kan validere schemaet (RuleParseError ellers).
+      - patterns:
+          - pattern: Object.fromEntries($X)
+          - metavariable-regex:
+              metavariable: $X
+              regex: '.*[Ff]orm[Dd]ata.*'
 
   # ----------------------------------------------------------------
   # Privilegerede felter må ALDRIG læses fra request. household_id og

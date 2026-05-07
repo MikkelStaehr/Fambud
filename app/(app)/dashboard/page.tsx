@@ -5,6 +5,7 @@ import {
   getCurrentMemberFirstName,
   getDashboardData,
   getFamilyMembers,
+  getLifeEvents,
   getMonthlyExpensesByGroup,
   getOnboardingProgress,
   getOtherMembersOnboardingStatus,
@@ -25,6 +26,7 @@ import { DashboardTour } from './_components/DashboardTour';
 import { FamilyStatus } from './_components/FamilyStatus';
 import { HeroStatus } from './_components/HeroStatus';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
+import { LifeEventsWidget } from './_components/LifeEventsWidget';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
 import { UpcomingEvents } from './_components/UpcomingEvents';
 
@@ -54,6 +56,7 @@ export default async function DashboardPage() {
     upcomingEvents,
     familyMembers,
     otherMembersStatus,
+    lifeEvents,
     shouldAutoStartTour,
   ] = await Promise.all([
     getDashboardData(),
@@ -66,6 +69,7 @@ export default async function DashboardPage() {
     getUpcomingEvents(),
     getFamilyMembers(),
     getOtherMembersOnboardingStatus(),
+    getLifeEvents(),
     shouldShowTour('dashboard'),
   ]);
 
@@ -157,6 +161,14 @@ export default async function DashboardPage() {
           privateGroups={expenseGroups.private}
           sharedGroups={expenseGroups.shared}
         />
+      </div>
+
+      {/* Begivenheder-widget: 1-3 nærmeste planlagte/aktive begivenheder
+          med progress og månedlig opsparingsrate. Empty state pumper
+          mod /begivenheder/ny så feature'en bliver opdaget af nye
+          brugere uden at de skal kende sidebaren. */}
+      <div className="mt-8">
+        <LifeEventsWidget events={lifeEvents} />
       </div>
 
       <section data-tour="cashflow-graph" className="mt-8">

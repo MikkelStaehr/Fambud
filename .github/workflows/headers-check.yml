@@ -20,7 +20,7 @@ jobs:
     name: Verify production headers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Vent på at Vercel-deploy er færdig hvis vi blev trigget af
       # push til main. 90 sekunder dækker typisk build+deploy.

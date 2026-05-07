@@ -35,13 +35,6 @@ const VALID_TYPES: readonly LifeEventType[] = [
   'andet',
 ];
 
-const VALID_STATUSES: readonly LifeEventStatus[] = [
-  'planning',
-  'active',
-  'completed',
-  'cancelled',
-];
-
 const VALID_TIMEFRAMES: readonly LifeEventTimeframe[] = [
   'within_1y',
   'within_2y',
@@ -63,9 +56,18 @@ type ParsedEvent = {
   target_date: string | null;
   timeframe: LifeEventTimeframe | null;
   linked_account_id: string | null;
-  status: LifeEventStatus;
   notes: string | null;
 };
+
+// Status auto-derive: planning hvis ingen konto, ellers active.
+// Kaldes både ved create og update. Terminale states (completed/cancelled)
+// sættes via setLifeEventStatus og må ikke nulstilles til planning/active
+// blot fordi linked_account ændres - det håndteres i updateLifeEvent.
+function deriveStatusFromAccount(
+  linked_account_id: string | null
+): LifeEventStatus {
+  return linked_account_id ? 'active' : 'planning';
+}
 
 function readEventForm(
   formData: FormData
@@ -95,36 +97,34 @@ function readEventForm(
     total_budget = parsed.value;
   }
 
-  // Date-mode: 'date' (konkret dato), 'timeframe' (bucket) eller
-  // 'unknown' (intet). XOR-constraint i DB sikrer at vi ikke gemmer begge.
-  const dateMode = String(formData.get('date_mode') ?? 'unknown');
+  // Date-mode: 'date' (konkret dato) eller 'timeframe' (bucket). Begge
+  // tvinger en deadline. DB-constraint life_events_must_have_deadline
+  // (migration 0058) afviser hvis ingen er sat.
+  const dateMode = String(formData.get('date_mode') ?? 'date');
   let target_date: string | null = null;
   let timeframe: LifeEventTimeframe | null = null;
 
   if (dateMode === 'date') {
     const raw = String(formData.get('target_date') ?? '').trim();
-    if (raw) {
-      if (!isValidOccursOn(raw)) {
-        return { error: 'Ugyldig dato' };
-      }
-      target_date = raw;
+    if (!raw) return { error: 'Dato er påkrævet' };
+    if (!isValidOccursOn(raw)) {
+      return { error: 'Ugyldig dato' };
     }
+    target_date = raw;
   } else if (dateMode === 'timeframe') {
     const raw = String(formData.get('timeframe') ?? '').trim();
-    if (VALID_TIMEFRAMES.includes(raw as LifeEventTimeframe)) {
-      timeframe = raw as LifeEventTimeframe;
+    if (!VALID_TIMEFRAMES.includes(raw as LifeEventTimeframe)) {
+      return { error: 'Vælg en tidsramme' };
     }
+    timeframe = raw as LifeEventTimeframe;
+  } else {
+    return { error: 'Vælg dato eller tidsramme' };
   }
 
   // linked_account_id: tom string = ingen tilknyttet konto. UID-format
   // valideres ikke explicit her - DB's FK constraint fanger ugyldige IDs.
   const linkedRaw = String(formData.get('linked_account_id') ?? '').trim();
   const linked_account_id = linkedRaw || null;
-
-  const statusRaw = String(formData.get('status') ?? 'planning').trim();
-  const status = VALID_STATUSES.includes(statusRaw as LifeEventStatus)
-    ? (statusRaw as LifeEventStatus)
-    : 'planning';
 
   const notesRaw = capLength(
     String(formData.get('notes') ?? '').trim(),
@@ -141,7 +141,6 @@ function readEventForm(
       target_date,
       timeframe,
       linked_account_id,
-      status,
       notes,
     },
   };
@@ -186,7 +185,7 @@ export async function createLifeEvent(formData: FormData) {
       target_date: parsed.data.target_date,
       timeframe: parsed.data.timeframe,
       linked_account_id: parsed.data.linked_account_id,
-      status: parsed.data.status,
+      status: deriveStatusFromAccount(parsed.data.linked_account_id),
       notes: parsed.data.notes,
     })
     .select('id')
@@ -230,6 +229,20 @@ export async function updateLifeEvent(id: string, formData: FormData) {
     }
   }
 
+  // Status auto-derive: hvis nuværende status er terminal (completed/
+  // cancelled), bevarer vi den. Ellers udleder vi fra linked_account.
+  const { data: current } = await supabase
+    .from('life_events')
+    .select('status')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .maybeSingle();
+  const isTerminal =
+    current?.status === 'completed' || current?.status === 'cancelled';
+  const nextStatus: LifeEventStatus = isTerminal
+    ? current!.status
+    : deriveStatusFromAccount(parsed.data.linked_account_id);
+
   const { error } = await supabase
     .from('life_events')
     .update({
@@ -240,7 +253,7 @@ export async function updateLifeEvent(id: string, formData: FormData) {
       target_date: parsed.data.target_date,
       timeframe: parsed.data.timeframe,
       linked_account_id: parsed.data.linked_account_id,
-      status: parsed.data.status,
+      status: nextStatus,
       notes: parsed.data.notes,
     })
     .eq('id', id)
@@ -277,14 +290,20 @@ export async function deleteLifeEvent(formData: FormData) {
   redirect('/begivenheder');
 }
 
-// "Markér som gennemført" / "Genåbn" / "Aflys" - status-skift uden at
-// gennemgå hele edit-formen. Tre faste targets så vi ikke skal validere
-// frit input.
+// "Markér som gennemført" / "Aflys" - terminal status-skift fra
+// detalje-siden. Vi tillader kun de to terminale targets her. Tilbage
+// til planning/active sker via reopenLifeEvent som auto-deriverer fra
+// linked_account_id (matcher den almindelige status-logik).
+const TERMINAL_STATUSES: readonly LifeEventStatus[] = [
+  'completed',
+  'cancelled',
+];
+
 export async function setLifeEventStatus(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   const target = String(formData.get('status') ?? '');
   if (!id) return;
-  if (!VALID_STATUSES.includes(target as LifeEventStatus)) {
+  if (!TERMINAL_STATUSES.includes(target as LifeEventStatus)) {
     return;
   }
 
@@ -301,6 +320,42 @@ export async function setLifeEventStatus(formData: FormData) {
   revalidatePath('/begivenheder');
   revalidatePath(`/begivenheder/${id}`);
   await setFlashCookie('Status opdateret');
+  redirect(`/begivenheder/${encodeURIComponent(id)}`);
+}
+
+// Genåbn fra completed/cancelled. Auto-deriverer ny status fra
+// linked_account_id (samme logik som createLifeEvent + updateLifeEvent).
+export async function reopenLifeEvent(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data: current } = await supabase
+    .from('life_events')
+    .select('linked_account_id, status')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .maybeSingle();
+  if (!current) return;
+  // No-op hvis allerede ikke-terminal - ingen grund til at skrive en
+  // identisk række.
+  if (current.status !== 'completed' && current.status !== 'cancelled') {
+    redirect(`/begivenheder/${encodeURIComponent(id)}`);
+  }
+
+  const next = deriveStatusFromAccount(current.linked_account_id);
+  const { error } = await supabase
+    .from('life_events')
+    .update({ status: next })
+    .eq('id', id)
+    .eq('household_id', householdId);
+  if (error) {
+    console.error('reopenLifeEvent failed:', error.message);
+    throw new Error('Internal error');
+  }
+  revalidatePath('/begivenheder');
+  revalidatePath(`/begivenheder/${id}`);
+  await setFlashCookie('Begivenhed genåbnet');
   redirect(`/begivenheder/${encodeURIComponent(id)}`);
 }
 

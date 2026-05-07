@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getLifeEventEligibleAccounts } from '@/lib/dal';
+import { getLifeEventEligibleAccounts, getLifeEvents } from '@/lib/dal';
 import { createLifeEvent } from '../actions';
 import { EventForm } from '../_components/EventForm';
 
@@ -15,7 +15,20 @@ export default async function NyBegivenhedPage({
   searchParams: SearchParams;
 }) {
   const { error } = await searchParams;
-  const accounts = await getLifeEventEligibleAccounts();
+  const [accounts, existingEvents] = await Promise.all([
+    getLifeEventEligibleAccounts(),
+    getLifeEvents(),
+  ]);
+
+  // Map fra account_id -> navnet på den begivenhed der allerede bruger
+  // kontoen. Vises i form'en så brugeren kan se konsekvensen før de
+  // splitter saldoen mellem flere mål.
+  const linkedElsewhere: Record<string, string> = {};
+  for (const event of existingEvents) {
+    if (event.linked_account_id) {
+      linkedElsewhere[event.linked_account_id] = event.name;
+    }
+  }
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -42,6 +55,7 @@ export default async function NyBegivenhedPage({
         <EventForm
           action={createLifeEvent}
           accounts={accounts}
+          linkedElsewhere={linkedElsewhere}
           submitLabel="Opret begivenhed"
           cancelHref="/begivenheder"
           error={error}

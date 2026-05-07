@@ -160,7 +160,8 @@ function monthsUntilTargetDate(targetISO: string, today: Date = new Date()): num
 }
 
 // Antal måneder for en begivenheds deadline. target_date har forrang;
-// ellers bucket-tidsrammen. Returnerer null hvis hverken er sat.
+// ellers bucket-tidsrammen. Returnerer null hvis hverken er sat
+// (skulle ikke kunne ske post-migration 0058, men logikken er defensiv).
 export function lifeEventMonthsRemaining(
   event: Pick<LifeEvent, 'target_date' | 'timeframe'>,
   today: Date = new Date()
@@ -170,6 +171,77 @@ export function lifeEventMonthsRemaining(
   }
   if (event.timeframe) {
     return LIFE_EVENT_TIMEFRAME_MONTHS[event.timeframe];
+  }
+  return null;
+}
+
+// Påkrævet månedlig opsparing for at nå målet før deadline. Trækker
+// eksisterende saldo fra budgettet og fordeler resten over de
+// resterende måneder. Returnerer null når budget eller deadline mangler.
+export function lifeEventMonthlyTarget(
+  event: Pick<
+    LifeEvent,
+    'total_budget' | 'use_items_for_budget' | 'target_date' | 'timeframe'
+  >,
+  items: Pick<LifeEventItem, 'amount'>[],
+  currentSaldoOere: number = 0,
+  today: Date = new Date()
+): number | null {
+  const budget = lifeEventTotalBudget(event, items);
+  if (budget == null) return null;
+  const months = lifeEventMonthsRemaining(event, today);
+  if (months == null || months <= 0) return null;
+  const remaining = Math.max(0, budget - currentSaldoOere);
+  return Math.ceil(remaining / months);
+}
+
+// Agent-alert om en begivenhed: hvad bør brugeren reagere på?
+//
+//   no_account     planlagt event uden tilknyttet konto - vi sparer
+//                  ikke op endnu
+//   no_budget      event har konto men ingen budget - kan ikke regne
+//                  månedlig opsparingsrate
+//   underfunded    aktiv event hvor månedlig nettotilstrømning er
+//                  under den krævede rate
+//
+// Terminale states (completed/cancelled) returnerer altid null.
+export type LifeEventAlert =
+  | { kind: 'no_account' }
+  | { kind: 'no_budget' }
+  | { kind: 'underfunded'; required: number; actual: number };
+
+export function lifeEventAlert(
+  event: Pick<
+    LifeEvent,
+    | 'status'
+    | 'linked_account_id'
+    | 'total_budget'
+    | 'use_items_for_budget'
+    | 'target_date'
+    | 'timeframe'
+  >,
+  items: Pick<LifeEventItem, 'amount'>[],
+  // Saldo på linked_account (0 hvis ingen konto)
+  linkedAccountSaldo: number,
+  // Månedlig nettotilstrømning til linked_account fra transfers (null
+  // hvis ingen konto)
+  monthlyInflow: number | null,
+  today: Date = new Date()
+): LifeEventAlert | null {
+  if (event.status === 'completed' || event.status === 'cancelled') {
+    return null;
+  }
+  if (!event.linked_account_id) {
+    return { kind: 'no_account' };
+  }
+  const budget = lifeEventTotalBudget(event, items);
+  if (budget == null) {
+    return { kind: 'no_budget' };
+  }
+  const target = lifeEventMonthlyTarget(event, items, linkedAccountSaldo, today);
+  if (target == null) return null;
+  if (monthlyInflow != null && monthlyInflow < target) {
+    return { kind: 'underfunded', required: target, actual: monthlyInflow };
   }
   return null;
 }

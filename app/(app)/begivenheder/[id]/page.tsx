@@ -7,8 +7,12 @@
 //   - Footer med "slet begivenhed"-action
 
 import Link from 'next/link';
-import { ArrowLeft, Trash2 } from 'lucide-react';
-import { getLifeEventById, getLifeEventEligibleAccounts } from '@/lib/dal';
+import { ArrowLeft, CheckCircle2, RotateCcw, Trash2, XCircle } from 'lucide-react';
+import {
+  getLifeEventById,
+  getLifeEventEligibleAccounts,
+  getLifeEvents,
+} from '@/lib/dal';
 import {
   formatAmount,
   lifeEventTotalBudget,
@@ -21,6 +25,8 @@ import {
   addLifeEventItem,
   deleteLifeEvent,
   deleteLifeEventItem,
+  reopenLifeEvent,
+  setLifeEventStatus,
   updateLifeEvent,
   updateLifeEventItem,
 } from '../actions';
@@ -43,10 +49,22 @@ export default async function EventDetailPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [event, accounts] = await Promise.all([
+  const [event, accounts, allEvents] = await Promise.all([
     getLifeEventById(id),
     getLifeEventEligibleAccounts(),
+    getLifeEvents(),
   ]);
+
+  // Map fra account_id -> navnet på en ANDEN begivenhed der bruger
+  // samme konto. Ekskluderer denne event så vi ikke advarer mod os
+  // selv ved redigering.
+  const linkedElsewhere: Record<string, string> = {};
+  for (const otherEvent of allEvents) {
+    if (otherEvent.id === id) continue;
+    if (otherEvent.linked_account_id) {
+      linkedElsewhere[otherEvent.linked_account_id] = otherEvent.name;
+    }
+  }
 
   // Bind id som første argument på update-actionen så form'en bare kan
   // sende formData.
@@ -54,6 +72,8 @@ export default async function EventDetailPage({
   const addItemAction = addLifeEventItem.bind(null, id);
 
   const totalBudget = lifeEventTotalBudget(event, event.items);
+  const isTerminal =
+    event.status === 'completed' || event.status === 'cancelled';
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -96,6 +116,50 @@ export default async function EventDetailPage({
         )}
       </header>
 
+      {/* Status-actions: terminale skift (Aflys / Markér gennemført) +
+          Genåbn fra terminal state. Status auto-deriveres ellers fra
+          linked_account_id når metadata gemmes. */}
+      <section className="mt-6 flex flex-wrap items-center gap-2">
+        {!isTerminal && (
+          <>
+            <form action={setLifeEventStatus}>
+              <input type="hidden" name="id" value={event.id} />
+              <input type="hidden" name="status" value="completed" />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 transition hover:bg-emerald-50"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Markér som gennemført
+              </button>
+            </form>
+            <form action={setLifeEventStatus}>
+              <input type="hidden" name="id" value={event.id} />
+              <input type="hidden" name="status" value="cancelled" />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <XCircle className="h-4 w-4" />
+                Aflys
+              </button>
+            </form>
+          </>
+        )}
+        {isTerminal && (
+          <form action={reopenLifeEvent}>
+            <input type="hidden" name="id" value={event.id} />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Genåbn
+            </button>
+          </form>
+        )}
+      </section>
+
       {/* Hovedform til metadata */}
       <section className="mt-6 max-w-2xl">
         <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -104,6 +168,7 @@ export default async function EventDetailPage({
         <EventForm
           action={updateAction}
           accounts={accounts}
+          linkedElsewhere={linkedElsewhere}
           defaultValues={{
             name: event.name,
             type: event.type,
@@ -112,7 +177,6 @@ export default async function EventDetailPage({
             target_date: event.target_date,
             timeframe: event.timeframe,
             linked_account_id: event.linked_account_id,
-            status: event.status,
             notes: event.notes,
           }}
           submitLabel="Gem ændringer"

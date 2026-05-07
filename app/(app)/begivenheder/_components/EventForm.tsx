@@ -2,14 +2,23 @@
 
 // Form til oprettelse + redigering af en begivenhed.
 //
-// Tre toggle-grupper styrer hvad der vises:
+// To toggle-grupper styrer hvad der vises:
 //   - budget_mode: 'total' (vis frit beløb-felt) eller 'items' (skjul, brug
 //     items-summen). Default 'total' for nye begivenheder så den almindelige
 //     start "jeg ved cirka hvad det koster" virker uden ekstra klik.
-//   - date_mode: 'date' (konkret dato), 'timeframe' (bucket) eller 'unknown'
-//     (ingen). DB-constraint sikrer at target_date OG timeframe ikke begge
-//     sættes samtidig - vi understøtter det med en radio-toggle her.
-//   - linked_account_id: optional dropdown af savings/investment-konti.
+//   - date_mode: 'date' (konkret dato) eller 'timeframe' (bucket). Begge
+//     tvinger en deadline (DB-constraint life_events_must_have_deadline,
+//     migration 0058). Vi har bevidst fjernet en "ukendt"-option fordi
+//     agenten ikke kan beregne en månedlig opsparingsrate uden deadline.
+//
+// Status er IKKE et brugervalg længere - det auto-deriveres fra
+// linked_account_id i serverside (linked = active, ellers planning).
+// Terminal states (completed/cancelled) sættes via dedikerede knapper
+// på detalje-siden.
+//
+// linked_account-dropdown'en viser en lille "(linket til X)"-note hvis
+// kontoen allerede er tilknyttet en anden begivenhed - så brugeren kan
+// se konsekvensen før de splitter saldoen mellem to mål.
 
 import Link from 'next/link';
 import { useState } from 'react';
@@ -18,13 +27,11 @@ import { SubmitButton } from '../../_components/SubmitButton';
 import {
   ACCOUNT_KIND_LABEL_DA,
   formatOereForInput,
-  LIFE_EVENT_STATUS_LABEL_DA,
   LIFE_EVENT_TIMEFRAME_LABEL_DA,
   LIFE_EVENT_TYPE_LABEL_DA,
 } from '@/lib/format';
 import type {
   AccountKind,
-  LifeEventStatus,
   LifeEventTimeframe,
   LifeEventType,
 } from '@/lib/database.types';
@@ -45,10 +52,14 @@ type Props = {
     target_date?: string | null;
     timeframe?: LifeEventTimeframe | null;
     linked_account_id?: string | null;
-    status?: LifeEventStatus;
     notes?: string | null;
   };
   accounts: AccountOption[];
+  // Map fra account_id til navnet på den anden begivenhed der allerede
+  // bruger den samme konto. Tom map for nye events; udfyldt på edit-siden
+  // når der er andre events i husstanden. Ekskluderer altid den event vi
+  // selv redigerer (parent-page sørger for det).
+  linkedElsewhere: Record<string, string>;
   submitLabel: string;
   cancelHref: string;
   error?: string;
@@ -66,26 +77,26 @@ const TIMEFRAME_OPTIONS: { value: LifeEventTimeframe; label: string }[] = (
   Object.keys(LIFE_EVENT_TIMEFRAME_LABEL_DA) as LifeEventTimeframe[]
 ).map((value) => ({ value, label: LIFE_EVENT_TIMEFRAME_LABEL_DA[value] }));
 
-const STATUS_OPTIONS: { value: LifeEventStatus; label: string }[] = (
-  Object.keys(LIFE_EVENT_STATUS_LABEL_DA) as LifeEventStatus[]
-).map((value) => ({ value, label: LIFE_EVENT_STATUS_LABEL_DA[value] }));
-
 type BudgetMode = 'total' | 'items';
-type DateMode = 'date' | 'timeframe' | 'unknown';
+type DateMode = 'date' | 'timeframe';
 
 function initialDateMode(
   target_date: string | null | undefined,
   timeframe: LifeEventTimeframe | null | undefined
 ): DateMode {
-  if (target_date) return 'date';
   if (timeframe) return 'timeframe';
-  return 'unknown';
+  // target_date sat ELLER ingen af delene → start med konkret dato.
+  // Migration 0058 sikrer at gemte rækker har én af dem; for nye
+  // events lander vi i date-mode som default.
+  void target_date;
+  return 'date';
 }
 
 export function EventForm({
   action,
   defaultValues = {},
   accounts,
+  linkedElsewhere,
   submitLabel,
   cancelHref,
   error,
@@ -97,6 +108,14 @@ export function EventForm({
   const [dateMode, setDateMode] = useState<DateMode>(
     initialDateMode(dv.target_date, dv.timeframe)
   );
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(
+    dv.linked_account_id ?? ''
+  );
+
+  const linkedWarning =
+    selectedAccountId && linkedElsewhere[selectedAccountId]
+      ? linkedElsewhere[selectedAccountId]
+      : null;
 
   return (
     <form action={action} className="space-y-6">
@@ -200,7 +219,7 @@ export function EventForm({
         )}
       </fieldset>
 
-      {/* Tidshorisont */}
+      {/* Tidshorisont - obligatorisk */}
       <fieldset className="rounded-md border border-neutral-200 p-4">
         <legend className="px-1 text-xs font-medium text-neutral-600">
           Hvornår
@@ -228,17 +247,6 @@ export function EventForm({
             />
             Cirka tidsramme
           </label>
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
-            <input
-              type="radio"
-              name="date_mode"
-              value="unknown"
-              checked={dateMode === 'unknown'}
-              onChange={() => setDateMode('unknown')}
-              className="accent-emerald-700"
-            />
-            Vi ved det ikke endnu
-          </label>
         </div>
 
         {dateMode === 'date' && (
@@ -250,6 +258,7 @@ export function EventForm({
               id="target_date"
               name="target_date"
               type="date"
+              required
               defaultValue={dv.target_date ?? ''}
               className={fieldClass}
             />
@@ -263,6 +272,7 @@ export function EventForm({
             <select
               id="timeframe"
               name="timeframe"
+              required
               defaultValue={dv.timeframe ?? 'within_1y'}
               className={fieldClass}
             >
@@ -274,49 +284,50 @@ export function EventForm({
             </select>
           </div>
         )}
+        <p className="mt-3 text-xs text-neutral-500">
+          En deadline er obligatorisk - uden den kan vi ikke beregne en
+          månedlig opsparingsrate. Vælg cirka tidsramme hvis I ikke har en
+          konkret dato endnu.
+        </p>
       </fieldset>
 
       {/* Tilknyttet konto */}
       <div>
         <label htmlFor="linked_account_id" className={labelClass}>
-          Tilknyttet opsparingskonto (valgfri)
+          Tilknyttet opsparingskonto
         </label>
         <select
           id="linked_account_id"
           name="linked_account_id"
-          defaultValue={dv.linked_account_id ?? ''}
+          value={selectedAccountId}
+          onChange={(e) => setSelectedAccountId(e.target.value)}
           className={fieldClass}
         >
           <option value="">Ingen tilknyttet konto endnu</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name} ({ACCOUNT_KIND_LABEL_DA[account.kind]})
-            </option>
-          ))}
+          {accounts.map((account) => {
+            const elsewhere = linkedElsewhere[account.id];
+            const suffix = elsewhere ? ` · linket til ${elsewhere}` : '';
+            return (
+              <option key={account.id} value={account.id}>
+                {account.name} ({ACCOUNT_KIND_LABEL_DA[account.kind]})
+                {suffix}
+              </option>
+            );
+          })}
         </select>
         <p className="mt-1 text-xs text-neutral-500">
-          Når en konto er tilknyttet, kan I se reel saldo som fremdrift mod
-          målet. Ellers viser vi bare budget og deadline.
+          Uden en tilknyttet konto bliver begivenheden stående som idé.
+          Først når I linker en konto, regner vi den ind i jeres månedlige
+          plan.
         </p>
-      </div>
-
-      {/* Status */}
-      <div>
-        <label htmlFor="status" className={labelClass}>
-          Status
-        </label>
-        <select
-          id="status"
-          name="status"
-          defaultValue={dv.status ?? 'planning'}
-          className={fieldClass}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        {linkedWarning && (
+          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Den valgte konto er allerede tilknyttet{' '}
+            <strong className="font-semibold">{linkedWarning}</strong>. I kan
+            godt dele én opsparingskonto mellem flere mål, men vær opmærksom
+            på at saldoen så fordeles mellem begge.
+          </p>
+        )}
       </div>
 
       {/* Noter */}

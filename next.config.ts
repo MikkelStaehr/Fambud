@@ -73,12 +73,12 @@ const nextConfig: NextConfig = {
 // traces er læselige uden at maps skal hostes offentligt.
 //
 // sourcemaps.deleteSourcemapsAfterUpload: true holder maps væk fra
-// produktions-bundle — Sentry bruger dem stadig server-side til mapping
+// produktions-bundle - Sentry bruger dem stadig server-side til mapping
 // efter upload, men de serves ikke til browseren.
 //
 // silent: !CI = stille i lokal dev, fuld logging i CI-build.
 //
-// Bemærk: disableLogger er fravalgt — den er deprecated i v10 og
+// Bemærk: disableLogger er fravalgt - den er deprecated i v10 og
 // ikke understøttet under Turbopack (Next.js 16's default-bundler).
 // Sentry's egen runtime-logger er allerede tavs i prod via debug:false
 // i hver runtime-config.

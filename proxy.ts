@@ -82,7 +82,7 @@ export const config = {
   // dertil, og en Route Handler forwarder til sentry.io. Uden eksplicit
   // eksklusion ville proxy'en redirecte uautentificerede tunnel-requests
   // til /login, hvilket dropper alle client-side Sentry-events fra
-  // udloggede brugere (inkl. landing-page, signup, glemt-kodeord —
+  // udloggede brugere (inkl. landing-page, signup, glemt-kodeord -
   // præcis dér hvor vi mest gerne vil fange fejl).
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.json|monitoring|\\.well-known).*)',

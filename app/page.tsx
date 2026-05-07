@@ -1,6 +1,18 @@
 // Public landing page. Vises til ikke-loggede besøgende. Allerede-loggede
 // brugere bouncer videre til dashboardet (samme rolle som proxy-redirect
 // havde tidligere - vi gør det her så landing kan ses uden auth).
+//
+// Layout-system:
+// - Type-scale: φ-baseret (1.6×) display-tier defineret i globals.css som
+//   .text-display-lg/.text-display/.text-display-sm/.text-lead/.text-eyebrow.
+//   Body bruger Tailwind's default skala. Display-tier bruger clamp() så
+//   sizes skalerer fluid mellem mobile-floor og desktop-cap uden bp-spring.
+// - Grid: hero bruger 1.618fr/1fr (gyldne snit) på lg+. Mobile er single-col.
+// - Vertikal rytme: Fibonacci-derived padding (16/26/40/64/104/168 px) via
+//   Tailwind's spacing-skala (py-4/-6.5/-10/-16/-26/-42 - 26 og 42 er
+//   arbitrary values fordi Tailwind ikke har dem standard).
+// - Mobile-first: alle klasser starter med mobile-værdier; sm:/lg: kun
+//   hvor desktop-spec afviger fra fluid clamp().
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -47,17 +59,19 @@ export default async function LandingPage() {
 function TopNav() {
   return (
     <nav className="sticky top-0 z-10 border-b border-neutral-200 bg-stone-50/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-        <span
-          className="text-xl tracking-tight text-neutral-900"
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+        <Link
+          href="/"
+          aria-label="Fambud forsiden"
+          className="text-lg tracking-tight text-neutral-900 sm:text-xl"
           style={{ fontFamily: FAMBUD_FONT }}
         >
           Fambud
-        </span>
-        <div className="flex items-center gap-1.5">
+        </Link>
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <Link
             href="/login"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:text-neutral-900"
+            className="rounded-md px-2.5 py-1.5 text-sm font-medium text-neutral-700 transition hover:text-neutral-900 sm:px-3"
           >
             Log ind
           </Link>
@@ -75,41 +89,53 @@ function TopNav() {
 
 function Hero() {
   return (
-    <section className="mx-auto max-w-6xl px-4 pt-12 pb-20 sm:px-6 sm:pt-20 lg:px-8 lg:pt-24 lg:pb-28">
-      <div className="grid gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:items-center">
+    // Vertikal padding: Fibonacci-baseret. 64px (py-16) mobile bund, 104px
+    // (py-26 = 6.5rem) desktop. Top er let trimmet (py-12/py-20) så det
+    // ikke føles air-heavy på små skærme hvor sticky-nav allerede tager 56px.
+    <section className="mx-auto max-w-6xl px-4 pt-10 pb-16 sm:px-6 sm:pt-16 sm:pb-20 lg:px-8 lg:pt-24 lg:pb-[6.5rem]">
+      {/* Grid: 1.618fr/1fr på lg+ er det gyldne snit. Tekst får 61.8% af
+          bredden, mockup 38.2%. Gap 64px (gap-16 = 4rem) på lg matcher
+          Fibonacci-skridt. */}
+      <div className="grid gap-10 sm:gap-14 lg:grid-cols-[1.618fr_1fr] lg:items-center lg:gap-16">
         <div>
-          <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-900">
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-eyebrow text-emerald-900">
             <Sparkles className="h-3 w-3" />
             Økonomisk planlægning for almindelige mennesker
           </p>
           <h1
-            className="mt-5 text-4xl leading-tight tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl"
+            className="mt-5 text-display-lg text-neutral-900"
             style={{ fontFamily: FAMBUD_FONT }}
           >
             Se hvor pengene løber hen, før de gør det
           </h1>
-          <p className="mt-5 max-w-lg text-base text-neutral-600 sm:text-lg">
+          <p className="mt-5 max-w-[34rem] text-lead text-neutral-600">
             Fambud hjælper dig med at sætte din økonomi i system. Du fortæller
             os hvad der kommer ind, hvad der går ud, og hvad du gerne vil
             spare op. Vi viser dig hvordan månederne kommer til at se ud, og
             hvor du kan justere, før overraskelserne indtræffer.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          {/* CTA-stack: full-width på smallest mobile (< sm = 640px),
+              auto-width på larger. Det undgår at to small-buttons quetcher
+              ved siden af hinanden på 320-375px-skærme. */}
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto"
             >
               Kom i gang gratis
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="/login"
-              className="rounded-md border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:border-neutral-400"
+              className="inline-flex w-full items-center justify-center rounded-md border border-neutral-300 bg-white px-5 py-3 text-sm font-semibold text-neutral-700 transition hover:border-neutral-400 sm:w-auto"
             >
               Log ind
             </Link>
           </div>
-          <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-neutral-500">
+          {/* Trust-row: 2-kolonne grid på mobile (max 4 items i 2x2), inline
+              på sm+. Det undgår at items wrapper i en single column på
+              375px-skærme der ser tomt ud. */}
+          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-neutral-500 sm:flex sm:flex-wrap sm:gap-x-4 sm:gap-y-1.5">
             <span className="inline-flex items-center gap-1">
               <Check className="h-3 w-3 text-emerald-700" />
               19 kr/md
@@ -138,18 +164,18 @@ function Hero() {
 function Features() {
   return (
     <section className="border-y border-neutral-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-        <div className="text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-            Hvorfor Fambud
-          </p>
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-[6.5rem]">
+        {/* Centeret intro-blok. Max-width 42rem (672px) holder lead-tekst
+            i ~60-75 chars per line på alle viewports - læsbarheds-optimum. */}
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-eyebrow text-emerald-800">Hvorfor Fambud</p>
           <h2
-            className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
+            className="mt-3 text-display text-neutral-900"
             style={{ fontFamily: FAMBUD_FONT }}
           >
             Lavet til hverdagen, ikke regnearket
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-neutral-600">
+          <p className="mt-5 text-lead text-neutral-600">
             De fleste banker antager at økonomi er simpelt. Det er det
             sjældent. Fambud er bygget til at håndtere det rigtige billede
             med fælles og private udgifter, forskellige indkomster,
@@ -158,7 +184,10 @@ function Features() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Feature-grid: 1 kol mobile, 2 kol sm (640px+), 3 kol lg (1024px+).
+            Gap 24px (gap-6 = 1.5rem) er sweet-spot mellem cards der føles
+            relaterede men separate. */}
+        <div className="mt-12 grid gap-6 sm:mt-16 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
             icon={<Users className="h-5 w-5" />}
             title="Til dig, og dem du deler med"
@@ -205,11 +234,14 @@ function FeatureCard({
   body: string;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-stone-50/50 p-6 transition hover:border-emerald-300 hover:bg-emerald-50/30">
+    // Card-padding: 24px (p-6 = 1.5rem) mobile, 32px (p-8 = 2rem) på sm+.
+    // Begge er Fibonacci-tal (24=Fib₈, 32 nær Fib₉=34) hvilket giver harmonic
+    // proportions internt mellem card-bredde, padding og typografi.
+    <div className="rounded-lg border border-neutral-200 bg-stone-50/50 p-6 transition hover:border-emerald-300 hover:bg-emerald-50/30 sm:p-8">
       <div className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
         {icon}
       </div>
-      <h3 className="mt-4 text-lg font-semibold tracking-tight text-neutral-900">
+      <h3 className="mt-5 text-lg font-semibold tracking-tight text-neutral-900 sm:text-xl">
         {title}
       </h3>
       <p className="mt-2 text-sm leading-relaxed text-neutral-600">{body}</p>
@@ -222,23 +254,26 @@ function FeatureCard({
 // holdepunkt på siden ud over hero-mockuppen.
 function DemoStrip() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-      <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+    <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-[6.5rem]">
+      {/* Mobile: tekst først (order-1), mockup under (order-2). Desktop:
+          mockup til venstre (order-1), tekst til højre (order-2). Det er
+          samme indhold men omvendt orden afhængigt af viewport - gør at
+          tekst-først pattern bevares på små skærme hvor brugeren scroller
+          og vil have kontekst først. */}
+      <div className="grid gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
         <div className="order-2 lg:order-1">
           <DemoStripMockup />
         </div>
 
         <div className="order-1 lg:order-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-            Hvor går pengene hen?
-          </p>
+          <p className="text-eyebrow text-emerald-800">Hvor går pengene hen?</p>
           <h2
-            className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
+            className="mt-3 text-display text-neutral-900"
             style={{ fontFamily: FAMBUD_FONT }}
           >
             Fra detaljerede tal til ét klart billede
           </h2>
-          <p className="mt-4 text-neutral-600">
+          <p className="mt-5 text-lead text-neutral-600">
             Indtast jeres faste udgifter med kategori, og Fambud ruller dem
             op til tematiske grupper du kan forstå med ét blik. Filtrér på
             fælles eller privat. Skift mellem måned, kvartal og år. Klik en
@@ -268,20 +303,20 @@ function DemoStrip() {
 // fungerer uden JS. Klik på spørgsmålet folder svaret ud.
 function FAQ() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+    <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-[6.5rem]">
       <div className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
+        <p className="text-eyebrow text-emerald-800">
           Ofte stillede spørgsmål
         </p>
         <h2
-          className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
+          className="mt-3 text-display text-neutral-900"
           style={{ fontFamily: FAMBUD_FONT }}
         >
           Det praktiske
         </h2>
       </div>
 
-      <div className="mt-10 space-y-3">
+      <div className="mt-10 space-y-3 sm:mt-12">
         <FaqItem
           q="Skal I have adgang til min bank?"
           a="Nej. Fambud importerer ikke fra din bank. Du indtaster selv dine faste udgifter og lønsedler - det giver fuld kontrol og ingen samtykke-risiko."
@@ -341,11 +376,11 @@ function FAQ() {
 function FaqItem({ q, a }: { q: string; a: React.ReactNode }) {
   return (
     <details className="group rounded-lg border border-neutral-200 bg-white">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-neutral-900">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-medium text-neutral-900 sm:px-6 sm:text-base">
         <span>{q}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400 transition group-open:rotate-180" />
       </summary>
-      <div className="border-t border-neutral-100 px-5 py-4 text-sm leading-relaxed text-neutral-600">
+      <div className="border-t border-neutral-100 px-5 py-4 text-sm leading-relaxed text-neutral-600 sm:px-6">
         {a}
       </div>
     </details>
@@ -355,33 +390,34 @@ function FaqItem({ q, a }: { q: string; a: React.ReactNode }) {
 function FinalCTA() {
   return (
     <section className="bg-emerald-800">
-      <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8">
+      <div className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8 lg:py-[6.5rem]">
         <h2
-          className="text-3xl tracking-tight text-white sm:text-4xl"
+          className="text-display text-white"
           style={{ fontFamily: FAMBUD_FONT }}
         >
           Klar til at få overblik?
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-emerald-50">
+        <p className="mx-auto mt-5 max-w-xl text-lead text-emerald-50">
           10 minutter med Fambud - og du ved præcis hvor jeres penge løber
           hen de næste 12 måneder.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        {/* CTA-stack samme pattern som hero: full-width mobile, auto sm+ */}
+        <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-1.5 rounded-md bg-white px-6 py-3 text-sm font-semibold text-emerald-900 transition hover:bg-stone-50"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white px-6 py-3 text-sm font-semibold text-emerald-900 transition hover:bg-stone-50"
           >
             Kom i gang gratis
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/login"
-            className="rounded-md border border-emerald-700 px-6 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-700"
+            className="inline-flex items-center justify-center rounded-md border border-emerald-700 px-6 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-700"
           >
             Jeg har allerede en konto
           </Link>
         </div>
-        <p className="mt-4 text-xs text-emerald-100">
+        <p className="mt-5 text-xs text-emerald-100">
           Senere 19 kr/md - fast pris, aldrig dyrere
         </p>
       </div>

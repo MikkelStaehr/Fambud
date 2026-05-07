@@ -33,18 +33,18 @@ const VIEWPORT_OPTIONS = { once: true, amount: 0.15 } as const;
 export function HowItWorksSteps() {
   return (
     <section className="border-y border-neutral-200 bg-white">
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-[6.5rem]">
         <div className="text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
+          <p className="text-eyebrow text-emerald-800">
             Sådan kommer du i gang
           </p>
           <h2
-            className="mt-2 text-3xl tracking-tight text-neutral-900 sm:text-4xl"
+            className="mt-3 text-display tracking-tight text-neutral-900"
             style={{ fontFamily: 'var(--font-zt-nature), system-ui, sans-serif' }}
           >
             Du er kørende på 10 minutter
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-neutral-600">
+          <p className="mx-auto mt-5 max-w-xl text-lead text-neutral-600">
             Du behøver ikke have alt klar fra starten. Begynd med din løn og
             dine største faste udgifter, så bygger du resten på når det
             passer dig.
@@ -407,19 +407,19 @@ function CtaBlock() {
       className="mt-16 text-center sm:mt-20"
     >
       <h3
-        className="text-2xl tracking-tight text-neutral-900 sm:text-3xl"
+        className="text-display-sm tracking-tight text-neutral-900"
         style={{ fontFamily: 'var(--font-zt-nature), system-ui, sans-serif' }}
       >
         Det tager mindre tid end at lave kaffe
       </h3>
-      <p className="mx-auto mt-3 max-w-md text-sm text-neutral-600 sm:text-base">
+      <p className="mx-auto mt-3 max-w-md text-lead text-neutral-600">
         Du kan starte med din løn alene. Faste udgifter kan du tilføje
         senere når du har en kop i hånden.
       </p>
-      <div className="mt-6 flex flex-col items-center gap-3">
+      <div className="mt-7 flex flex-col items-center gap-3">
         <Link
           href="/signup"
-          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-800 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
         >
           Opret konto gratis
         </Link>

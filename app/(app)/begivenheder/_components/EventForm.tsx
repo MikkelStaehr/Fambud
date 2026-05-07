@@ -2,45 +2,32 @@
 
 // Form til oprettelse + redigering af en begivenhed.
 //
+// Post-migration 0059: form'en har INGEN kontovalg. Tilknytning sker via
+// overførsler (transfers.life_event_id) - se /overforsler/ny?life_event_id=X
+// flowet for hvordan en begivenhed bindes til en konto via en konkret
+// månedlig overførsel.
+//
 // To toggle-grupper styrer hvad der vises:
 //   - budget_mode: 'total' (vis frit beløb-felt) eller 'items' (skjul, brug
 //     items-summen). Default 'total' for nye begivenheder så den almindelige
 //     start "jeg ved cirka hvad det koster" virker uden ekstra klik.
 //   - date_mode: 'date' (konkret dato) eller 'timeframe' (bucket). Begge
 //     tvinger en deadline (DB-constraint life_events_must_have_deadline,
-//     migration 0058). Vi har bevidst fjernet en "ukendt"-option fordi
-//     agenten ikke kan beregne en månedlig opsparingsrate uden deadline.
+//     migration 0058).
 //
-// Status er IKKE et brugervalg længere - det auto-deriveres fra
-// linked_account_id i serverside (linked = active, ellers planning).
-// Terminal states (completed/cancelled) sættes via dedikerede knapper
-// på detalje-siden.
-//
-// linked_account-dropdown'en viser en lille "(linket til X)"-note hvis
-// kontoen allerede er tilknyttet en anden begivenhed - så brugeren kan
-// se konsekvensen før de splitter saldoen mellem to mål.
+// Status er IKKE et brugervalg - terminale states sættes via dedikerede
+// knapper på detalje-siden, planning/active beregnes live fra transfers.
 
 import Link from 'next/link';
 import { useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { SubmitButton } from '../../_components/SubmitButton';
 import {
-  ACCOUNT_KIND_LABEL_DA,
   formatOereForInput,
   LIFE_EVENT_TIMEFRAME_LABEL_DA,
   LIFE_EVENT_TYPE_LABEL_DA,
 } from '@/lib/format';
-import type {
-  AccountKind,
-  LifeEventTimeframe,
-  LifeEventType,
-} from '@/lib/database.types';
-
-type AccountOption = {
-  id: string;
-  name: string;
-  kind: AccountKind;
-};
+import type { LifeEventTimeframe, LifeEventType } from '@/lib/database.types';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
@@ -51,15 +38,8 @@ type Props = {
     use_items_for_budget?: boolean;
     target_date?: string | null;
     timeframe?: LifeEventTimeframe | null;
-    linked_account_id?: string | null;
     notes?: string | null;
   };
-  accounts: AccountOption[];
-  // Map fra account_id til navnet på den anden begivenhed der allerede
-  // bruger den samme konto. Tom map for nye events; udfyldt på edit-siden
-  // når der er andre events i husstanden. Ekskluderer altid den event vi
-  // selv redigerer (parent-page sørger for det).
-  linkedElsewhere: Record<string, string>;
   submitLabel: string;
   cancelHref: string;
   error?: string;
@@ -85,9 +65,6 @@ function initialDateMode(
   timeframe: LifeEventTimeframe | null | undefined
 ): DateMode {
   if (timeframe) return 'timeframe';
-  // target_date sat ELLER ingen af delene → start med konkret dato.
-  // Migration 0058 sikrer at gemte rækker har én af dem; for nye
-  // events lander vi i date-mode som default.
   void target_date;
   return 'date';
 }
@@ -95,8 +72,6 @@ function initialDateMode(
 export function EventForm({
   action,
   defaultValues = {},
-  accounts,
-  linkedElsewhere,
   submitLabel,
   cancelHref,
   error,
@@ -108,14 +83,6 @@ export function EventForm({
   const [dateMode, setDateMode] = useState<DateMode>(
     initialDateMode(dv.target_date, dv.timeframe)
   );
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    dv.linked_account_id ?? ''
-  );
-
-  const linkedWarning =
-    selectedAccountId && linkedElsewhere[selectedAccountId]
-      ? linkedElsewhere[selectedAccountId]
-      : null;
 
   return (
     <form action={action} className="space-y-6">
@@ -291,45 +258,6 @@ export function EventForm({
         </p>
       </fieldset>
 
-      {/* Tilknyttet konto */}
-      <div>
-        <label htmlFor="linked_account_id" className={labelClass}>
-          Tilknyttet opsparingskonto
-        </label>
-        <select
-          id="linked_account_id"
-          name="linked_account_id"
-          value={selectedAccountId}
-          onChange={(e) => setSelectedAccountId(e.target.value)}
-          className={fieldClass}
-        >
-          <option value="">Ingen tilknyttet konto endnu</option>
-          {accounts.map((account) => {
-            const elsewhere = linkedElsewhere[account.id];
-            const suffix = elsewhere ? ` · linket til ${elsewhere}` : '';
-            return (
-              <option key={account.id} value={account.id}>
-                {account.name} ({ACCOUNT_KIND_LABEL_DA[account.kind]})
-                {suffix}
-              </option>
-            );
-          })}
-        </select>
-        <p className="mt-1 text-xs text-neutral-500">
-          Uden en tilknyttet konto bliver begivenheden stående som idé.
-          Først når I linker en konto, regner vi den ind i jeres månedlige
-          plan.
-        </p>
-        {linkedWarning && (
-          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Den valgte konto er allerede tilknyttet{' '}
-            <strong className="font-semibold">{linkedWarning}</strong>. I kan
-            godt dele én opsparingskonto mellem flere mål, men vær opmærksom
-            på at saldoen så fordeles mellem begge.
-          </p>
-        )}
-      </div>
-
       {/* Noter */}
       <div>
         <label htmlFor="notes" className={labelClass}>
@@ -345,6 +273,12 @@ export function EventForm({
           className={fieldClass}
         />
       </div>
+
+      <p className="rounded-md border border-neutral-200 bg-stone-50 px-3 py-2 text-xs text-neutral-600">
+        Begivenheden står som idé indtil I opsætter en månedlig overførsel
+        for den. Det gør I på detaljesiden bagefter, eller via
+        Overførsler.
+      </p>
 
       <div className="flex items-center justify-end gap-2 border-t border-neutral-200 pt-4">
         <Link

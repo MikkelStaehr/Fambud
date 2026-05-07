@@ -1,15 +1,23 @@
 // /begivenheder - observationssiden.
 //
-// Liste over alle planlagte og aktive begivenheder med fremdrift, deadline
-// og månedlig opsparingsrate. CRUD-handlinger (oprettelse, redigering,
-// poster) lever på detalje-siden / "Værktøjer"-menuen, ikke her.
+// Liste over alle planlagte og aktive begivenheder med deadline,
+// månedlig opsparingsrate og evt. agent-alert. CRUD-handlinger
+// (oprettelse, redigering, poster) lever på detalje-siden / "Værktøjer"-
+// menuen, ikke her.
+//
+// Post-migration 0059: vi viser ikke længere saldo/progress baseret på
+// kontosaldo. Status og opsparing trackes via overførsler tied til
+// event'et.
 
 import Link from 'next/link';
-import { Plus, Pencil, Calendar } from 'lucide-react';
+import { Plus, Pencil, Calendar, AlertTriangle, Clock } from 'lucide-react';
 import { getLifeEvents } from '@/lib/dal';
 import {
   formatAmount,
   formatShortDateDA,
+  lifeEventAlert,
+  lifeEventLiveStatus,
+  lifeEventMonthlyTarget,
   lifeEventMonthsRemaining,
   lifeEventTotalBudget,
   LIFE_EVENT_STATUS_LABEL_DA,
@@ -29,10 +37,11 @@ export default async function BegivenhederPage() {
   const events = await getLifeEvents();
 
   // Total budget på tværs af aktive (ikke-aflyste, ikke-gennemførte) for
-  // header-tælleren. Vi inkluderer både totals fra frit-tal og items-sum.
-  const activeEvents = events.filter(
-    (e) => e.status === 'planning' || e.status === 'active'
-  );
+  // header-tælleren. Bruger live status så terminale events ekskluderes.
+  const activeEvents = events.filter((e) => {
+    const live = lifeEventLiveStatus(e.status, e.transfers.length);
+    return live === 'planning' || live === 'active';
+  });
   const totalBudget = activeEvents.reduce((sum, e) => {
     const budget = lifeEventTotalBudget(e, e.items);
     return sum + (budget ?? 0);
@@ -78,22 +87,19 @@ export default async function BegivenhederPage() {
       ) : (
         <div className="mt-6 grid gap-3">
           {events.map((event) => {
+            const liveStatus = lifeEventLiveStatus(
+              event.status,
+              event.transfers.length
+            );
             const budget = lifeEventTotalBudget(event, event.items);
             const months = lifeEventMonthsRemaining(event);
-            // Fremdrift kun når linked_account er sat OG vi har et budget.
-            // opening_balance fra account-tabel er den seneste rapporterede
-            // saldo, ikke realtid - tilstrækkeligt til en cirka-progress.
-            const saldo = event.linked_account?.opening_balance ?? null;
-            const progressPct =
-              saldo != null && budget != null && budget > 0
-                ? Math.min(100, Math.round((saldo / budget) * 100))
-                : null;
-            // Månedlig opsparingsrate til at nå målet inden deadline.
-            // Trækker eksisterende saldo fra budgettet.
-            const monthlyTarget =
-              budget != null && months != null && months > 0
-                ? Math.max(0, Math.ceil((budget - (saldo ?? 0)) / months))
-                : null;
+            const monthlyTarget = lifeEventMonthlyTarget(event, event.items);
+            const alert = lifeEventAlert(
+              event,
+              event.items,
+              event.monthlyTotal,
+              event.transfers.length
+            );
 
             return (
               <div
@@ -110,16 +116,11 @@ export default async function BegivenhederPage() {
                         {LIFE_EVENT_TYPE_LABEL_DA[event.type]}
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[event.status]}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[liveStatus]}`}
                       >
-                        {LIFE_EVENT_STATUS_LABEL_DA[event.status]}
+                        {LIFE_EVENT_STATUS_LABEL_DA[liveStatus]}
                       </span>
                     </div>
-                    {event.linked_account && (
-                      <div className="mt-0.5 text-xs text-neutral-500">
-                        Tilknyttet {event.linked_account.name}
-                      </div>
-                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Link
@@ -159,42 +160,51 @@ export default async function BegivenhederPage() {
                         <span className="text-neutral-400">Ikke sat</span>
                       )}
                     </dd>
-                    {months != null && months > 0 && (
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Måneder tilbage</dt>
+                    <dd className="inline-flex items-center gap-1 font-mono tabnum text-sm font-semibold text-neutral-900">
+                      <Clock className="h-3 w-3 text-neutral-400" />
+                      {months != null ? months : '–'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Pr. måned</dt>
+                    <dd className="font-mono tabnum text-sm text-neutral-700">
+                      {monthlyTarget != null
+                        ? `${formatAmount(monthlyTarget)} kr`
+                        : '–'}
+                    </dd>
+                    {event.transfers.length > 0 && (
                       <dd className="text-[11px] text-neutral-500">
-                        ca. {months} {months === 1 ? 'måned' : 'måneder'}
+                        Aktuelt {formatAmount(event.monthlyTotal)} kr/md
                       </dd>
                     )}
                   </div>
-                  {monthlyTarget != null && monthlyTarget > 0 && (
-                    <div>
-                      <dt className="text-neutral-500">Pr. måned</dt>
-                      <dd className="font-mono tabnum text-sm text-neutral-700">
-                        {formatAmount(monthlyTarget)} kr
-                      </dd>
-                      <dd className="text-[11px] text-neutral-500">
-                        for at nå målet
-                      </dd>
-                    </div>
-                  )}
-                  {progressPct != null && (
-                    <div>
-                      <dt className="text-neutral-500">Fremdrift</dt>
-                      <dd className="text-sm font-semibold text-neutral-900">
-                        {progressPct}%
-                      </dd>
-                      <dd className="text-[11px] text-neutral-500">
-                        {formatAmount(saldo ?? 0)} kr sparet
-                      </dd>
-                    </div>
-                  )}
                 </dl>
 
-                {progressPct != null && (
-                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                    <div
-                      className="h-full bg-emerald-700 transition-all"
-                      style={{ width: `${progressPct}%` }}
-                    />
+                {alert && (
+                  <div className="mt-3 inline-flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>
+                      {alert.kind === 'no_budget' && 'Mangler budget'}
+                      {alert.kind === 'no_active_transfer' && (
+                        <>
+                          Ingen overførsel opsat
+                          {alert.required != null && (
+                            <>
+                              , forslag: {formatAmount(alert.required)} kr/md
+                            </>
+                          )}
+                        </>
+                      )}
+                      {alert.kind === 'underfunded' && (
+                        <>
+                          Sparer {formatAmount(alert.actual)} kr/md, mangler{' '}
+                          {formatAmount(alert.required - alert.actual)} kr/md
+                        </>
+                      )}
+                    </span>
                   </div>
                 )}
               </div>

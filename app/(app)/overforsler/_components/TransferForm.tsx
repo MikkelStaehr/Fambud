@@ -36,6 +36,10 @@ type Props = {
     occurs_on?: string;
     recurrence?: RecurrenceFreq;
     recurrence_until?: string | null;
+    // Optional binding til en begivenhed. Når sat, gemmer createTransfer/
+    // updateTransfer tokenen i transfers.life_event_id og redirector
+    // tilbage til begivenhedens detalje-side.
+    life_event_id?: string | null;
   };
   submitLabel: string;
   cancelHref: string;
@@ -103,6 +107,16 @@ export function TransferForm({
 
   return (
     <form action={action} className="space-y-5">
+      {/* Skjult binding til en begivenhed når flow'et starter fra
+          /begivenheder/<id>'s "Opsæt overførsel"-CTA. Server-actionen
+          læser feltet og verificerer ejerskab før den linker. */}
+      {dv.life_event_id && (
+        <input
+          type="hidden"
+          name="life_event_id"
+          value={dv.life_event_id}
+        />
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="from_account_id" className={labelClass}>Fra konto</label>

@@ -1,28 +1,47 @@
 // Begivenheder (life_events): planlagte større opsparingsmål.
 //
-// Hver begivenhed har optional linje-poster (life_event_items) der summer
-// til total-budget når use_items_for_budget=true, og optional link til en
-// savings/investment-konto. UI'et beregner fremdrift via konto-saldo +
-// budget-helpers i lib/format.ts (lifeEventTotalBudget,
-// lifeEventMonthsRemaining).
+// Modellen post-migration 0059: en begivenhed har INGEN direkte konto-FK.
+// Tilknytningen sker via overførsler - hver transfer.life_event_id linker
+// en konkret månedlig opsparing til en begivenhed. En event kan have N
+// transfers (multi-contributor), eller 0 (planning-state).
+//
+// DAL'en henter events + items + transfers i én roundtrip pr. side. Live
+// status og alerts beregnes i lib/format.ts på read.
 
-import type { Account, LifeEvent, LifeEventItem } from '@/lib/database.types';
+import type {
+  AccountKind,
+  LifeEvent,
+  LifeEventItem,
+  RecurrenceFreq,
+} from '@/lib/database.types';
+import { monthlyEquivalent } from '@/lib/format';
 import { getHouseholdContext } from './auth';
 
-export type LifeEventLinkedAccount = Pick<
-  Account,
-  'id' | 'name' | 'opening_balance' | 'kind'
->;
+// Slim-summary af en transfer linket til et event. Vi henter kun de
+// felter UI'et faktisk skal bruge (sammenligning af mål-konti,
+// monthly-equivalent, navn på kontoen).
+export type LifeEventTransferSummary = {
+  id: string;
+  to_account_id: string;
+  to_account_name: string;
+  to_account_kind: AccountKind;
+  amount: number;
+  recurrence: RecurrenceFreq;
+  monthly: number; // monthlyEquivalent af amount + recurrence
+};
 
 export type LifeEventWithItems = LifeEvent & {
   items: LifeEventItem[];
-  linked_account: LifeEventLinkedAccount | null;
+  // Recurring (ikke-'once') transfers tied til dette event. Empty array
+  // betyder planning - ingen aktiv opsparing endnu.
+  transfers: LifeEventTransferSummary[];
+  // Sum af transfers.monthly. Bruges af agentens underfunded-detektor
+  // og som "Aktuel pr. måned"-stat i UI.
+  monthlyTotal: number;
 };
 
-// Lister begivenheder for det aktuelle household. Aflyste filtreres væk
-// med mindre includeCancelled=true (admin-view kunne vise dem; default
-// bruger-view skjuler dem). Sortering: target_date stigende, nulls sidst,
-// så "nærmeste deadline først" er det naturlige resultat.
+// Sortering: target_date stigende, nulls sidst (timeframe-buckets
+// behandles som "udsat" i sammenligning).
 export async function getLifeEvents(
   includeCancelled = false
 ): Promise<LifeEventWithItems[]> {
@@ -45,8 +64,7 @@ export async function getLifeEvents(
 
   const eventIds = events.map((e) => e.id);
 
-  // Items joint-fetch: én query for alle events. items_by_event-mappet
-  // bygges client-side så vi undgår N+1.
+  // Items joint-fetch
   const { data: items, error: itemsErr } = await supabase
     .from('life_event_items')
     .select('*')
@@ -61,29 +79,66 @@ export async function getLifeEvents(
     itemsByEvent.set(item.event_id, arr);
   }
 
-  // Linked accounts joint-fetch: kun de IDs der reelt er sat.
-  const linkedIds = events
-    .map((e) => e.linked_account_id)
-    .filter((id): id is string => !!id);
-  const accountById = new Map<string, LifeEventLinkedAccount>();
-  if (linkedIds.length > 0) {
+  // Transfers joint-fetch: alle recurring transfers tied til disse
+  // events. 'once'-transfers ekskluderes - de er engangsindbetalinger,
+  // ikke månedlig opsparing, og skal ikke flippe status til active.
+  const { data: transfers, error: transfersErr } = await supabase
+    .from('transfers')
+    .select('id, life_event_id, to_account_id, amount, recurrence')
+    .in('life_event_id', eventIds)
+    .neq('recurrence', 'once');
+  if (transfersErr) throw transfersErr;
+
+  // Berig transfers med kontonavne. Ét select pr. unique account_id.
+  const accountIds = Array.from(
+    new Set((transfers ?? []).map((t) => t.to_account_id))
+  );
+  const accountMap = new Map<
+    string,
+    { name: string; kind: AccountKind }
+  >();
+  if (accountIds.length > 0) {
     const { data: accounts, error: accErr } = await supabase
       .from('accounts')
-      .select('id, name, opening_balance, kind')
-      .in('id', linkedIds);
+      .select('id, name, kind')
+      .in('id', accountIds);
     if (accErr) throw accErr;
-    for (const account of accounts ?? []) {
-      accountById.set(account.id, account);
+    for (const acc of accounts ?? []) {
+      accountMap.set(acc.id, { name: acc.name, kind: acc.kind });
     }
   }
 
-  return events.map((event) => ({
-    ...event,
-    items: itemsByEvent.get(event.id) ?? [],
-    linked_account: event.linked_account_id
-      ? (accountById.get(event.linked_account_id) ?? null)
-      : null,
-  }));
+  const transfersByEvent = new Map<string, LifeEventTransferSummary[]>();
+  for (const tr of transfers ?? []) {
+    if (!tr.life_event_id) continue;
+    const account = accountMap.get(tr.to_account_id);
+    const summary: LifeEventTransferSummary = {
+      id: tr.id,
+      to_account_id: tr.to_account_id,
+      to_account_name: account?.name ?? 'Ukendt konto',
+      to_account_kind: account?.kind ?? 'other',
+      amount: tr.amount,
+      recurrence: tr.recurrence,
+      monthly: monthlyEquivalent(tr.amount, tr.recurrence),
+    };
+    const arr = transfersByEvent.get(tr.life_event_id) ?? [];
+    arr.push(summary);
+    transfersByEvent.set(tr.life_event_id, arr);
+  }
+
+  return events.map((event) => {
+    const eventTransfers = transfersByEvent.get(event.id) ?? [];
+    const monthlyTotal = eventTransfers.reduce(
+      (sum, t) => sum + t.monthly,
+      0
+    );
+    return {
+      ...event,
+      items: itemsByEvent.get(event.id) ?? [],
+      transfers: eventTransfers,
+      monthlyTotal,
+    };
+  });
 }
 
 export async function getLifeEventById(id: string): Promise<LifeEventWithItems> {
@@ -97,47 +152,65 @@ export async function getLifeEventById(id: string): Promise<LifeEventWithItems> 
     .single();
   if (eventErr) throw eventErr;
 
-  const { data: items, error: itemsErr } = await supabase
-    .from('life_event_items')
-    .select('*')
-    .eq('event_id', id)
-    .order('sort_order', { ascending: true });
-  if (itemsErr) throw itemsErr;
+  const [itemsRes, transfersRes] = await Promise.all([
+    supabase
+      .from('life_event_items')
+      .select('*')
+      .eq('event_id', id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('transfers')
+      .select('id, to_account_id, amount, recurrence')
+      .eq('life_event_id', id)
+      .neq('recurrence', 'once'),
+  ]);
+  if (itemsRes.error) throw itemsRes.error;
+  if (transfersRes.error) throw transfersRes.error;
 
-  let linked_account: LifeEventLinkedAccount | null = null;
-  if (event.linked_account_id) {
-    const { data: account } = await supabase
+  const accountIds = Array.from(
+    new Set((transfersRes.data ?? []).map((t) => t.to_account_id))
+  );
+  const accountMap = new Map<
+    string,
+    { name: string; kind: AccountKind }
+  >();
+  if (accountIds.length > 0) {
+    const { data: accounts } = await supabase
       .from('accounts')
-      .select('id, name, opening_balance, kind')
-      .eq('id', event.linked_account_id)
-      .eq('household_id', householdId)
-      .maybeSingle();
-    linked_account = account ?? null;
+      .select('id, name, kind')
+      .in('id', accountIds)
+      .eq('household_id', householdId);
+    for (const acc of accounts ?? []) {
+      accountMap.set(acc.id, { name: acc.name, kind: acc.kind });
+    }
   }
 
-  return { ...event, items: items ?? [], linked_account };
+  const transfers: LifeEventTransferSummary[] = (transfersRes.data ?? []).map(
+    (tr) => {
+      const account = accountMap.get(tr.to_account_id);
+      return {
+        id: tr.id,
+        to_account_id: tr.to_account_id,
+        to_account_name: account?.name ?? 'Ukendt konto',
+        to_account_kind: account?.kind ?? 'other',
+        amount: tr.amount,
+        recurrence: tr.recurrence,
+        monthly: monthlyEquivalent(tr.amount, tr.recurrence),
+      };
+    }
+  );
+  const monthlyTotal = transfers.reduce((sum, t) => sum + t.monthly, 0);
+
+  return {
+    ...event,
+    items: itemsRes.data ?? [],
+    transfers,
+    monthlyTotal,
+  };
 }
 
-// Konti til linked_account-dropdown'en på begivenhed-formen. Kun savings
-// og investment giver mening (det er der opsparings-saldoer ligger), og
-// kun ikke-arkiverede.
-export async function getLifeEventEligibleAccounts(): Promise<
-  Pick<Account, 'id' | 'name' | 'kind'>[]
-> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('id, name, kind')
-    .eq('household_id', householdId)
-    .in('kind', ['savings', 'investment'])
-    .eq('archived', false)
-    .order('name', { ascending: true });
-  if (error) throw error;
-  return data ?? [];
-}
-
-// Antal aktive (ikke-aflyste, ikke-gennemførte) begivenheder. Bruges af
-// dashboard og evt. badges i sidebaren senere.
+// Antal aktive (ikke-aflyste, ikke-gennemførte) begivenheder. Bruges
+// af dashboard og evt. badges i sidebaren senere.
 export async function getActiveLifeEventCount(): Promise<number> {
   const { supabase, householdId } = await getHouseholdContext();
   const { count, error } = await supabase

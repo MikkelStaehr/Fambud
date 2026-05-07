@@ -175,73 +175,90 @@ export function lifeEventMonthsRemaining(
   return null;
 }
 
-// Påkrævet månedlig opsparing for at nå målet før deadline. Trækker
-// eksisterende saldo fra budgettet og fordeler resten over de
-// resterende måneder. Returnerer null når budget eller deadline mangler.
+// Påkrævet månedlig opsparing for at nå målet før deadline. Beregnes som
+// budget / måneder_tilbage. Vi trækker IKKE saldo fra længere - efter
+// migration 0059 er saldo ikke længere en del af modellen; opsparing
+// trackes via overførsler, ikke via kontosaldo.
+// Returnerer null når budget eller deadline mangler.
 export function lifeEventMonthlyTarget(
   event: Pick<
     LifeEvent,
     'total_budget' | 'use_items_for_budget' | 'target_date' | 'timeframe'
   >,
   items: Pick<LifeEventItem, 'amount'>[],
-  currentSaldoOere: number = 0,
   today: Date = new Date()
 ): number | null {
   const budget = lifeEventTotalBudget(event, items);
   if (budget == null) return null;
   const months = lifeEventMonthsRemaining(event, today);
   if (months == null || months <= 0) return null;
-  const remaining = Math.max(0, budget - currentSaldoOere);
-  return Math.ceil(remaining / months);
+  return Math.ceil(budget / months);
+}
+
+// Live status (post-migration 0059): planning/active beregnes på read
+// fra antal recurring transfers tied til event'et. Terminale states
+// (completed/cancelled) bevares fra DB.
+//   transfersCount = 0  → planning
+//   transfersCount > 0  → active
+export type LifeEventStatusLike =
+  | 'planning'
+  | 'active'
+  | 'completed'
+  | 'cancelled';
+
+export function lifeEventLiveStatus(
+  storedStatus: LifeEventStatusLike,
+  transfersCount: number
+): LifeEventStatusLike {
+  if (storedStatus === 'completed' || storedStatus === 'cancelled') {
+    return storedStatus;
+  }
+  return transfersCount > 0 ? 'active' : 'planning';
 }
 
 // Agent-alert om en begivenhed: hvad bør brugeren reagere på?
 //
-//   no_account     planlagt event uden tilknyttet konto - vi sparer
-//                  ikke op endnu
-//   no_budget      event har konto men ingen budget - kan ikke regne
-//                  månedlig opsparingsrate
-//   underfunded    aktiv event hvor månedlig nettotilstrømning er
-//                  under den krævede rate
+//   no_budget            event mangler totalbudget (kan ikke regne
+//                        månedlig opsparingsrate)
+//   no_active_transfer   event har budget + deadline men 0 recurring
+//                        transfers - opsæt en overførsel for at
+//                        komme i gang
+//   underfunded          event har transfers men sum(monthly) er
+//                        under påkrævet rate
 //
 // Terminale states (completed/cancelled) returnerer altid null.
 export type LifeEventAlert =
-  | { kind: 'no_account' }
   | { kind: 'no_budget' }
+  | { kind: 'no_active_transfer'; required: number | null }
   | { kind: 'underfunded'; required: number; actual: number };
 
 export function lifeEventAlert(
   event: Pick<
     LifeEvent,
     | 'status'
-    | 'linked_account_id'
     | 'total_budget'
     | 'use_items_for_budget'
     | 'target_date'
     | 'timeframe'
   >,
   items: Pick<LifeEventItem, 'amount'>[],
-  // Saldo på linked_account (0 hvis ingen konto)
-  linkedAccountSaldo: number,
-  // Månedlig nettotilstrømning til linked_account fra transfers (null
-  // hvis ingen konto)
-  monthlyInflow: number | null,
+  monthlyTotal: number,
+  transfersCount: number,
   today: Date = new Date()
 ): LifeEventAlert | null {
   if (event.status === 'completed' || event.status === 'cancelled') {
     return null;
   }
-  if (!event.linked_account_id) {
-    return { kind: 'no_account' };
-  }
   const budget = lifeEventTotalBudget(event, items);
   if (budget == null) {
     return { kind: 'no_budget' };
   }
-  const target = lifeEventMonthlyTarget(event, items, linkedAccountSaldo, today);
-  if (target == null) return null;
-  if (monthlyInflow != null && monthlyInflow < target) {
-    return { kind: 'underfunded', required: target, actual: monthlyInflow };
+  const target = lifeEventMonthlyTarget(event, items, today);
+  if (transfersCount === 0) {
+    return { kind: 'no_active_transfer', required: target };
+  }
+  if (target != null && monthlyTotal < target) {
+    return { kind: 'underfunded', required: target, actual: monthlyTotal };
   }
   return null;
 }

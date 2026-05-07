@@ -5,6 +5,11 @@
 // Pattern matcher /laan/actions.ts: privilegerede felter (household_id) hentes
 // fra getHouseholdContext server-side, aldrig fra formData. Brugerinput læses
 // eksplicit per felt - ingen mass-assignment (CLAUDE.md regel #2).
+//
+// Post-migration 0059: linked_account_id er fjernet fra life_events.
+// Status auto-derive på save findes ikke længere - planning/active
+// beregnes live fra antal recurring transfers tied til event'et.
+// DB-kolonnen status bevarer kun terminale states (completed/cancelled).
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -55,19 +60,8 @@ type ParsedEvent = {
   use_items_for_budget: boolean;
   target_date: string | null;
   timeframe: LifeEventTimeframe | null;
-  linked_account_id: string | null;
   notes: string | null;
 };
-
-// Status auto-derive: planning hvis ingen konto, ellers active.
-// Kaldes både ved create og update. Terminale states (completed/cancelled)
-// sættes via setLifeEventStatus og må ikke nulstilles til planning/active
-// blot fordi linked_account ændres - det håndteres i updateLifeEvent.
-function deriveStatusFromAccount(
-  linked_account_id: string | null
-): LifeEventStatus {
-  return linked_account_id ? 'active' : 'planning';
-}
 
 function readEventForm(
   formData: FormData
@@ -121,11 +115,6 @@ function readEventForm(
     return { error: 'Vælg dato eller tidsramme' };
   }
 
-  // linked_account_id: tom string = ingen tilknyttet konto. UID-format
-  // valideres ikke explicit her - DB's FK constraint fanger ugyldige IDs.
-  const linkedRaw = String(formData.get('linked_account_id') ?? '').trim();
-  const linked_account_id = linkedRaw || null;
-
   const notesRaw = capLength(
     String(formData.get('notes') ?? '').trim(),
     TEXT_LIMITS.description
@@ -140,7 +129,6 @@ function readEventForm(
       use_items_for_budget,
       target_date,
       timeframe,
-      linked_account_id,
       notes,
     },
   };
@@ -156,24 +144,6 @@ export async function createLifeEvent(formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  // Hvis linked_account_id er sat, verificér at kontoen tilhører dette
-  // household og er en gyldig type. RLS dækker også, men eksplicit tjek
-  // giver en klar fejlbesked frem for en obskur DB-constraint-fejl.
-  if (parsed.data.linked_account_id) {
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('id, kind')
-      .eq('id', parsed.data.linked_account_id)
-      .eq('household_id', householdId)
-      .maybeSingle();
-    if (!account) {
-      redirect(
-        '/begivenheder/ny?error=' +
-          encodeURIComponent('Den valgte konto findes ikke')
-      );
-    }
-  }
-
   const { data, error } = await supabase
     .from('life_events')
     .insert({
@@ -184,8 +154,10 @@ export async function createLifeEvent(formData: FormData) {
       use_items_for_budget: parsed.data.use_items_for_budget,
       target_date: parsed.data.target_date,
       timeframe: parsed.data.timeframe,
-      linked_account_id: parsed.data.linked_account_id,
-      status: deriveStatusFromAccount(parsed.data.linked_account_id),
+      // Status defaulter til 'planning'. Live status (planning vs active)
+      // beregnes på read fra antal recurring transfers, men DB-kolonnen
+      // bruges som anker for terminale states.
+      status: 'planning',
       notes: parsed.data.notes,
     })
     .select('id')
@@ -214,35 +186,8 @@ export async function updateLifeEvent(id: string, formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  if (parsed.data.linked_account_id) {
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('id', parsed.data.linked_account_id)
-      .eq('household_id', householdId)
-      .maybeSingle();
-    if (!account) {
-      redirect(
-        `/begivenheder/${encodeURIComponent(id)}?error=` +
-          encodeURIComponent('Den valgte konto findes ikke')
-      );
-    }
-  }
-
-  // Status auto-derive: hvis nuværende status er terminal (completed/
-  // cancelled), bevarer vi den. Ellers udleder vi fra linked_account.
-  const { data: current } = await supabase
-    .from('life_events')
-    .select('status')
-    .eq('id', id)
-    .eq('household_id', householdId)
-    .maybeSingle();
-  const isTerminal =
-    current?.status === 'completed' || current?.status === 'cancelled';
-  const nextStatus: LifeEventStatus = isTerminal
-    ? current!.status
-    : deriveStatusFromAccount(parsed.data.linked_account_id);
-
+  // Vi rører IKKE status her - terminale states sættes via
+  // setLifeEventStatus, planning/active beregnes live fra transfers.
   const { error } = await supabase
     .from('life_events')
     .update({
@@ -252,8 +197,6 @@ export async function updateLifeEvent(id: string, formData: FormData) {
       use_items_for_budget: parsed.data.use_items_for_budget,
       target_date: parsed.data.target_date,
       timeframe: parsed.data.timeframe,
-      linked_account_id: parsed.data.linked_account_id,
-      status: nextStatus,
       notes: parsed.data.notes,
     })
     .eq('id', id)
@@ -291,9 +234,7 @@ export async function deleteLifeEvent(formData: FormData) {
 }
 
 // "Markér som gennemført" / "Aflys" - terminal status-skift fra
-// detalje-siden. Vi tillader kun de to terminale targets her. Tilbage
-// til planning/active sker via reopenLifeEvent som auto-deriverer fra
-// linked_account_id (matcher den almindelige status-logik).
+// detalje-siden. Vi tillader kun de to terminale targets her.
 const TERMINAL_STATUSES: readonly LifeEventStatus[] = [
   'completed',
   'cancelled',
@@ -323,8 +264,9 @@ export async function setLifeEventStatus(formData: FormData) {
   redirect(`/begivenheder/${encodeURIComponent(id)}`);
 }
 
-// Genåbn fra completed/cancelled. Auto-deriverer ny status fra
-// linked_account_id (samme logik som createLifeEvent + updateLifeEvent).
+// Genåbn fra completed/cancelled. Sætter status='planning' - live
+// status (planning vs active) beregnes derefter på read fra om der
+// findes recurring transfers tied til event'et.
 export async function reopenLifeEvent(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!id) return;
@@ -332,21 +274,18 @@ export async function reopenLifeEvent(formData: FormData) {
   const { supabase, householdId } = await getHouseholdContext();
   const { data: current } = await supabase
     .from('life_events')
-    .select('linked_account_id, status')
+    .select('status')
     .eq('id', id)
     .eq('household_id', householdId)
     .maybeSingle();
   if (!current) return;
-  // No-op hvis allerede ikke-terminal - ingen grund til at skrive en
-  // identisk række.
   if (current.status !== 'completed' && current.status !== 'cancelled') {
     redirect(`/begivenheder/${encodeURIComponent(id)}`);
   }
 
-  const next = deriveStatusFromAccount(current.linked_account_id);
   const { error } = await supabase
     .from('life_events')
-    .update({ status: next })
+    .update({ status: 'planning' })
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {
@@ -376,7 +315,6 @@ export async function addLifeEventItem(eventId: string, formData: FormData) {
   }
 
   const amountRaw = String(formData.get('amount') ?? '');
-  // Items kan være 0 (fx en post hvor prisen ikke er kendt endnu).
   const amount = parseRequiredAmount(amountRaw, 'Beløb', { allowZero: true });
   if (!amount.ok) {
     redirect(
@@ -392,7 +330,6 @@ export async function addLifeEventItem(eventId: string, formData: FormData) {
 
   const { supabase, householdId } = await getHouseholdContext();
 
-  // Verificér at event'en tilhører dette household før insert.
   const { data: event } = await supabase
     .from('life_events')
     .select('id')
@@ -403,7 +340,6 @@ export async function addLifeEventItem(eventId: string, formData: FormData) {
     throw new Error('Internal error');
   }
 
-  // Find næste sort_order så nye items lægges nederst.
   const { data: lastItem } = await supabase
     .from('life_event_items')
     .select('sort_order')

@@ -2,20 +2,29 @@
 //
 // Layout:
 //   - Header med navn + status-pille + back-link
+//   - EventOverview (read-only) med deadline, månedsrate, transfer-status,
+//     agent-alert + "Opsæt overførsel"-CTA
+//   - Status-actions (Markér gennemført / Aflys / Genåbn)
 //   - Hovedformular (EventForm) til metadata
 //   - Items-sektion (ItemList) til linje-poster
-//   - Footer med "slet begivenhed"-action
+//   - Farezone (slet)
 
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import {
-  getCashflowGraph,
+  ArrowLeft,
+  CheckCircle2,
+  RotateCcw,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
+import {
+  getAdvisorContext,
   getLifeEventById,
-  getLifeEventEligibleAccounts,
-  getLifeEvents,
 } from '@/lib/dal';
 import {
+  formatOereForInput,
   lifeEventAlert,
+  lifeEventLiveStatus,
   lifeEventMonthlyTarget,
   lifeEventMonthsRemaining,
   lifeEventTotalBudget,
@@ -43,6 +52,28 @@ const STATUS_BADGE_CLASS: Record<LifeEventStatus, string> = {
   cancelled: 'bg-amber-50 text-amber-800',
 };
 
+// Bygger pre-fill-URL til /overforsler/ny baseret på event'ets monthly
+// target og husstandens numContributors. Hvis det er en 50/50 separat-
+// økonomi-husstand, foreslås halvdelen ("din andel") - matcher
+// CashflowAdvisor's "partial share"-mønster.
+function buildSetupTransferHref(
+  eventId: string,
+  monthlyTarget: number | null,
+  numContributors: number,
+  eventName: string
+): string {
+  const params = new URLSearchParams({
+    life_event_id: eventId,
+    recurrence: 'monthly',
+    description: eventName,
+  });
+  if (monthlyTarget != null) {
+    const share = Math.ceil(monthlyTarget / Math.max(1, numContributors));
+    params.set('amount', formatOereForInput(share));
+  }
+  return `/overforsler/ny?${params.toString()}`;
+}
+
 export default async function EventDetailPage({
   params,
   searchParams,
@@ -53,47 +84,33 @@ export default async function EventDetailPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [event, accounts, allEvents, graph] = await Promise.all([
+  const [event, advisorCtx] = await Promise.all([
     getLifeEventById(id),
-    getLifeEventEligibleAccounts(),
-    getLifeEvents(),
-    getCashflowGraph(),
+    getAdvisorContext(),
   ]);
 
-  // Map fra account_id -> navnet på en ANDEN begivenhed der bruger
-  // samme konto. Ekskluderer denne event så vi ikke advarer mod os
-  // selv ved redigering.
-  const linkedElsewhere: Record<string, string> = {};
-  for (const otherEvent of allEvents) {
-    if (otherEvent.id === id) continue;
-    if (otherEvent.linked_account_id) {
-      linkedElsewhere[otherEvent.linked_account_id] = otherEvent.name;
-    }
-  }
-
-  // Bind id som første argument på update-actionen så form'en bare kan
-  // sende formData.
   const updateAction = updateLifeEvent.bind(null, id);
   const addItemAction = addLifeEventItem.bind(null, id);
 
   const totalBudget = lifeEventTotalBudget(event, event.items);
   const monthsRemaining = lifeEventMonthsRemaining(event);
-  const monthlyTarget = lifeEventMonthlyTarget(
-    event,
-    event.items,
-    event.linked_account?.opening_balance ?? 0
-  );
-  const monthlyInflow = event.linked_account_id
-    ? (graph.perAccount.get(event.linked_account_id)?.transfersIn ?? 0)
-    : null;
+  const monthlyTarget = lifeEventMonthlyTarget(event, event.items);
   const alert = lifeEventAlert(
     event,
     event.items,
-    event.linked_account?.opening_balance ?? 0,
-    monthlyInflow
+    event.monthlyTotal,
+    event.transfers.length
   );
+  const liveStatus = lifeEventLiveStatus(event.status, event.transfers.length);
   const isTerminal =
-    event.status === 'completed' || event.status === 'cancelled';
+    liveStatus === 'completed' || liveStatus === 'cancelled';
+
+  const setupTransferHref = buildSetupTransferHref(
+    event.id,
+    monthlyTarget,
+    advisorCtx.numContributors,
+    event.name
+  );
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -114,9 +131,9 @@ export default async function EventDetailPage({
             {LIFE_EVENT_TYPE_LABEL_DA[event.type]}
           </span>
           <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[event.status]}`}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[liveStatus]}`}
           >
-            {LIFE_EVENT_STATUS_LABEL_DA[event.status]}
+            {LIFE_EVENT_STATUS_LABEL_DA[liveStatus]}
           </span>
         </div>
         {event.notes && (
@@ -124,20 +141,19 @@ export default async function EventDetailPage({
         )}
       </header>
 
-      {/* Overblik - read-only stats + alert. Det første brugeren ser
-          så de ikke skal læse formularen for at forstå tilstanden. */}
+      {/* Overblik - read-only stats + alert + CTA */}
       <EventOverview
         event={event}
         totalBudget={totalBudget}
         monthsRemaining={monthsRemaining}
         monthlyTarget={monthlyTarget}
-        monthlyInflow={monthlyInflow}
         alert={alert}
+        setupTransferHref={setupTransferHref}
       />
 
       {/* Status-actions: terminale skift (Aflys / Markér gennemført) +
-          Genåbn fra terminal state. Status auto-deriveres ellers fra
-          linked_account_id når metadata gemmes. */}
+          Genåbn fra terminal state. Live status (planning vs active)
+          beregnes ellers fra antal recurring transfers. */}
       <section className="mt-6 flex flex-wrap items-center gap-2">
         {!isTerminal && (
           <>
@@ -186,8 +202,6 @@ export default async function EventDetailPage({
         </h2>
         <EventForm
           action={updateAction}
-          accounts={accounts}
-          linkedElsewhere={linkedElsewhere}
           defaultValues={{
             name: event.name,
             type: event.type,
@@ -195,7 +209,6 @@ export default async function EventDetailPage({
             use_items_for_budget: event.use_items_for_budget,
             target_date: event.target_date,
             timeframe: event.timeframe,
-            linked_account_id: event.linked_account_id,
             notes: event.notes,
           }}
           submitLabel="Gem ændringer"
@@ -211,8 +224,8 @@ export default async function EventDetailPage({
         </h2>
         <p className="mb-3 text-sm text-neutral-500">
           Brug poster til at bryde budgettet ned (lokale, mad, foto, …). Når
-          budget-mode er sat til &quot;Sum af poster&quot; på detaljerne ovenfor,
-          udgør summen her det samlede totalbudget.
+          budget-mode er sat til &quot;Sum af poster&quot; på detaljerne
+          ovenfor, udgør summen her det samlede totalbudget.
         </p>
         <ItemList
           eventId={event.id}
@@ -229,8 +242,9 @@ export default async function EventDetailPage({
           Farezone
         </h2>
         <p className="mt-1 text-sm text-neutral-600">
-          Sletter begivenheden og alle dens poster. Tilknyttede konti
-          påvirkes ikke. Dette kan ikke fortrydes.
+          Sletter begivenheden og alle dens poster. Tilknyttede overførsler
+          beholder beløb og dato men mister linket til denne begivenhed.
+          Dette kan ikke fortrydes.
         </p>
         <form action={deleteLifeEvent} className="mt-3">
           <input type="hidden" name="id" value={event.id} />

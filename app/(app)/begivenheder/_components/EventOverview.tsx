@@ -1,32 +1,38 @@
 // Read-only overblik øverst på begivenhedens detalje-side. Giver
-// brugeren et hurtigt billede af status, fremdrift og deadline FØR de
-// scroller ned i edit-formularen. Pendant til summary-cards på
-// /begivenheder-listen, men med flere detaljer (aktuel månedlig
-// opsparing, alert-banner) fordi vi har plads til det her.
+// brugeren et hurtigt billede af status, tid og pengestrøm FØR de
+// scroller ned i edit-formularen.
 //
-// Rent præsentations-komponent: alle beregninger sker i parent-page
-// så vi ikke fetcher data dobbelt.
-//
-// Ingen klient-state, men markeret 'use client' alligevel ikke - dette
-// er en server-component. Ikoner fra lucide-react er server-safe.
+// Post-migration 0059: vi tracker IKKE saldo længere. Fremdrift måles
+// via om der er opsat månedlige overførsler tied til event'et og om
+// summen af dem dækker det krævede månedlige beløb.
 
-import { AlertTriangle, Calendar, Wallet } from 'lucide-react';
+import Link from 'next/link';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Calendar,
+  Clock,
+  Wallet,
+} from 'lucide-react';
 import {
   formatAmount,
   formatShortDateDA,
   LIFE_EVENT_TIMEFRAME_LABEL_DA,
   type LifeEventAlert,
 } from '@/lib/format';
-import type { LifeEventWithItems } from '@/lib/dal';
 import { ACCOUNT_KIND_LABEL_DA } from '@/lib/format';
+import type { LifeEventWithItems } from '@/lib/dal';
 
 type Props = {
   event: LifeEventWithItems;
   totalBudget: number | null;
   monthsRemaining: number | null;
   monthlyTarget: number | null;
-  monthlyInflow: number | null;
   alert: LifeEventAlert | null;
+  // Pre-fill href til /overforsler/ny med life_event_id + krævet beløb,
+  // så CTA'en på no_active_transfer-alerten er ét klik væk fra at
+  // oprette overførslen.
+  setupTransferHref: string;
 };
 
 export function EventOverview({
@@ -34,50 +40,30 @@ export function EventOverview({
   totalBudget,
   monthsRemaining,
   monthlyTarget,
-  monthlyInflow,
   alert,
+  setupTransferHref,
 }: Props) {
-  const saldo = event.linked_account?.opening_balance ?? 0;
-  const progressPct =
-    totalBudget != null && totalBudget > 0
-      ? Math.min(100, Math.round((saldo / totalBudget) * 100))
-      : null;
+  // Aggreger transfer-info: hvis alle transfers peger på samme to_account,
+  // vis det som "Tilknyttet X". Hvis flere konti, vis "fordelt på N konti".
+  const targetAccounts = new Map<
+    string,
+    { name: string; kind: typeof event.transfers[number]['to_account_kind'] }
+  >();
+  for (const tr of event.transfers) {
+    if (!targetAccounts.has(tr.to_account_id)) {
+      targetAccounts.set(tr.to_account_id, {
+        name: tr.to_account_name,
+        kind: tr.to_account_kind,
+      });
+    }
+  }
+  const targetAccountList = [...targetAccounts.values()];
 
   return (
     <section className="mt-6 rounded-md border border-neutral-200 bg-white p-5">
       <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
         Overblik
       </h2>
-
-      {/* Progress-bar: kun når der er en linked_account OG et budget */}
-      {event.linked_account && totalBudget != null && totalBudget > 0 ? (
-        <div className="mt-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-mono tabnum text-sm text-neutral-900">
-              <strong className="font-semibold">
-                {formatAmount(saldo)} kr
-              </strong>{' '}
-              <span className="text-neutral-500">
-                af {formatAmount(totalBudget)} kr
-              </span>
-            </span>
-            <span className="text-sm font-semibold text-emerald-700">
-              {progressPct}%
-            </span>
-          </div>
-          <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
-            <div
-              className="h-full bg-emerald-700 transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        </div>
-      ) : !event.linked_account ? (
-        <p className="mt-3 text-sm text-neutral-500">
-          Ingen tilknyttet konto endnu, så vi kan ikke vise fremdrift mod
-          målet. Vælg en opsparingskonto under Detaljer for at komme i gang.
-        </p>
-      ) : null}
 
       {/* Stat-grid */}
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
@@ -95,12 +81,14 @@ export function EventOverview({
               <span className="text-neutral-400">Ikke sat</span>
             )}
           </dd>
-          {monthsRemaining != null && monthsRemaining > 0 && (
-            <dd className="text-[11px] text-neutral-500">
-              ca. {monthsRemaining}{' '}
-              {monthsRemaining === 1 ? 'måned tilbage' : 'måneder tilbage'}
-            </dd>
-          )}
+        </div>
+
+        <div>
+          <dt className="text-xs text-neutral-500">Måneder tilbage</dt>
+          <dd className="mt-0.5 inline-flex items-center gap-1 font-mono tabnum text-base font-semibold text-neutral-900">
+            <Clock className="h-3.5 w-3.5 text-neutral-400" />
+            {monthsRemaining != null ? monthsRemaining : '–'}
+          </dd>
         </div>
 
         <div>
@@ -127,63 +115,92 @@ export function EventOverview({
             </dd>
           )}
         </div>
-
-        <div>
-          <dt className="text-xs text-neutral-500">Aktuel pr. måned</dt>
-          <dd className="mt-0.5 font-mono tabnum font-semibold text-neutral-900">
-            {monthlyInflow != null
-              ? `${formatAmount(monthlyInflow)} kr`
-              : '–'}
-          </dd>
-          {monthlyInflow == null ? (
-            <dd className="text-[11px] text-neutral-500">
-              Ingen tilknyttet konto
-            </dd>
-          ) : monthlyInflow === 0 ? (
-            <dd className="text-[11px] text-neutral-500">
-              Ingen overførsler endnu
-            </dd>
-          ) : null}
-        </div>
       </dl>
 
-      {/* Tilknyttet konto */}
-      {event.linked_account && (
-        <div className="mt-4 inline-flex items-center gap-2 rounded-md bg-stone-50 px-3 py-2 text-sm text-neutral-700">
+      {/* Aktuel månedlig opsparing - kun når der er transfers */}
+      {event.transfers.length > 0 && (
+        <div className="mt-4 rounded-md bg-stone-50 px-3 py-2.5 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-neutral-500">Aktuel pr. måned</span>
+            <span className="font-mono tabnum font-semibold text-neutral-900">
+              {formatAmount(event.monthlyTotal)} kr
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">
+            Sum af {event.transfers.length}{' '}
+            {event.transfers.length === 1
+              ? 'månedlig overførsel'
+              : 'månedlige overførsler'}
+          </p>
+        </div>
+      )}
+
+      {/* Tilknyttet(e) konto(er) */}
+      {targetAccountList.length > 0 && (
+        <div className="mt-3 inline-flex items-center gap-2 rounded-md bg-stone-50 px-3 py-2 text-sm text-neutral-700">
           <Wallet className="h-3.5 w-3.5 text-neutral-400" />
           <span>
-            Tilknyttet{' '}
-            <strong className="font-medium text-neutral-900">
-              {event.linked_account.name}
-            </strong>{' '}
-            <span className="text-neutral-500">
-              ({ACCOUNT_KIND_LABEL_DA[event.linked_account.kind]})
-            </span>
+            {targetAccountList.length === 1 ? (
+              <>
+                Tilknyttet{' '}
+                <strong className="font-medium text-neutral-900">
+                  {targetAccountList[0]!.name}
+                </strong>{' '}
+                <span className="text-neutral-500">
+                  ({ACCOUNT_KIND_LABEL_DA[targetAccountList[0]!.kind]})
+                </span>
+              </>
+            ) : (
+              <>
+                Fordelt på{' '}
+                <strong className="font-medium text-neutral-900">
+                  {targetAccountList.length} konti
+                </strong>
+              </>
+            )}
           </span>
         </div>
       )}
 
-      {/* Alert-banner: agentens advarsel hvis den gælder. Samme tekst-
-          mønster som dashboard-widget'en. */}
+      {/* Alert-banner: agentens advarsel hvis den gælder */}
       {alert && (
         <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            {alert.kind === 'no_account' && (
-              <>
-                <strong className="font-semibold">
-                  Ingen tilknyttet konto endnu.
-                </strong>{' '}
-                Begivenheden står som idé indtil I linker en
-                opsparingskonto under Detaljer.
-              </>
-            )}
+          <div className="flex-1">
             {alert.kind === 'no_budget' && (
               <>
                 <strong className="font-semibold">Mangler budget.</strong> Sæt
                 et totalbudget for at vi kan beregne en månedlig
                 opsparingsrate.
               </>
+            )}
+            {alert.kind === 'no_active_transfer' && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  <strong className="font-semibold">
+                    Ingen overførsel opsat endnu.
+                  </strong>{' '}
+                  Begivenheden står som idé indtil I opretter en månedlig
+                  overførsel
+                  {alert.required != null && (
+                    <>
+                      {' '}
+                      på cirka{' '}
+                      <strong className="font-semibold">
+                        {formatAmount(alert.required)} kr/md
+                      </strong>
+                    </>
+                  )}
+                  .
+                </span>
+                <Link
+                  href={setupTransferHref}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-900"
+                >
+                  Opsæt overførsel
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
             )}
             {alert.kind === 'underfunded' && (
               <>

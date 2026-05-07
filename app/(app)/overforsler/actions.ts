@@ -17,6 +17,11 @@ const VALID_FREQS: readonly RecurrenceFreq[] = [
   'yearly',
 ];
 
+// UUID-mønster brugt til at validere life_event_id. Vi accepterer kun
+// gyldige UUIDv4-strenge så et ondsindet input ikke ender i query'en.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function readTransferForm(formData: FormData):
   | { error: string }
   | {
@@ -28,6 +33,7 @@ function readTransferForm(formData: FormData):
         occurs_on: string;
         recurrence: RecurrenceFreq;
         recurrence_until: string | null;
+        life_event_id: string | null;
       };
     } {
   const from_account_id = String(formData.get('from_account_id') ?? '').trim();
@@ -60,8 +66,24 @@ function readTransferForm(formData: FormData):
   const descRaw = capLength(String(formData.get('description') ?? '').trim(), TEXT_LIMITS.description);
   const description = descRaw || null;
 
+  // life_event_id kommer som hidden input når brugeren startede flow'et
+  // fra en begivenheds "Opsæt overførsel"-CTA. Format-tjek her; ejerskab
+  // verificeres serverside i createTransfer/updateTransfer (RLS dækker
+  // også, men eksplicit tjek giver en pænere fejlbesked).
+  const lifeEventRaw = String(formData.get('life_event_id') ?? '').trim();
+  const life_event_id = UUID_PATTERN.test(lifeEventRaw) ? lifeEventRaw : null;
+
   return {
-    data: { from_account_id, to_account_id, amount, description, occurs_on, recurrence, recurrence_until },
+    data: {
+      from_account_id,
+      to_account_id,
+      amount,
+      description,
+      occurs_on,
+      recurrence,
+      recurrence_until,
+      life_event_id,
+    },
   };
 }
 
@@ -72,6 +94,25 @@ export async function createTransfer(formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // Hvis link til en begivenhed er angivet, verificér at event'en
+  // tilhører dette household før insert. RLS ville også afvise via
+  // FK-trigger, men eksplicit tjek giver en pænere fejlbesked.
+  if (parsed.data.life_event_id) {
+    const { data: event } = await supabase
+      .from('life_events')
+      .select('id')
+      .eq('id', parsed.data.life_event_id)
+      .eq('household_id', householdId)
+      .maybeSingle();
+    if (!event) {
+      redirect(
+        '/overforsler/ny?error=' +
+          encodeURIComponent('Den valgte begivenhed findes ikke')
+      );
+    }
+  }
+
   const { error } = await supabase.from('transfers').insert({
     household_id: householdId,
     ...parsed.data,
@@ -82,6 +123,17 @@ export async function createTransfer(formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  // Hvis transferen blev linket til en begivenhed, invalider også den
+  // begivenheds detalje- og listesider så live status (planning →
+  // active) opdateres straks.
+  if (parsed.data.life_event_id) {
+    revalidatePath('/begivenheder');
+    revalidatePath(`/begivenheder/${parsed.data.life_event_id}`);
+    await setFlashCookie('Overførsel oprettet og koblet til begivenhed');
+    redirect(
+      `/begivenheder/${encodeURIComponent(parsed.data.life_event_id)}`
+    );
+  }
   await setFlashCookie('Overførsel oprettet');
   redirect('/overforsler');
 }
@@ -95,6 +147,22 @@ export async function updateTransfer(id: string, formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  if (parsed.data.life_event_id) {
+    const { data: event } = await supabase
+      .from('life_events')
+      .select('id')
+      .eq('id', parsed.data.life_event_id)
+      .eq('household_id', householdId)
+      .maybeSingle();
+    if (!event) {
+      redirect(
+        `/overforsler/${encodeURIComponent(id)}?error=` +
+          encodeURIComponent('Den valgte begivenhed findes ikke')
+      );
+    }
+  }
+
   const { error } = await supabase
     .from('transfers')
     .update(parsed.data)
@@ -108,6 +176,10 @@ export async function updateTransfer(id: string, formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  if (parsed.data.life_event_id) {
+    revalidatePath('/begivenheder');
+    revalidatePath(`/begivenheder/${parsed.data.life_event_id}`);
+  }
   await setFlashCookie('Overførsel gemt');
   redirect('/overforsler');
 }

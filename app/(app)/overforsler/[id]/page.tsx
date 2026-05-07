@@ -49,6 +49,7 @@ export default async function EditOverforselPage({
             occurs_on: transfer.occurs_on,
             recurrence: transfer.recurrence,
             recurrence_until: transfer.recurrence_until,
+            life_event_id: transfer.life_event_id,
           }}
           submitLabel="Gem ændringer"
           cancelHref="/overforsler"

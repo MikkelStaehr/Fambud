@@ -1,9 +1,12 @@
 // /begivenheder/ny - oprettelses-form. Trigger fra både NAV_MAIN-listen
 // og NAV_TOOLS "Planlæg begivenhed"-genvej.
+//
+// Post-migration 0059: form'en samler kun event-metadata (navn, type,
+// budget, deadline, noter). Tilknytning til en konto sker først når
+// brugeren opsætter en månedlig overførsel via /overforsler/ny.
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getLifeEventEligibleAccounts, getLifeEvents } from '@/lib/dal';
 import { createLifeEvent } from '../actions';
 import { EventForm } from '../_components/EventForm';
 
@@ -15,20 +18,6 @@ export default async function NyBegivenhedPage({
   searchParams: SearchParams;
 }) {
   const { error } = await searchParams;
-  const [accounts, existingEvents] = await Promise.all([
-    getLifeEventEligibleAccounts(),
-    getLifeEvents(),
-  ]);
-
-  // Map fra account_id -> navnet på den begivenhed der allerede bruger
-  // kontoen. Vises i form'en så brugeren kan se konsekvensen før de
-  // splitter saldoen mellem flere mål.
-  const linkedElsewhere: Record<string, string> = {};
-  for (const event of existingEvents) {
-    if (event.linked_account_id) {
-      linkedElsewhere[event.linked_account_id] = event.name;
-    }
-  }
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -46,16 +35,14 @@ export default async function NyBegivenhedPage({
           Ny begivenhed
         </h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Tilføj et planlagt opsparingsmål. I kan altid justere budget og
-          tidsramme senere.
+          Tilføj et planlagt opsparingsmål. Når begivenheden er oprettet,
+          kan I opsætte en månedlig overførsel for at aktivere opsparingen.
         </p>
       </header>
 
       <div className="mt-6 max-w-2xl">
         <EventForm
           action={createLifeEvent}
-          accounts={accounts}
-          linkedElsewhere={linkedElsewhere}
           submitLabel="Opret begivenhed"
           cancelHref="/begivenheder"
           error={error}

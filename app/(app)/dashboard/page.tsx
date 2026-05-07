@@ -102,14 +102,6 @@ export default async function DashboardPage() {
   );
   const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
 
-  // accountInflows: månedlig nettotilstrømning til hver konto (transfers
-  // ind). Bruges af LifeEventsWidget til at detektere underfunded
-  // begivenheder. Hentes fra graph.perAccount så vi ikke laver en
-  // separat DB-query.
-  const accountInflows: Record<string, number> = {};
-  for (const [accountId, detail] of graph.perAccount.entries()) {
-    accountInflows[accountId] = detail.transfersIn;
-  }
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
@@ -173,15 +165,11 @@ export default async function DashboardPage() {
       </div>
 
       {/* Begivenheder-widget: 1-3 nærmeste planlagte/aktive begivenheder
-          med progress og månedlig opsparingsrate. Empty state pumper
-          mod /begivenheder/ny så feature'en bliver opdaget af nye
-          brugere uden at de skal kende sidebaren.
-          accountInflows fodrer agentens "underfunded"-detektor. */}
+          med deadline, månedlig opsparingsrate og agent-alerts. Empty
+          state pumper mod /begivenheder/ny så feature'en bliver opdaget
+          af nye brugere uden at de skal kende sidebaren. */}
       <div className="mt-8">
-        <LifeEventsWidget
-          events={lifeEvents}
-          accountInflows={accountInflows}
-        />
+        <LifeEventsWidget events={lifeEvents} />
       </div>
 
       <section data-tour="cashflow-graph" className="mt-8">

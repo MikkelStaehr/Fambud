@@ -495,6 +495,7 @@ export type Database = {
           recurrence: RecurrenceFreq;
           recurrence_until: string | null;
           created_at: string;
+          life_event_id: string | null;
         };
         Insert: {
           id?: string;
@@ -507,6 +508,7 @@ export type Database = {
           recurrence?: RecurrenceFreq;
           recurrence_until?: string | null;
           created_at?: string;
+          life_event_id?: string | null;
         };
         Update: {
           id?: string;
@@ -519,6 +521,7 @@ export type Database = {
           recurrence?: RecurrenceFreq;
           recurrence_until?: string | null;
           created_at?: string;
+          life_event_id?: string | null;
         };
         Relationships: [];
       };
@@ -532,7 +535,6 @@ export type Database = {
           use_items_for_budget: boolean;
           target_date: string | null;
           timeframe: LifeEventTimeframe | null;
-          linked_account_id: string | null;
           status: LifeEventStatus;
           notes: string | null;
           created_at: string;
@@ -546,7 +548,6 @@ export type Database = {
           use_items_for_budget?: boolean;
           target_date?: string | null;
           timeframe?: LifeEventTimeframe | null;
-          linked_account_id?: string | null;
           status?: LifeEventStatus;
           notes?: string | null;
           created_at?: string;
@@ -560,7 +561,6 @@ export type Database = {
           use_items_for_budget?: boolean;
           target_date?: string | null;
           timeframe?: LifeEventTimeframe | null;
-          linked_account_id?: string | null;
           status?: LifeEventStatus;
           notes?: string | null;
           created_at?: string;

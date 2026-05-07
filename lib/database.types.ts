@@ -56,6 +56,28 @@ export type RecurrenceFreq =
   | 'semiannual'
   | 'yearly';
 
+// Begivenheder (life_events): planlagte større opsparingsmål.
+// Migration 0056 introducerer enums og tabeller.
+export type LifeEventType =
+  | 'konfirmation'
+  | 'bryllup'
+  | 'foedselsdag'
+  | 'rejse'
+  | 'bolig'
+  | 'studie'
+  | 'andet';
+export type LifeEventStatus =
+  | 'planning'
+  | 'active'
+  | 'completed'
+  | 'cancelled';
+export type LifeEventTimeframe =
+  | 'within_1y'
+  | 'within_2y'
+  | 'within_5y'
+  | 'within_10y';
+export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
+
 export type Database = {
   public: {
     Tables: {
@@ -500,6 +522,84 @@ export type Database = {
         };
         Relationships: [];
       };
+      life_events: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          type: LifeEventType;
+          total_budget: number | null;
+          use_items_for_budget: boolean;
+          target_date: string | null;
+          timeframe: LifeEventTimeframe | null;
+          linked_account_id: string | null;
+          status: LifeEventStatus;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          name: string;
+          type?: LifeEventType;
+          total_budget?: number | null;
+          use_items_for_budget?: boolean;
+          target_date?: string | null;
+          timeframe?: LifeEventTimeframe | null;
+          linked_account_id?: string | null;
+          status?: LifeEventStatus;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          name?: string;
+          type?: LifeEventType;
+          total_budget?: number | null;
+          use_items_for_budget?: boolean;
+          target_date?: string | null;
+          timeframe?: LifeEventTimeframe | null;
+          linked_account_id?: string | null;
+          status?: LifeEventStatus;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      life_event_items: {
+        Row: {
+          id: string;
+          event_id: string;
+          household_id: string;
+          title: string;
+          amount: number;
+          status: LifeEventItemStatus;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          household_id: string;
+          title: string;
+          amount?: number;
+          status?: LifeEventItemStatus;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          household_id?: string;
+          title?: string;
+          amount?: number;
+          status?: LifeEventItemStatus;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -564,3 +664,5 @@ export type TransactionComponent = Database['public']['Tables']['transaction_com
 export type FamilyMember = Database['public']['Tables']['family_members']['Row'];
 export type Household = Database['public']['Tables']['households']['Row'];
 export type HouseholdInvite = Database['public']['Tables']['household_invites']['Row'];
+export type LifeEvent = Database['public']['Tables']['life_events']['Row'];
+export type LifeEventItem = Database['public']['Tables']['life_event_items']['Row'];

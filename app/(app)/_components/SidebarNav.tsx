@@ -15,6 +15,8 @@ import {
   Settings,
   Table2,
   Wrench,
+  Goal,
+  CalendarPlus,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -29,6 +31,7 @@ const NAV_MAIN: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/konti', label: 'Konti', icon: Wallet },
   { href: '/laan', label: 'Lån', icon: Landmark },
+  { href: '/begivenheder', label: 'Begivenheder', icon: Goal },
   { href: '/indkomst', label: 'Indkomst', icon: Coins },
   // Budget er det flade overblik (read-only tabel) - Table2-ikonet adskiller
   // den visuelt fra "Faste udgifter" (CRUD-værktøjet) der bruger ClipboardList.
@@ -44,6 +47,9 @@ const NAV_TOOLS: NavItem[] = [
   { href: '/faste-udgifter', label: 'Faste udgifter', icon: ClipboardList },
   { href: '/husholdning', label: 'Husholdning', icon: ShoppingBasket },
   { href: '/opsparinger', label: 'Opsparinger & buffer', icon: PiggyBank },
+  // Genvej direkte til oprettelses-flow. Selve listen lever på
+  // /begivenheder (NAV_MAIN ovenfor) - to indgange, samme domæne.
+  { href: '/begivenheder/ny', label: 'Planlæg begivenhed', icon: CalendarPlus },
 ];
 
 const NAV_BOTTOM: NavItem[] = [

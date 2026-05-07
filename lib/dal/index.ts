@@ -24,4 +24,5 @@ export * from './expenses-by-category';
 export * from './upcoming-events';
 export * from './income';
 export * from './loans';
+export * from './life-events';
 export * from './predictable';

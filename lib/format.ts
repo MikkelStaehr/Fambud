@@ -1,6 +1,12 @@
 import type {
   AccountKind,
   InvestmentType,
+  LifeEvent,
+  LifeEventItem,
+  LifeEventItemStatus,
+  LifeEventStatus,
+  LifeEventTimeframe,
+  LifeEventType,
   RecurrenceFreq,
   SavingsPurpose,
 } from '@/lib/database.types';
@@ -71,6 +77,102 @@ export const RECURRENCE_LABEL_DA: Record<RecurrenceFreq, string> = {
   semiannual: 'halvårligt',
   yearly: 'årligt',
 };
+
+// Begivenheder (life_events) - danske labels for de fire enums.
+export const LIFE_EVENT_TYPE_LABEL_DA: Record<LifeEventType, string> = {
+  konfirmation: 'Konfirmation',
+  bryllup: 'Bryllup',
+  foedselsdag: 'Rund fødselsdag',
+  rejse: 'Større rejse',
+  bolig: 'Bolig- eller bilkøb',
+  studie: 'Studieafslutning',
+  andet: 'Andet',
+};
+
+export const LIFE_EVENT_STATUS_LABEL_DA: Record<LifeEventStatus, string> = {
+  planning: 'Under planlægning',
+  active: 'Aktiv opsparing',
+  completed: 'Gennemført',
+  cancelled: 'Aflyst',
+};
+
+export const LIFE_EVENT_TIMEFRAME_LABEL_DA: Record<
+  LifeEventTimeframe,
+  string
+> = {
+  within_1y: 'Inden for 1 år',
+  within_2y: 'Inden for 2 år',
+  within_5y: 'Inden for 5 år',
+  within_10y: 'Inden for 10 år',
+};
+
+// Antal måneder vi bruger som "deadline" når brugeren har valgt en
+// bucket-tidsramme i stedet for en konkret dato. Brugt af UI til at
+// foreslå en månedlig opsparingsrate (totalBudget / months).
+//
+// Vi tager midten af bucketens åbne interval - "inden for 1 år" = 9 mdr
+// (matcher landing-flow's TIMEFRAME_MONTHS), "inden for 2 år" = 18 mdr,
+// "5 år" = 42 mdr (3.5 år), "10 år" = 84 mdr (7 år). Hvis brugeren
+// faktisk har sat en target_date, bruges den istedet.
+export const LIFE_EVENT_TIMEFRAME_MONTHS: Record<LifeEventTimeframe, number> =
+  {
+    within_1y: 9,
+    within_2y: 18,
+    within_5y: 42,
+    within_10y: 84,
+  };
+
+export const LIFE_EVENT_ITEM_STATUS_LABEL_DA: Record<
+  LifeEventItemStatus,
+  string
+> = {
+  planlagt: 'Planlagt',
+  booket: 'Booket',
+  betalt: 'Betalt',
+};
+
+// Total-budget for en begivenhed: hvis use_items_for_budget=true, bruges
+// summen af items.amount; ellers det frie tal i total_budget. Returnerer
+// null hvis ingen af delene er sat (brugeren har ikke besluttet endnu).
+export function lifeEventTotalBudget(
+  event: Pick<LifeEvent, 'total_budget' | 'use_items_for_budget'>,
+  items: Pick<LifeEventItem, 'amount'>[]
+): number | null {
+  if (event.use_items_for_budget) {
+    if (items.length === 0) return null;
+    return items.reduce((sum, item) => sum + item.amount, 0);
+  }
+  return event.total_budget;
+}
+
+// Antal måneder fra i dag til target_date. Negativ hvis datoen er passeret.
+// Bruges til at beregne månedlig opsparing nødvendig for at nå målet.
+function monthsUntilTargetDate(targetISO: string, today: Date = new Date()): number {
+  const [y, m, d] = targetISO.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  const months =
+    (target.getFullYear() - today.getFullYear()) * 12 +
+    (target.getMonth() - today.getMonth());
+  // Korriger med dag-niveau så "31. december" til "1. januar" ikke
+  // tæller som 1 måned.
+  if (target.getDate() < today.getDate()) return months - 1;
+  return months;
+}
+
+// Antal måneder for en begivenheds deadline. target_date har forrang;
+// ellers bucket-tidsrammen. Returnerer null hvis hverken er sat.
+export function lifeEventMonthsRemaining(
+  event: Pick<LifeEvent, 'target_date' | 'timeframe'>,
+  today: Date = new Date()
+): number | null {
+  if (event.target_date) {
+    return Math.max(1, monthsUntilTargetDate(event.target_date, today));
+  }
+  if (event.timeframe) {
+    return LIFE_EVENT_TIMEFRAME_MONTHS[event.timeframe];
+  }
+  return null;
+}
 
 // Danish month names, indexed by 1-12. Month picker uses these labels.
 export const MONTHS_DA: { value: number; label: string }[] = [

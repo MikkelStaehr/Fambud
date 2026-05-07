@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+const LANDING_TOKEN_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Auth callback for Supabase PKCE-flow. Brugeren lander her fra emails
 // (recovery, magic link, signup confirmation) med en `code`-query-param.
 // Vi bytter koden til en session og redirecter til `next` (default
@@ -35,6 +38,26 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Conversion-tracking: hvis brugeren havde en landing-flow-token
+      // fra "Find ud af det selv"-flowet, blev den lagret i raw_user_
+      // meta_data under signup. Læs den nu (auth.uid() er sat efter
+      // exchange) og link den anonyme submission til denne bruger.
+      // Fail-silent: linket er ikke blokerende.
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const token = userData?.user?.user_metadata?.landing_flow_token;
+        if (typeof token === 'string' && LANDING_TOKEN_PATTERN.test(token)) {
+          const { error: linkErr } = await supabase.rpc(
+            'link_landing_submission',
+            { p_token: token }
+          );
+          if (linkErr) {
+            console.error('link_landing_submission failed:', linkErr.message);
+          }
+        }
+      } catch (err) {
+        console.error('landing-flow link unexpected error:', err);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

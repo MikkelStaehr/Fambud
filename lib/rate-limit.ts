@@ -28,6 +28,7 @@ export const RATE_LIMITS: Record<string, RateLimitConfig> = {
   feedback: { maxHits: 10, windowSeconds: 3600 },
   feedback_household: { maxHits: 30, windowSeconds: 3600 },
   login: { maxHits: 10, windowSeconds: 900 },
+  landing_flow_submission: { maxHits: 30, windowSeconds: 3600 },
 };
 
 // Henter klient-IP fra request-headers. På Vercel er den korrekte IP

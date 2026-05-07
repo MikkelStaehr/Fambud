@@ -3,6 +3,7 @@ import { signup } from './actions';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
 import { SubmitButton } from '@/app/_components/SubmitButton';
 import { readAuthStepCookie } from '@/lib/auth-step';
+import { LandingTokenField } from './_components/LandingTokenField';
 
 export default async function SignupPage({
   searchParams,
@@ -54,6 +55,9 @@ export default async function SignupPage({
         </div>
 
         <form action={signup} className="mt-8 space-y-4">
+          {/* Skjult conversion-token fra landing-flow. Sat fra localStorage
+              hvis brugeren kom via "Find ud af det selv"-flowet. */}
+          <LandingTokenField />
           <div>
             <label htmlFor="household_name" className="block text-xs font-medium text-neutral-600">
               Husstandens navn <span className="text-neutral-400">(valgfrit)</span>

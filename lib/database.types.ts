@@ -600,6 +600,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      landing_flow_submissions: {
+        Row: {
+          id: string;
+          anonymous_token: string;
+          flow_state: Record<string, unknown>;
+          ip_hash: string | null;
+          user_agent: string | null;
+          submitted_at: string;
+          converted_user_id: string | null;
+          converted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          anonymous_token: string;
+          flow_state: Record<string, unknown>;
+          ip_hash?: string | null;
+          user_agent?: string | null;
+          submitted_at?: string;
+          converted_user_id?: string | null;
+          converted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          anonymous_token?: string;
+          flow_state?: Record<string, unknown>;
+          ip_hash?: string | null;
+          user_agent?: string | null;
+          submitted_at?: string;
+          converted_user_id?: string | null;
+          converted_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -643,6 +676,10 @@ export type Database = {
       };
       rate_limit_cleanup: {
         Args: Record<string, never>;
+        Returns: void;
+      };
+      link_landing_submission: {
+        Args: { p_token: string };
         Returns: void;
       };
     };

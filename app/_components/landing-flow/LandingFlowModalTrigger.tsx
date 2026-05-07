@@ -39,15 +39,48 @@ import {
   type FlowState,
   type UnsureField,
 } from '@/lib/landing/types';
+import { submitLandingFlow } from './actions';
 import { StepProgress } from './StepProgress';
 import { StepOne } from './StepOne';
 import { StepTwo, canProceedStep2 } from './StepTwo';
 import { StepThree } from './StepThree';
 
+// localStorage-key til den anonyme conversion-token. Persisteres på
+// tværs af tabs så en bruger der laver flowet, lukker tab'en og senere
+// signer up fra en anden side stadig kan attribueres.
+const TOKEN_STORAGE_KEY = 'fambud-landing-token';
+
+// Hent eller generér token. crypto.randomUUID() er native på alle
+// moderne browsers (Chrome 92+, Safari 15.4+, Firefox 95+) og skaber
+// en uuid v4. Hvis browseren mangler det (kun gamle Edge), faldback til
+// vores egen generator så vi ikke crasher.
+function getOrCreateToken(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const existing = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (existing) return existing;
+    const token =
+      typeof crypto?.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}-4${Math.random().toString(16).slice(2, 5)}-${Math.random().toString(16).slice(2, 6)}-${Math.random().toString(16).slice(2, 14)}`;
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    return token;
+  } catch {
+    // localStorage blokeret (privacy mode / disabled cookies). Vi
+    // kører videre uden conversion-tracking - feature'en er nice-to-
+    // have, ikke blokerende.
+    return '';
+  }
+}
+
 export function LandingFlowModalTrigger() {
   const [isOpen, setIsOpen] = useState(false);
   const [state, setState] = useState<FlowState>(INITIAL_FLOW_STATE);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Forhindrer dobbelt-submission hvis brugeren navigerer frem og
+  // tilbage mellem step 2 og 3 i samme session. Token er stabil per
+  // session - vi sender én gang og linker ved signup.
+  const submittedRef = useRef(false);
 
   // Sync isOpen til dialog-element via showModal()/close().
   useEffect(() => {
@@ -178,7 +211,25 @@ export function LandingFlowModalTrigger() {
   };
 
   const goToStep = (step: 1 | 2 | 3) => {
-    setState((prev) => ({ ...prev, step }));
+    setState((prev) => {
+      // Når vi rammer step 3 første gang i denne session, fyrer vi en
+      // anonym conversion-tracker af. Den er fire-and-forget - hvis
+      // den fejler (rate-limit, netværk, hvad som helst), fortsætter
+      // brugeren upåvirket med at se sit forslag.
+      if (step === 3 && !submittedRef.current) {
+        submittedRef.current = true;
+        const token = getOrCreateToken();
+        if (token) {
+          // Drop step ud af payload'en - den er en UI-state-detalje,
+          // ikke en del af brugerens "svar".
+          const payload = { ...prev, step: 3 };
+          void submitLandingFlow(token, payload).catch((err) => {
+            console.error('submitLandingFlow failed:', err);
+          });
+        }
+      }
+      return { ...prev, step };
+    });
   };
 
   // canProceed-logik per step. Centraliseret i modal-shell så footer

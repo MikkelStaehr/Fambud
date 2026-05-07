@@ -3597,3 +3597,300 @@ HowItWorksSteps top + bottom).
   HowItWorksSteps. Lignende patterns kan findes i DemoStripMockup
   eller andre absolute-overlay-konfigurationer. Worth en systematisk
   z-index-pass på alle landing-komponenter.
+
+---
+
+# Devlog — 7. maj 2026 (begivenheder-feature: landing-flow → app-integration)
+
+Stort feature-arbejde i ét stræk: tre-trins "Find ud af det selv"-flow på
+landing, ny `life_events`-feature i appen, og to refaktoreringer drevet
+af konkret bruger-feedback der gjorde den oprindelige model strammere.
+
+Migrations 0056-0059. Otte commits fra `64a67ee` til `0bc370a`. Alle på
+main.
+
+---
+
+## 1. Landing-flow: "Find ud af det selv" som 3-step modal
+
+**Commit:** `64a67ee`
+
+Tre-trins modal triggered fra hero ("Prøv det med jeres egne tal"):
+
+- **Trin 1**: brikker-checkliste (buffer, opsparing, alder, børn,
+  rådighed, fordeling) + "Hvordan holder I styr"-pills (regneark / app /
+  hovedet / gør det ikke)
+- **Trin 2**: tre tal (indkomst, faste udgifter, husholdning) + "går i
+  0"-aha-blok + større begivenheder pills (multi-select med "ingen"
+  gensidigt eksklusiv) → expandable detail-blok per event med budget +
+  tidsramme
+- **Trin 3**: personaliseret plan med praise-block, rådighedsbeløb-
+  insight, plan-tabs ("i dag" vs "kunne se ud"), CTA
+
+To-zone-modal-layout: warm `bg-stone-100` zone 1 (intro) + hvid `bg-white`
+zone 2 (working area) med subtil `inset shadow` for visuel lift. Footer
+varierer per step (kun "Fortsæt" på 1, "Tilbage" + "Vis vores forslag" på
+2, "Justér mine svar" på 3).
+
+**Långsigtede mål-håndtering:** events med `timeframe='2-plus'` OG
+`budget >= 100.000 kr` klassificeres som langsigtede, vises i separat
+blok ([LongTermEventBlock.tsx](app/_components/landing-flow/LongTermEventBlock.tsx))
+over plan-tabs, og medregnes IKKE i månedlig allocation. Det undgår at
+en 500k boligkøb skubber den månedlige plan urealistisk i vejret.
+
+**Stramt-mode:** når kortsigtede events kræver mere end raadigt-buffer,
+vises en advarselsblok der pointer mod FamBud for finjustering, og
+opsparing/rådighed empty'es i plan-tabs.
+
+**Shortfall-mode:** når raadigt ≤ 0, droppes alle events fra planen
+("vi løser underskuddet først"), og en kortere "find missing money"-
+version af step 3 vises i stedet.
+
+---
+
+## 2. Begivenheder-feature: ny app-tabel + /begivenheder-side
+
+**Migration:** [0056_life_events.sql](supabase/migrations/0056_life_events.sql)
+**Commit:** `cb304a6` (PR 1)
+
+Ny `life_events`-tabel + `life_event_items`-tabel for linje-poster
+(lokale, mad, foto). Fire enums: `life_event_type` (konfirmation,
+bryllup, foedselsdag, rejse, bolig, studie, andet),
+`life_event_status` (planning/active/completed/cancelled),
+`life_event_timeframe` (within_1y/within_2y/within_5y/within_10y),
+`life_event_item_status` (planlagt/booket/betalt).
+
+**Datamodel-valg:**
+- Budget kan være et frit tal (`total_budget`) ELLER summen af items
+  (`use_items_for_budget=true`) - matcher use-case'en "jeg ved cirka,
+  men opdaterer efterhånden som priser kommer ind"
+- Tidshorisont er enten `target_date` ELLER `timeframe`-bucket via
+  XOR-constraint
+- `linked_account_id` (optional FK til savings/investment-konto) **—
+  fjernet i PR 5, se senere**
+
+**Sidebar:** to nye entries i [SidebarNav.tsx](app/(app)/_components/SidebarNav.tsx):
+- NAV_MAIN: "Begivenheder" → `/begivenheder` (observation-view)
+- NAV_TOOLS: "Planlæg begivenhed" → `/begivenheder/ny` (deeplink-genvej)
+
+**Routes:** `/begivenheder` (liste), `/begivenheder/ny` (oprettelse),
+`/begivenheder/[id]` (detalje + items + slet).
+
+**ItemList-komponent** ([_components/ItemList.tsx](app/(app)/begivenheder/_components/ItemList.tsx))
+har inline edit per række via `useState<editingId>`. Hver item har
+status-badge (planlagt/booket/betalt) + delete-form.
+
+---
+
+## 3. Dashboard-widget for nærmeste begivenheder
+
+**Commit:** `d7f42db` (PR 2)
+
+[LifeEventsWidget.tsx](app/(app)/dashboard/_components/LifeEventsWidget.tsx)
+viser de 1-3 nærmeste planlagte/aktive begivenheder med deadline,
+månedlig opsparingsrate og evt. agent-alert per række.
+
+Sortering: deadline-nærhed (target_date først, timeframe-bucket
+dernæst). Empty state pumper mod `/begivenheder/ny` så feature'en
+opdages af nye brugere uden at de skal kende sidebaren.
+
+Hvis flere events end MAX_EVENTS_ON_DASHBOARD (3) har alerts, vises
+"+N yderligere har opmærksomhedspunkter" som footer i widgeten.
+
+---
+
+## 4. Anonym landing-flow conversion-tracking
+
+**Migration:** [0057_landing_flow_submissions.sql](supabase/migrations/0057_landing_flow_submissions.sql)
+**Commit:** `f9e30fe` (PR 3)
+
+Ny `landing_flow_submissions`-tabel der gemmer flow-state som jsonb +
+anonym uuid-token i besøgerens localStorage. Token bæres med til
+`/signup` via skjult input ([LandingTokenField.tsx](app/signup/_components/LandingTokenField.tsx))
+og linkes til den nye user via `link_landing_submission(uuid)` RPC.
+
+**Privacy-defaults:**
+- Ingen email/PII gemmes — kun sha256-hash af IP til misbrugs-detektion
+- RLS lukket: kun INSERT for anon/authenticated, SELECT/UPDATE/DELETE
+  via service-role i Supabase Dashboard
+- RPC er `SECURITY DEFINER` med minimal blast-radius: kun `converted_user_id`
+  og `converted_at` opdateres, kun rækker hvor `converted_user_id IS NULL`,
+  og `auth.uid()` bruges så bruger kun kan linke til sig selv
+
+**Dual-path linking:**
+- Immediate-session signup (sjældent i prod): RPC kaldes direkte i
+  signup-action efter succes
+- Email-confirmation-flow (typisk): token gemmes i `raw_user_meta_data`
+  ved signUp og hentes i `/auth/callback` efter `exchangeCodeForSession`
+
+Token cap: 4KB JSON payload, regex-valideret UUID-format, per-IP
+rate-limit 30/time via eksisterende `rate_limit_routes`-system.
+
+---
+
+## 5. Agent-integration: første iteration (PR 4)
+
+**Migration:** [0058_life_events_require_deadline.sql](supabase/migrations/0058_life_events_require_deadline.sql)
+**Commit:** `9dfc4cc`
+
+Brugeren styrede mod en strammere data-model: deadline er obligatorisk
+(DB-CHECK forhindrer rækker uden `target_date` ELLER `timeframe`), og
+status auto-deriveres fra `linked_account_id` (linket → active, ikke
+linket → planning) i stedet for at være et brugervalg.
+
+**Agent-alerts** ([lib/format.ts](lib/format.ts) `lifeEventAlert`):
+- `no_account` — planlagt event uden tilknyttet konto
+- `no_budget` — konto sat men intet budget
+- `underfunded` — månedlig nettotilstrømning til kontoen < påkrævet rate
+
+Alerts vises inline i LifeEventsWidget + på detalje-siden.
+
+**EventOverview-sektion** ([_components/EventOverview.tsx](app/(app)/begivenheder/_components/EventOverview.tsx))
+tilføjet i `ca1de93`: read-only stats-grid øverst på detalje-siden
+(deadline, totalbudget, krævet/aktuel pr. måned, tilknyttet konto,
+alert-banner) så brugeren ikke skulle scanne formularen for at forstå
+tilstanden.
+
+---
+
+## 6. Mobile-fix: landing-flow modal viewport-cutoff
+
+**Commit:** `a63b881`
+
+Brugeren rapporterede at footer-knappen ("Fortsæt") på mobil var skåret
+af. Årsag: iOS Safaris `100vh` (Tailwinds `h-screen`) inkluderer browser-
+chrome (URL-bar + bottom-toolbar), så modalens footer endte under det
+synlige viewport og kunne ikke scrolles til.
+
+Fix: skift til `h-[100dvh]` (dynamic viewport height) som justerer sig
+løbende som chrome'en vises/skjules. Desktop-styling (`sm:h-auto
+sm:max-h-[85vh]`) uændret.
+
+---
+
+## 7. Designre-think: overførsler som binding (PR 5)
+
+**Migration:** [0059_link_transfers_to_life_events.sql](supabase/migrations/0059_link_transfers_to_life_events.sql)
+**Commit:** `0bc370a`
+
+Brugeren reframede modellen efter at have testet den første version:
+
+> "Det giver vel ikke mening her, at brugeren skal tænke over hvilken
+> konto der skal opspares på [ved oprettelse]. Min logik fortæller
+> mig, at når en begivenhed er oprettet, så vil den flyde rundt som
+> værende 'planned' men ikke 'Active'. […] man skal gå til overførsel
+> […] og her vil begivenheden så fremgå uden en overførsel, og først
+> når vi opretter den overførsel, skal den knyttes til en konto."
+
+Modellen blev splittet rent: **event = intent, transfer = action,
+linket lever på transferen** (`transfers.life_event_id`). Konkret:
+
+- `life_events.linked_account_id` droppet
+- `transfers.life_event_id uuid references life_events(id) on delete set null`
+  tilføjet med partial-index for hurtige opslag
+- Status auto-derive på save fjernet — DB-kolonnen bevarer kun terminale
+  states (completed/cancelled), `planning` vs `active` beregnes på read
+  fra antallet af recurring transfers tied til event'et
+  (`lifeEventLiveStatus` i [lib/format.ts](lib/format.ts))
+- `lifeEventAlert` opdateret: `no_account` droppet, ny `no_active_transfer`
+  med pre-udfyldt CTA til `/overforsler/ny?life_event_id=X`
+- Saldo-tracking droppet overalt: ingen progress-bar baseret på
+  kontosaldo, ingen "Opsparet X kr". I stedet: prominent
+  "Måneder tilbage"-counter og "Krævet pr. måned" beregnet uden
+  saldo-fradrag
+
+**Pre-fill-logik på `/overforsler/ny?life_event_id=X`:**
+- `amount = ceil(monthly_target / numContributors)` — matcher
+  CashflowAdvisor's "partial share"-mønster: separat-økonomi-husstand
+  med 2 contributors → halvdelen pre-udfyldes ("din andel")
+- `recurrence = monthly`, `description = event.name`
+- Hidden `life_event_id`-input sendes med form-submit
+- `createTransfer` verificerer ejerskab + revaliderer `/begivenheder` +
+  redirector tilbage til event-detalje, så live status flipper til
+  active øjeblikkeligt
+
+---
+
+## 8. Læringspunkter
+
+**Den store: lyt til feedback før du forsvarer designet.** Den
+oprindelige `linked_account_id`-på-event'et model konflaterede intent
+og action. Da jeg foreslog at lukke gabet med en advisor-warning ("ja,
+linked = active, men hvis transfersIn er 0, så er det reelt ikke
+aktivt") accepterede brugeren det først, men kom tilbage senere og
+sagde "vi tænker det hele om". Det var det rigtige kald — den nye
+model er strukturelt renere og fjerner alarm-paradokserne. Lessons:
+
+1. Når du foreslår en patch oven på et grundlæggende design, tjek om
+   patchen reelt forsvarer designets antagelse, eller om antagelsen er
+   forkert. Hvis du finder dig selv at bygge advarsler for at forklare
+   hvorfor en status-flag ikke betyder hvad den siger, så er det
+   modellen der er forkert.
+
+2. Bekræftelse på en plan = "jeg accepterer din nuværende vurdering",
+   ikke "designet er færdigt". Brugere kalibrerer deres mentale model
+   ved at se det implementeret. Forvent revisitation.
+
+**Saldo som tracking-signal er forkert for opsparingsmål.** Saldo er
+en stock; opsparingsmål handler om flow (hvor meget bliver sat til
+side hver måned). At vise "X% nået" baseret på account-saldo er
+misvisende fordi saldoen kan ændre sig af mange grunde der ikke har
+med målet at gøre. "Måneder tilbage" + "kører overførslen som
+forventet" er det ærlige signal.
+
+**XOR-constraints i Postgres med backfill først.** Migration 0058
+viste mønstret: backfill eksisterende rows til en gyldig værdi
+(`update life_events set timeframe='within_10y' where ...`) FØR
+constraint'en tilføjes. Hvis constraint'en kommer først, fejler
+migration ved første eksisterende invalid row. Pattern: `update; alter
+add constraint`.
+
+**Live status-beregning vs stored status.** For status der er afledt
+af relateret data (her: antal transfers), er compute-on-read renere
+end stored-with-trigger. Stored kræver triggers ved ALLE skrive-paths
+til relateret data; compute-on-read er én helper-funktion der altid er
+korrekt. Stored bevares kun for terminale states (completed/cancelled)
+hvor manuel intent skal kunne overrule.
+
+---
+
+## 9. Status
+
+**Commits:** 8 fra `64a67ee` til `0bc370a` på main.
+
+**Migrations kørt på prod-db** (af brugeren undervejs):
+- 0056 life_events
+- 0057 landing_flow_submissions
+- 0058 life_events_require_deadline
+- 0059 link_transfers_to_life_events
+
+**Build:** tsc + build clean. Lint clean på de touched filer (de
+pre-existing errors i wizard/ etc. er uforandrede).
+
+**CLAUDE.md-regel #1 (em-dash):** verificeret tom på tværs af alle
+nye filer i begge sessioner. Semgrep-reglen håndhæver det automatisk.
+
+---
+
+## Åbne tråde
+
+- **Mobile-audit på begivenheder-flow:** brugeren spurgte om jeg
+  havde designet mobile-first. Ærligt svar: delvist (Tailwind-
+  konventioner), ikke aktivt testet. Specifikt EventOverview's 4-col
+  stat-grid der bliver 2x2 på mobile med tabular-num-beløb kan klemme
+  på 320px. ItemList's add/edit-form bliver 4 stackede rækker på
+  mobile — funktionelt fint, men højt. Mangler en konkret
+  audit-pass.
+- **Multi-contributor warning på event:** når et event har færre
+  transfers end `numContributors`, kunne vi flagge "kun 1 af 2 har
+  opsat overførsel". Kræver at advisor-context er tilgængelig på
+  begivenheds-niveau (det er den allerede). Næste iteration.
+- **Once-transfers tied til events:** filtreres i øjeblikket væk fra
+  monthly-totalet (kun recurring tæller). Et engangsindskud er en
+  reel kontribution, men ikke en månedlig rate. Skal vises separat
+  ("plus X kr engangsindbetalt") eller stille ignoreres. Næste
+  iteration.
+- **Conversion-rate-dashboard:** SQL-view der opsummerer
+  `landing_flow_submissions` → conversion %, segmenteret på
+  flow-state (system='none' vs 'sheet' fx). Bygges når der er nok
+  data til det giver mening.

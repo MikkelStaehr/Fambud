@@ -9,17 +9,21 @@
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import {
+  getCashflowGraph,
   getLifeEventById,
   getLifeEventEligibleAccounts,
   getLifeEvents,
 } from '@/lib/dal';
 import {
-  formatAmount,
+  lifeEventAlert,
+  lifeEventMonthlyTarget,
+  lifeEventMonthsRemaining,
   lifeEventTotalBudget,
   LIFE_EVENT_STATUS_LABEL_DA,
   LIFE_EVENT_TYPE_LABEL_DA,
 } from '@/lib/format';
 import { EventForm } from '../_components/EventForm';
+import { EventOverview } from '../_components/EventOverview';
 import { ItemList } from '../_components/ItemList';
 import {
   addLifeEventItem,
@@ -49,10 +53,11 @@ export default async function EventDetailPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [event, accounts, allEvents] = await Promise.all([
+  const [event, accounts, allEvents, graph] = await Promise.all([
     getLifeEventById(id),
     getLifeEventEligibleAccounts(),
     getLifeEvents(),
+    getCashflowGraph(),
   ]);
 
   // Map fra account_id -> navnet på en ANDEN begivenhed der bruger
@@ -72,6 +77,21 @@ export default async function EventDetailPage({
   const addItemAction = addLifeEventItem.bind(null, id);
 
   const totalBudget = lifeEventTotalBudget(event, event.items);
+  const monthsRemaining = lifeEventMonthsRemaining(event);
+  const monthlyTarget = lifeEventMonthlyTarget(
+    event,
+    event.items,
+    event.linked_account?.opening_balance ?? 0
+  );
+  const monthlyInflow = event.linked_account_id
+    ? (graph.perAccount.get(event.linked_account_id)?.transfersIn ?? 0)
+    : null;
+  const alert = lifeEventAlert(
+    event,
+    event.items,
+    event.linked_account?.opening_balance ?? 0,
+    monthlyInflow
+  );
   const isTerminal =
     event.status === 'completed' || event.status === 'cancelled';
 
@@ -99,22 +119,21 @@ export default async function EventDetailPage({
             {LIFE_EVENT_STATUS_LABEL_DA[event.status]}
           </span>
         </div>
-        {totalBudget != null && (
-          <p className="mt-2 text-sm text-neutral-500">
-            Totalbudget:{' '}
-            <span className="font-mono font-medium text-neutral-900">
-              {formatAmount(totalBudget)} kr
-            </span>
-            {event.use_items_for_budget && (
-              <span className="text-xs text-neutral-500">
-                {' '}
-                (sum af {event.items.length}{' '}
-                {event.items.length === 1 ? 'post' : 'poster'})
-              </span>
-            )}
-          </p>
+        {event.notes && (
+          <p className="mt-2 text-sm text-neutral-600">{event.notes}</p>
         )}
       </header>
+
+      {/* Overblik - read-only stats + alert. Det første brugeren ser
+          så de ikke skal læse formularen for at forstå tilstanden. */}
+      <EventOverview
+        event={event}
+        totalBudget={totalBudget}
+        monthsRemaining={monthsRemaining}
+        monthlyTarget={monthlyTarget}
+        monthlyInflow={monthlyInflow}
+        alert={alert}
+      />
 
       {/* Status-actions: terminale skift (Aflys / Markér gennemført) +
           Genåbn fra terminal state. Status auto-deriveres ellers fra

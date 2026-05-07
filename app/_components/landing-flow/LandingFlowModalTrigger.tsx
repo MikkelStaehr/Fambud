@@ -255,14 +255,18 @@ export function LandingFlowModalTrigger() {
       {/* Native <dialog>. Mobile: full-screen, ingen rounded corners.
           Desktop: centreret max-w-3xl + max-h-85vh + rounded.
           dialog-element selv har bg-transparent så vi kan style content-
-          wrapperen som vil; backdrop-styling via ::backdrop. */}
+          wrapperen som vil; backdrop-styling via ::backdrop.
+          h-[100dvh] (dynamic viewport height) frem for h-screen (100vh)
+          fordi iOS Safari's 100vh inkluderer URL-bar/toolbar - så
+          footeren havner UNDER det synlige område og kan ikke scrolles
+          til. dvh justerer sig som chrome'en vises/skjules. */}
       <dialog
         ref={dialogRef}
         onClick={handleDialogClick}
         onCancel={handleCancel}
         onClose={handleCancel}
         aria-labelledby="landing-flow-title"
-        className="m-0 h-screen max-h-none w-full max-w-none border-0 bg-transparent p-0 backdrop:bg-black/50 backdrop:backdrop-blur-sm sm:m-auto sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:rounded"
+        className="m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-transparent p-0 backdrop:bg-black/50 backdrop:backdrop-blur-sm sm:m-auto sm:h-auto sm:max-h-[85vh] sm:max-w-3xl sm:rounded"
       >
         {/* Content-wrapper. Layout-strategi:
             - Mobile: flex-col + h-full (= h-screen via dialog), body flex-1

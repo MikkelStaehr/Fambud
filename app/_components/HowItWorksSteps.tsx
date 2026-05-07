@@ -185,8 +185,14 @@ function Step({
       </div>
 
       {/* Mockup. På mobile: row 2, span begge kolonner, top-margin.
-          På sm+: kolonne 3, samme row som tekst. */}
-      <div className="col-span-2 mt-5 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-0">
+          På sm+: kolonne 3, samme row som tekst.
+          relative z-10: på mobile passerer connector-linjen (absolute,
+          left-5) gennem mockup-arealet i row 2. Uden z-context renderer
+          linjen ovenpå mockup-indholdet (linje på "Email"-labels osv.).
+          relative + z-10 lægger mockup'en visuelt over linjen. På sm+
+          har det ingen effekt fordi mockup er i kolonne 3 og linje i
+          kolonne 1 - de overlapper aldrig. */}
+      <div className="relative z-10 col-span-2 mt-5 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-0">
         {mockup}
       </div>
     </motion.div>

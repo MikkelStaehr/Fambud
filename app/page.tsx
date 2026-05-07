@@ -32,6 +32,7 @@ import { createClient } from '@/lib/supabase/server';
 import { HeroDemoMockup } from '@/app/_components/HeroDemoMockup';
 import { DemoStripMockup } from '@/app/_components/DemoStripMockup';
 import { HowItWorksSteps } from '@/app/_components/HowItWorksSteps';
+import { LandingFlowModalTrigger } from '@/app/_components/landing-flow/LandingFlowModalTrigger';
 
 const FAMBUD_FONT = 'var(--font-zt-nature), system-ui, sans-serif';
 
@@ -114,16 +115,21 @@ function Hero() {
             spare op. Vi viser dig hvordan månederne kommer til at se ud, og
             hvor du kan justere, før overraskelserne indtræffer.
           </p>
-          {/* CTA-stack: full-width på smallest mobile (< sm = 640px),
-              auto-width på larger. Det undgår at to small-buttons quetcher
-              ved siden af hinanden på 320-375px-skærme. */}
+          {/* CTA-hierarki:
+              1. Primær: "Find ud af hvor I står" (trigger til flow-modal,
+                 emerald-800 fyldt, lidt større padding/text)
+              2. Sekundær: "Kom i gang gratis" (emerald outline)
+              3. Tertiær: "Log ind" (neutral outline)
+              Flowet er primær path - brugere skal kunne se deres tal FØR
+              de forpligter sig til signup. På mobile stacker buttons
+              vertikalt; på sm+ side-by-side med wrap hvis trangt. */}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <LandingFlowModalTrigger />
             <Link
               href="/signup"
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-800 bg-white px-5 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 sm:w-auto"
             >
               Kom i gang gratis
-              <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="/login"

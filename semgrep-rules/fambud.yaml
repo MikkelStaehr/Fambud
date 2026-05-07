@@ -23,7 +23,7 @@ rules:
       eller andre filer der bundles til klient. Brug en Server Action
       eller Route Handler i stedet.
     severity: ERROR
-    languages: [typescript, tsx]
+    languages: [typescript]
     paths:
       include:
         - '**/_components/**'
@@ -131,7 +131,7 @@ rules:
       XSS-vektor. Verificér at $HTML.__html ikke kan indeholde
       user-controlled strings.
     severity: WARNING
-    languages: [tsx, jsx]
+    languages: [typescript, javascript]
     pattern: |
       <$EL ... dangerouslySetInnerHTML={$HTML} ... />
 

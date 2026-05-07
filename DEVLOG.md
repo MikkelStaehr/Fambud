@@ -3328,3 +3328,272 @@ sikkerhedsfundamentet ligger fra dagen før.
   3 (Bolig-detaljer) men det checked ikke matematisk.
 - Vi har endnu ikke testet sektionen i Lighthouse - bundle-impact
   bør verificeres mod Performance score post-deploy.
+
+---
+
+# Devlog — 7. maj 2026 (dependabot, CI-grøn, φ-typografi, mobile-fix)
+
+Kort men dens session med fire emner: håndtering af 6 dependabot-PRs,
+en serie CI-workflow-fixes, et redesign af landing-typografien baseret
+på det gyldne snit, og et z-index-bug på mobile som brugeren spottede.
+
+Commits: `e4501ca` til `6841e2c`. 10 commits inkl. dependabot-merges.
+
+---
+
+## 1. Dependabot bonus-leverance: 5 PRs merged, 1 lukket
+
+Vores Prompt 12 CI-setup gav dependabot adgang til at åbne PRs. Den
+havde åbnet 6 stykker som ventede.
+
+**Merged efter lokal verifikation:**
+
+| PR | Bump | Verificering |
+| --- | --- | --- |
+| #1 | actions/setup-node 4 → 6 | CI-meta, ingen risk |
+| #2 | actions/checkout 4 → 6 | CI-meta, ingen risk |
+| #4 | typescript 5.9.3 → 6.0.3 | `tsc --noEmit` + `npm run build` clean lokalt |
+| #5 | @types/node 20.19.39 → 25.6.0 | tsc + build clean |
+| #6 | lucide-react 0.460.0 → 1.14.0 | tsc + build clean (alle ikon-imports stadig gyldige) |
+
+**Lukket med begrundelse:**
+
+| PR | Hvorfor |
+| --- | --- |
+| #3 | eslint 9 → 10 - inkompatibel med `eslint-config-next` (eslint-plugin-react bag den bruger gammel `context.getFilename()`-API). Lokal lint fejlede med `TypeError: contextOrFilename.getFilename is not a function`. Genåbnes når Next.js bumper deres eslint-plugin-react-dependency. |
+
+Workflow: `gh pr checkout` lokalt → `npm install` → `tsc` + `build`.
+Hvis grøn → `gh pr merge --squash`. Tog ~5 min per PR.
+
+---
+
+## 2. CI-workflow tre-trins fix: fra rød til grøn
+
+Den eksisterende Security-workflow havde fejlet siden Prompt 12 setup.
+TypeScript+build job passede, men `Static analysis (semgrep)` og
+`Dependency CVEs` job fejlede konsistent. Brugeren havde ikke bemærket
+det fordi PR-checks alligevel viste delvist grønne, og Vercel
+deployment passerer uafhængigt.
+
+### 2.1 Runde 1 (`b4d2a95`): osv-scanner pin + semgrep schema
+
+- `google/osv-scanner-action/osv-scanner-action@v2` findes ikke som
+  major-alias. Action-repo har kun konkrete tags. Pinnet til v2.3.5.
+- Semgrep-rule `fambud-no-mass-assignment` havde `metavariable-regex`
+  direkte under et pattern-list-item. Det giver `RuleParseError:
+  Invalid rule schema`. Skal wrappes i `patterns:`-block når flere
+  constraints kombineres.
+
+### 2.2 Runde 2 (`d95d72b`): tsx/jsx language tokens + osv-scanner v2 flags
+
+CI fejlede igen efter runde 1, men med nye fejl:
+
+- Semgrep: `tsx` og `jsx` er ikke gyldige `languages:`-tokens
+  (`invalid language: tsx`). Kun `typescript` og `javascript` findes.
+  TSX-files matches automatisk når typescript er valgt. Erstattet:
+  `[typescript, tsx]` → `[typescript]` og `[tsx, jsx]` →
+  `[typescript, javascript]`.
+- OSV-Scanner v2 droppede `--skip-git` og `--recursive` flags
+  (`flag provided but not defined: -skip-git`). Default-behavior
+  dækker nu det. Forenklet `scan-args:` til bare `./`.
+
+### 2.3 Runde 3 (`8ccf93a`): em-dash purge - reglen catchede sig selv
+
+Efter runde 2 var semgrep funktionel. Den catchede med det samme 4
+em-dashes i Sentry-installation-commits:
+
+- `proxy.ts:85` - kommentar
+- `sentry.edge.config.ts:4` - kommentar
+- `next.config.ts:76` + `:81` - to kommentarer
+
+Pointen i sig selv: vores `fambud-no-em-dash`-rule (P5 fra Prompt 12)
+fungerer som lovet og blev validate'd ved at fange em-dashes i de
+commits der oprettede reglen. Self-validating CI.
+
+Erstattet med almindelig bindestreg per CLAUDE.md-konventionen.
+
+**Resultat:** Security-workflow er nu **fuldt grøn** på alle 4 jobs
+(secret scan, typescript+build, semgrep, dependency CVEs). Verificeret
+på run `25476047403`.
+
+---
+
+## 3. Landing-typografi: φ-baseret modulær type-scale
+
+Brugeren bad om at vi "virkelig nørder ned i" mobile-first og
+designprincipper som det gyldne snit + 1.6× ratio på font-størrelser.
+Resultatet er en eksplicit type-scale med 5 nye utility-klasser
+defineret i [globals.css](app/globals.css) i `@layer utilities`.
+
+### 3.1 Design-rationaler
+
+**Hvorfor 1.6 ikke 1.618:** φ (gyldne snit) = 1.618. 1.6 er pragmatisk
+afrunding der giver klare tal i pixels uden at miste det visuelle
+indtryk af gyldent forhold. Forskel = 1.1%, ikke synligt.
+
+**Hvorfor ratio på display-tier kun, ikke body:** En 1.6×-skala på
+body-tekst ville gøre `text-sm` til 10px og `text-lg` til 25px - for
+voldsomt for læsbarhed. Body-tekst bruger Tailwind's standard
+1.125-1.25× ratios; display-tier (display-sm/display/display-lg) bruger
+1.6× for visuel impact.
+
+**Hvorfor clamp() i stedet for sm:/lg:-spring:** Breakpoint-spring
+giver pludselige ændringer ved viewport-grænser (760px → 760px+1 ramt
+H1 fra 42 til 60px). Med `clamp(2.625rem, 1.4rem + 5.2vw, 4.5rem)`
+skalerer typen kontinuerligt - 768px viewport får 47px H1 (mellem
+mobile 42 og desktop 72), ikke et spring.
+
+### 3.2 Skalaen i tal
+
+| Klasse | Mobile (375px) | Desktop (1280px+) | clamp-formel |
+| --- | --- | --- | --- |
+| `.text-eyebrow` | 12 | 12 | fast - kapitalt label |
+| `.text-lead` | 18 | 22 | `clamp(1.125rem, 0.95rem + 0.7vw, 1.375rem)` |
+| `.text-display-sm` | 26 | 32 | `clamp(1.625rem, 1.4rem + 0.95vw, 2rem)` |
+| `.text-display` | 32 | 52 | `clamp(2rem, 1.25rem + 3.2vw, 3.25rem)` |
+| `.text-display-lg` | 42 | 72 | `clamp(2.625rem, 1.4rem + 5.2vw, 4.5rem)` |
+
+Skalaen i tal: 16 → 26 → 42 → 68 → 108 (hver = forrige × 1.6).
+
+**Letter-spacing:** strammet proportionalt med size:
+- display-sm: -0.02em
+- display: -0.025em
+- display-lg: -0.035em
+
+Større letterforms har mere whitespace internt og kræver tighter
+tracking for at forblive optisk samme density. Apple og IBM bruger
+samme princip på deres display-skalaer.
+
+### 3.3 Mobile-first refactors på landing
+
+Sammen med type-scale opgraderet flere mobile-first patterns på
+[app/page.tsx](app/page.tsx):
+
+1. **Hero grid**: `lg:grid-cols-[1.1fr_1fr]` → `lg:grid-cols-[1.618fr_1fr]`.
+   Tekst får 61.8% bredde, mockup 38.2% - det gyldne snit som
+   layout-deler.
+2. **Hero CTAs**: stack vertikalt med `w-full` på mobile, `flex-row`
+   på sm+. To buttons quetchede side-om-side på 320-375px-skærme.
+3. **Hero trust-row** (4 items): `grid-cols-2` på mobile (4 items =
+   2×2 grid), `flex flex-wrap` på sm+. Tidligere `flex flex-wrap`
+   alene brød til 1×4 column-layout på 375px der så halvtomt ud.
+4. **Section vertical-padding**: `py-16 sm:py-20 lg:py-[6.5rem]` =
+   64/80/104px, alle Fibonacci-derived.
+5. **Feature card padding**: `p-6 sm:p-8` = 24/32 (Fib₈/nær Fib₉).
+6. **HowItWorksSteps**: top H2 → `text-display`, bottom CTA H3 →
+   `text-display-sm`, eyebrows → `text-eyebrow`. ÉT system overalt.
+
+---
+
+## 4. HowItWorks z-index bug på mobile
+
+Brugeren spottede efter ovennævnte refactor: "linjen med tal går ind
+over teksten på mobilen" - dvs. connector-linjen mellem timeline-
+trinene rendererede ovenpå mockup-indholdet på mobile, inklusive
+tekst-labels som "Email" og "Adgangskode" inde i SignupMockup.
+
+### Hvad var fejlen
+
+Step-elementet er en grid med `position: relative`. Connector-linjen
+mellem badges er `absolute left-5 top-10 bottom-0` - den går fra under
+badge'en helt ned til bunden af step-containeren.
+
+På mobile er layoutet:
+```
+Row 1: [badge col, 40px] [text col, 1fr]
+Row 2: [mockup, col-span-2 spanning både cols]
+```
+
+Mockup er i row 2 og spænder begge kolonner. Det betyder mockup'en og
+connector-linjen visuelt overlapper i samme x-y-område. Linjen er
+`position: absolute` (default z=0), mockup-divs er `position: static`
+(ingen z-index). Per CSS-specs stacker positionerede elementer over
+ikke-positionerede søskende → linjen renderes ovenpå mockup'en.
+
+På desktop opstår problemet ikke fordi mockup er i kolonne 3 (`sm:col-
+start-3`) og linjen i kolonne 1 - de overlapper ikke horisontalt.
+
+### Fix
+
+[app/_components/HowItWorksSteps.tsx](app/_components/HowItWorksSteps.tsx)
+mockup-wrapper får `relative z-10`. Det etablerer egen stacking-context
+og lægger mockup'en over linjen. På sm+ har det ingen visuel effekt
+(intet overlap).
+
+---
+
+## 5. Læringspunkter
+
+### 5.1 CI-fejl er ikke selv-rapporterende
+
+Security-workflowet havde fejlet i flere uger uden at nogen lagde mærke
+til det. Vercel-deploy passerer uafhængigt. Hvis et CI-job fejler
+konsistent uden at det blokerer merge, glider det forbi som
+falsk-positive der afhærder organisations-opmærksomheden mod ægte fund.
+
+### 5.2 Dependabot major-bumps kræver lokal verifikation
+
+5/6 dependabot-PRs var safe. Den ene (eslint 10) brød upstream-
+kompabilitet og ville have brudt build hvis automatisk merged.
+Auto-merge skal være tier'ed: patch+minor OK, major kræver lokal
+verify.
+
+### 5.3 Em-dash-reglen var sin egen test-case
+
+Reglen catchede em-dashes i de commits der oprettede reglen. Self-
+validating CI - bekræfter at den værker generaliseret fremover.
+
+### 5.4 clamp() er overlegen til responsive type
+
+Tre måder at lave responsive type:
+1. Breakpoint-spring (`text-3xl sm:text-4xl`) - pludselige spring ved
+   viewport-grænser
+2. Pure vw - skalerer linear, går for småt på små viewports og for
+   stort på store
+3. clamp(min, vw-baseret, max) - ingen spring + bounded
+
+Vi vælger #3 for display-tier; body bruger #1 fordi clamp er
+unødvendig for 14→16px range.
+
+---
+
+## 6. Status
+
+**Commits**: 10 fra `e4501ca` til `6841e2c`. Alle på main.
+
+**Dependencies**:
+- TypeScript 6.0.3 (var 5.9.3)
+- @types/node 25.6.0 (var 20.19.39)
+- lucide-react 1.14.0 (var 0.460.0)
+- actions/checkout + setup-node bumpet til v6
+- npm audit: 0 vulnerabilities
+
+**CI**:
+- Security-workflow: grøn (alle 4 jobs)
+- Headers-check workflow: grøn
+
+**Build**: tsc + build clean.
+
+**Type-scale**: 5 nye utility-klasser i globals.css, anvendt på hele
+landing-page hierarchy (hero, features, demo-strip, FAQ, final-CTA,
+HowItWorksSteps top + bottom).
+
+---
+
+## Åbne tråde fra denne session
+
+- **eslint 10**: vendes tilbage til når Next.js bumper deres
+  eslint-config-next med opdateret eslint-plugin-react.
+- **typescript 6 release-notes**: nye syntax-features (decorators
+  stage 3, satisfies-improvements) som vi ikke høster endnu. Gennemgå
+  ved næste sprint.
+- **lucide-react 1.x deprecated aliases**: 0.x→1.x er stable men
+  nogle ikon-navne er aliased. Worth at scanne build-log for
+  deprecated-warnings.
+- **Lighthouse på landing efter type-scale**: bundle-impact af clamp()
+  er 0 ekstra JS, men CLS kan være påvirket. Pre-deploy Lighthouse-
+  test ville være worth.
+- **Mobile testing-pass**: brugeren spottede z-index-bug på
+  HowItWorksSteps. Lignende patterns kan findes i DemoStripMockup
+  eller andre absolute-overlay-konfigurationer. Worth en systematisk
+  z-index-pass på alle landing-komponenter.

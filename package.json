@@ -11,15 +11,15 @@
     "db:types": "supabase gen types typescript --project-id ihhkmffrdtexlrmgxlmu --schema public > lib/database.types.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.51.0",
-    "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.105.3",
+    "@sentry/nextjs": "^10.52.0",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "geist": "^1.5.1",
     "lucide-react": "^1.14.0",
     "motion": "^12.38.0",
-    "next": "^16.2.4",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -27,7 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.2.4",
+    "eslint-config-next": "^16.2.6",
     "tailwindcss": "^4",
     "typescript": "^6"
   },

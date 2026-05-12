@@ -7,8 +7,6 @@ import type {
   LifeEventStatus,
   LifeEventTimeframe,
   LifeEventType,
-  PayslipLine,
-  PayslipLineCategory,
   RecurrenceFreq,
   SavingsPurpose,
 } from '@/lib/database.types';
@@ -265,130 +263,6 @@ export function lifeEventAlert(
   return null;
 }
 
-// ============================================================================
-// Lønsedler (payslips) - katagori-labels, tooltips, fortegns-normalisering
-// ============================================================================
-
-// Kort label til dropdown'en på lønseddel-form'en.
-export const PAYSLIP_LINE_CATEGORY_LABEL_DA: Record<
-  PayslipLineCategory,
-  string
-> = {
-  grundlon: 'Bruttoløn',
-  tillaeg: 'Tillæg (overarbejde, nattillæg, …)',
-  feriepenge_optjent: 'Optjent feriepenge',
-  pension_arbejdsgiver: 'Pension - arbejdsgivers del',
-  pension_egen: 'Pension - din egen del',
-  atp: 'ATP',
-  am_bidrag: 'AM-bidrag',
-  a_skat: 'A-skat',
-  akasse: 'A-kasse',
-  fagforening: 'Fagforening',
-  fradrag_andet: 'Andet fradrag',
-  andet: 'Andet',
-};
-
-// Forklaringer der vises som tooltip ved siden af kategori-dropdown'en.
-// Skrives så en der ALDRIG har sat sig ind i økonomi kan forstå det.
-export const PAYSLIP_LINE_CATEGORY_TOOLTIP_DA: Record<
-  PayslipLineCategory,
-  string
-> = {
-  grundlon:
-    'Din grundløn / bruttoløn før skat og fradrag. Det største tal på lønsedlen.',
-  tillaeg:
-    'Ekstra tillæg oven i grundlønnen: overarbejde, nattillæg, weekendtillæg, holddrift, ulempetillæg osv.',
-  feriepenge_optjent:
-    'Det din arbejdsgiver lægger til side til din ferie (typisk 12,5% af bruttolønnen). Du får dem udbetalt når du holder ferie.',
-  pension_arbejdsgiver:
-    'Hvad din arbejdsgiver indbetaler til din pension. Du får det ikke udbetalt nu, men det vokser på din pensionsordning.',
-  pension_egen:
-    'Din egen pension-indbetaling. Trækkes fra lønnen før du får den udbetalt - typisk en aftalt procent af lønnen.',
-  atp: 'Arbejdsmarkedets Tillægspension. Et lille fast beløb (~99 kr/md) du betaler, og din arbejdsgiver betaler det dobbelte. Giver pension som lille tillæg til folkepensionen.',
-  am_bidrag:
-    'Arbejdsmarkedsbidrag. 8% af din bruttoløn der trækkes som en form for socialafgift. Beregnes før A-skat.',
-  a_skat:
-    'A-skat. Det vi alle betaler i indkomstskat (stat + kommune). Beregnes af din løn efter AM-bidrag og dine fradrag.',
-  akasse:
-    'Din A-kasse-kontingent. Forsikrer dig mod arbejdsløshed. Typisk 400-500 kr/md.',
-  fagforening:
-    'Dit fagforeningskontingent. Hvis dit kontingent ikke trækkes via lønsedlen, så indtast det her som "Andet".',
-  fradrag_andet:
-    'Andre faste fradrag: kantine, lønforskud, frikort, abonnementer der trækkes via lønnen osv.',
-  andet:
-    'Kan ikke kategoriseres som noget af det ovenstående. Brug "Andet" som sidste mulighed.',
-};
-
-// Hvilke kategorier gemmes som negative beløb (fradrag) når brugeren
-// skriver et positivt tal i form'en. Andre kategorier (grundlon, tillaeg
-// osv.) gemmes som positive. 'andet' følger brugerens fortegn (vi
-// fortolker det IKKE - hvis brugeren skriver "-200" som "Andet",
-// gemmer vi -200).
-const PAYSLIP_NEGATIVE_CATEGORIES: ReadonlySet<PayslipLineCategory> = new Set([
-  'pension_egen',
-  'atp',
-  'am_bidrag',
-  'a_skat',
-  'akasse',
-  'fagforening',
-  'fradrag_andet',
-]);
-
-// Konverterer brugerens positive input til signed øre baseret på kategori.
-// rawAbsOere skal ALTID være >= 0 fra UI'et. For 'andet' bevarer vi
-// fortegnet hvis brugeren angav det.
-export function payslipNormalizedAmount(
-  rawAbsOere: number,
-  category: PayslipLineCategory
-): number {
-  if (category === 'andet') return rawAbsOere;
-  if (PAYSLIP_NEGATIVE_CATEGORIES.has(category)) {
-    return -Math.abs(rawAbsOere);
-  }
-  return Math.abs(rawAbsOere);
-}
-
-// Brutto = sum af alle positive linjer (indtægter før fradrag).
-export function payslipGrossAmount(
-  lines: Pick<PayslipLine, 'amount'>[]
-): number {
-  return lines.reduce((sum, line) => sum + Math.max(0, line.amount), 0);
-}
-
-// Netto = sum af alle linjer (det der reelt udbetales).
-export function payslipNetAmount(
-  lines: Pick<PayslipLine, 'amount'>[]
-): number {
-  return lines.reduce((sum, line) => sum + line.amount, 0);
-}
-
-// Saldoer gemmes i hundrededele af enheden (18,5 dage = 1850).
-// Format helpers så UI'et viser dem som "18,5 dage" eller "12,3 timer".
-export function formatPayslipBalance(
-  hundredths: number | null | undefined,
-  unit: 'dage' | 'timer'
-): string {
-  if (hundredths == null) return '–';
-  const value = hundredths / 100;
-  // 1 decimal hvis ikke heltal, ingen hvis heltal
-  const formatted = Number.isInteger(value)
-    ? value.toString()
-    : value.toFixed(1).replace('.', ',');
-  return `${formatted} ${unit}`;
-}
-
-// Parse "18,5" eller "18.5" eller "1850" formats... egentlig kun
-// "18,5"/"18.5" format fra UI. Returnerer hundrededele eller null.
-export function parsePayslipBalance(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const normalised = trimmed.replace(/\s/g, '').replace(/,/g, '.');
-  const n = Number(normalised);
-  if (!Number.isFinite(n) || n < 0) return null;
-  // Cap til 999,99 - ingen realistisk feriesaldo eller flex-saldo er højere
-  if (n > 999.99) return null;
-  return Math.round(n * 100);
-}
 
 // Danish month names, indexed by 1-12. Month picker uses these labels.
 export const MONTHS_DA: { value: number; label: string }[] = [

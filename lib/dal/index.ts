@@ -25,5 +25,4 @@ export * from './upcoming-events';
 export * from './income';
 export * from './loans';
 export * from './life-events';
-export * from './payslips';
 export * from './predictable';

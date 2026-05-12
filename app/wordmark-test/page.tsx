@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import {
   FAMILIES,
+  TUNED_CANDIDATES,
   madeAwelier,
   madeInfinity,
   madeInfinityBeside,
@@ -17,6 +18,7 @@ import {
   madeVoyager,
   magnolia,
   ztNatureFull,
+  type TunedCandidate,
   type WordmarkFamily,
 } from './fonts';
 
@@ -58,10 +60,131 @@ export default function WordmarkTestPage() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-12 px-6 py-10">
+        {/* Justerede kandidater - specifikke konfigurationer brugeren
+            har bedt om at sammenligne. Stå øverst så de er nemme at
+            screenshot'e. */}
+        <section>
+          <header className="mb-4 border-b-2 border-emerald-700 pb-3">
+            <h2 className="text-lg font-semibold text-neutral-900">
+              Justerede kandidater
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Specifikke font + vægt + letter-spacing-kombinationer udvalgt
+              til sammenligning. Resten af familierne ligger nedenfor.
+            </p>
+          </header>
+
+          <div className="space-y-4">
+            {TUNED_CANDIDATES.map((cand) => (
+              <TunedCandidateCard key={cand.label} candidate={cand} />
+            ))}
+          </div>
+        </section>
+
         {FAMILIES.map((family) => (
           <FamilySection key={family.name} family={family} />
         ))}
       </main>
+    </div>
+  );
+}
+
+function TunedCandidateCard({ candidate }: { candidate: TunedCandidate }) {
+  return (
+    <div className="rounded-md border border-neutral-200 bg-white overflow-hidden">
+      <div className="border-b border-neutral-100 bg-stone-50 px-4 py-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">
+          {candidate.label}
+        </p>
+        {candidate.note && (
+          <p className="mt-0.5 text-[11px] text-neutral-400">{candidate.note}</p>
+        )}
+      </div>
+
+      {/* Lys baggrund: stor + mellem + lille */}
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3 bg-white px-6 py-6">
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '72px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+          }}
+        >
+          fambud
+        </span>
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '32px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+          }}
+        >
+          fambud
+        </span>
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '18px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+          }}
+        >
+          fambud
+        </span>
+      </div>
+
+      {/* Mørk baggrund */}
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3 bg-neutral-900 px-6 py-6 text-white">
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '72px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+          }}
+        >
+          fambud
+        </span>
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '32px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+          }}
+        >
+          fambud
+        </span>
+      </div>
+
+      {/* Emerald-800 - FamBuds primær-farve */}
+      <div className="bg-white px-6 py-4">
+        <span
+          style={{
+            fontFamily: candidate.cssVar,
+            fontWeight: candidate.weight,
+            fontStyle: candidate.italic ? 'italic' : 'normal',
+            fontSize: '56px',
+            lineHeight: 1,
+            letterSpacing: candidate.letterSpacing,
+            color: '#065f46',
+          }}
+        >
+          fambud
+        </span>
+      </div>
     </div>
   );
 }

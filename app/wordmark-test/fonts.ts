@@ -210,6 +210,52 @@ export type WordmarkFamily = {
   variants: WordmarkVariant[];
 };
 
+// Manuelt justerede kandidater - specifikke (font, vægt, letter-spacing)-
+// kombinationer brugeren vil sammenligne side om side øverst på siden.
+// Default letter-spacing i family-sektionen er -0.02em (tæt). Disse
+// kandidater overskriver letter-spacing til andre værdier brugeren har
+// bedt om.
+export type TunedCandidate = {
+  label: string;
+  cssVar: string;
+  weight: number;
+  italic?: boolean;
+  letterSpacing: string;
+  note?: string;
+};
+
+export const TUNED_CANDIDATES: readonly TunedCandidate[] = [
+  {
+    label: 'MADE Awelier · Regular 400 · +0.05em',
+    cssVar: 'var(--font-made-awelier)',
+    weight: 400,
+    letterSpacing: '0.05em',
+    note: 'Let, åben',
+  },
+  {
+    label: 'MADE Awelier · Black 900 · +0.05em',
+    cssVar: 'var(--font-made-awelier)',
+    weight: 900,
+    letterSpacing: '0.05em',
+    note: 'Stærk, åben',
+  },
+  {
+    label: 'ZT Nature · Bold Italic 700 · +0.04em',
+    cssVar: 'var(--font-zt-nature-full)',
+    weight: 700,
+    italic: true,
+    letterSpacing: '0.04em',
+    note: 'Den nuværende stil med mere luft',
+  },
+  {
+    label: 'Magnolia · Regular 400 · -0.05em',
+    cssVar: 'var(--font-magnolia)',
+    weight: 400,
+    letterSpacing: '-0.05em',
+    note: 'Script tættere sammen',
+  },
+];
+
 export const FAMILIES: readonly WordmarkFamily[] = [
   {
     name: 'MADE Awelier',

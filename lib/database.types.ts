@@ -78,6 +78,27 @@ export type LifeEventTimeframe =
   | 'within_10y';
 export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
 
+// Lønsedler (payslips): kategorisering af lønseddel-linjer.
+// Migration 0060 introducerer enum og tabeller.
+//
+// Fortegns-konvention:
+//   amount > 0 (indtægter):  grundlon, tillaeg, feriepenge_optjent, pension_arbejdsgiver
+//   amount < 0 (fradrag):    pension_egen, atp, am_bidrag, a_skat, akasse, fagforening, fradrag_andet
+//   amount ± (bruger):       andet
+export type PayslipLineCategory =
+  | 'grundlon'
+  | 'tillaeg'
+  | 'feriepenge_optjent'
+  | 'pension_arbejdsgiver'
+  | 'pension_egen'
+  | 'atp'
+  | 'am_bidrag'
+  | 'a_skat'
+  | 'akasse'
+  | 'fagforening'
+  | 'fradrag_andet'
+  | 'andet';
+
 export type Database = {
   public: {
     Tables: {
@@ -600,6 +621,87 @@ export type Database = {
         };
         Relationships: [];
       };
+      payslips: {
+        Row: {
+          id: string;
+          household_id: string;
+          family_member_id: string;
+          period_start: string;
+          period_end: string;
+          pay_date: string | null;
+          employer: string | null;
+          feriesaldo_remaining: number | null;
+          overarbejde_remaining: number | null;
+          afspadsering_remaining: number | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          family_member_id: string;
+          period_start: string;
+          period_end: string;
+          pay_date?: string | null;
+          employer?: string | null;
+          feriesaldo_remaining?: number | null;
+          overarbejde_remaining?: number | null;
+          afspadsering_remaining?: number | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          family_member_id?: string;
+          period_start?: string;
+          period_end?: string;
+          pay_date?: string | null;
+          employer?: string | null;
+          feriesaldo_remaining?: number | null;
+          overarbejde_remaining?: number | null;
+          afspadsering_remaining?: number | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      payslip_lines: {
+        Row: {
+          id: string;
+          payslip_id: string;
+          household_id: string;
+          raw_label: string;
+          amount: number;
+          category: PayslipLineCategory;
+          notes: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          payslip_id: string;
+          household_id: string;
+          raw_label: string;
+          amount: number;
+          category?: PayslipLineCategory;
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          payslip_id?: string;
+          household_id?: string;
+          raw_label?: string;
+          amount?: number;
+          category?: PayslipLineCategory;
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       landing_flow_submissions: {
         Row: {
           id: string;
@@ -703,3 +805,5 @@ export type Household = Database['public']['Tables']['households']['Row'];
 export type HouseholdInvite = Database['public']['Tables']['household_invites']['Row'];
 export type LifeEvent = Database['public']['Tables']['life_events']['Row'];
 export type LifeEventItem = Database['public']['Tables']['life_event_items']['Row'];
+export type Payslip = Database['public']['Tables']['payslips']['Row'];
+export type PayslipLine = Database['public']['Tables']['payslip_lines']['Row'];

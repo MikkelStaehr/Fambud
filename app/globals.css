@@ -5,12 +5,14 @@
   --font-mono: var(--font-geist-mono);
 
   /* ============================================================================
-   * Brand-rebrand: olive + cream palette
+   * Brand-rebrand: olive-palette (kun emerald-skalaen overrider)
    * ----------------------------------------------------------------------------
-   * Vi overskriver Tailwind's emerald-skala (brand-primær) og stone-50/100
-   * (varm baggrund) så alle eksisterende bg-emerald-X / text-emerald-X /
-   * bg-stone-50-klasser automatisk rendres i den nye palette, uden at vi
-   * skal røre 272 forekomster i 72 filer.
+   * Vi overskriver Tailwind's emerald-skala (brand-primær) så alle 272
+   * forekomster af bg-emerald-X / text-emerald-X / border-emerald-X
+   * automatisk rendres i olive. Stone og hvid forbliver Tailwind-default
+   * (stone-50 ≈ #FAFAF9, stone-100 ≈ #F5F5F4, white = #FFF) - den varme
+   * cream-baggrund føltes for soft/lifestyle i selve app'en, så vi
+   * beholder rene, lyse flader som arbejdsmiljø.
    *
    * Designet på /farve-test og brugergodkendt.
    * ========================================================================== */
@@ -27,16 +29,6 @@
   --color-emerald-800: #3B3D2B;
   --color-emerald-900: #2B2D1B;
   --color-emerald-950: #1B1D0E;
-
-  /* Cream-familie (overskriver stone-50/100) - varm baggrund + zone-fills. */
-  --color-stone-50:  #EDE6D4;
-  --color-stone-100: #E0D8C0;
-
-  /* Hvid dæmpet til en varm off-white så cards ikke clasher mod cream-bg.
-     Påvirker både bg-white og text-white. På mørke knapper (olive bg) er
-     forskellen mellem #FFF og #FAF7EE knap synlig - stadig læsbart, men
-     mere brand-konsistent end ren hvid på cream. */
-  --color-white: #FAF7EE;
 }
 
 /* Apply tabular figures whenever this class is set on a money-bearing element.

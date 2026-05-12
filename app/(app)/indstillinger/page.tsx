@@ -15,6 +15,7 @@ import {
   restartTour,
   deleteMyAccount,
   setMonthlySummaryEmail,
+  sendMyMonthlySummaryTest,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
 
@@ -177,6 +178,23 @@ export default async function IndstillingerPage({
             >
               Gem
             </button>
+          </form>
+
+          {/* Test-send-knap: validerer email-template + Resend-deliverability
+              ved at sende ÉN test-mail til den indloggede bruger. Opdaterer
+              ikke last_monthly_summary_sent_at, så den almindelige
+              månedlige cron fyrer stadig som forventet. */}
+          <form action={sendMyMonthlySummaryTest} className="mt-3">
+            <button
+              type="submit"
+              className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-900 hover:bg-neutral-50"
+            >
+              Send test-mail til mig selv
+            </button>
+            <p className="mt-1.5 text-[11px] text-neutral-500">
+              Bruger din nuværende månedsdata. Subject præfikses med
+              [TEST] så du kan kende den fra den rigtige.
+            </p>
           </form>
         </section>
       )}

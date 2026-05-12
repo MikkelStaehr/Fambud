@@ -7,6 +7,13 @@ import type { CategoryKind } from '@/lib/database.types';
 import { capLength, TEXT_LIMITS } from '@/lib/format';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logAuditEvent } from '@/lib/audit-log';
+import { setFlashCookie } from '@/lib/flash';
+import { resolveSiteOrigin } from '@/lib/site-url';
+import {
+  getMonthlySummaryForMember,
+  getNumContributors,
+  sendMonthlySummaryEmail,
+} from '@/lib/email/monthly-summary';
 
 // Genstart dashboard-touren - sætter tour_completed_at tilbage til null
 // så turen auto-starter ved næste dashboard-besøg. Bruges af "Genstart
@@ -520,5 +527,70 @@ export async function setMonthlySummaryEmail(formData: FormData) {
     );
   }
   revalidatePath('/indstillinger');
+  redirect('/indstillinger');
+}
+
+// Sender en test-mail til den indloggede bruger med deres egen aktuelle
+// månedsoversigt. Til validering af email-template + Resend-deliverability
+// før den rigtige månedlige cron fyrer af.
+//
+// Forskel fra cron-routen: vi opdaterer IKKE last_monthly_summary_sent_at,
+// så test-mail blokerer ikke den almindelige månedlige send. Subject
+// præfikses med "[TEST]" så modtageren tydeligt kan se det er en
+// manuel kørsel.
+export async function sendMyMonthlySummaryTest() {
+  const { supabase, householdId, user } = await getHouseholdContext();
+
+  const { data: me, error: meErr } = await supabase
+    .from('family_members')
+    .select('id, name, email')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (meErr || !me) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Kunne ikke finde din profil')
+    );
+  }
+  if (!me.email) {
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Din profil har ingen email - tilføj én først')
+    );
+  }
+
+  try {
+    const numContributors = await getNumContributors(supabase, householdId);
+    const summary = await getMonthlySummaryForMember(
+      supabase,
+      householdId,
+      me.name,
+      numContributors
+    );
+
+    const origin = await resolveSiteOrigin();
+    const firstName = me.name.trim().split(/\s+/)[0] ?? 'der';
+
+    await sendMonthlySummaryEmail({
+      to: me.email,
+      firstName,
+      monthIndex0: new Date().getUTCMonth(),
+      summary,
+      appUrl: `${origin}/dashboard`,
+      settingsUrl: `${origin}/indstillinger`,
+      isTest: true,
+    });
+
+    await setFlashCookie(`Test-mail sendt til ${me.email}`);
+  } catch (err) {
+    console.error('sendMyMonthlySummaryTest failed:', err);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent(
+          'Test-mail kunne ikke sendes - tjek Resend-konfig og logs'
+        )
+    );
+  }
+
   redirect('/indstillinger');
 }

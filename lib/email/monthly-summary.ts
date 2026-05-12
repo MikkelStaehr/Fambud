@@ -282,6 +282,9 @@ function escapeAttr(s: string): string {
 
 // Send-funktion. Kaster hvis Resend fejler - cron-routen logger og
 // fortsætter med næste bruger.
+//
+// isTest: når true, præfikses subject med "[TEST]" så modtageren tydeligt
+// kan skelne manuelle testkald fra den planlagte månedlige send.
 export async function sendMonthlySummaryEmail(input: {
   to: string;
   firstName: string;
@@ -289,8 +292,10 @@ export async function sendMonthlySummaryEmail(input: {
   summary: MonthlySummary;
   appUrl: string;
   settingsUrl: string;
+  isTest?: boolean;
 }): Promise<void> {
-  const subject = buildSubject(input.firstName, input.monthIndex0);
+  const baseSubject = buildSubject(input.firstName, input.monthIndex0);
+  const subject = input.isTest ? `[TEST] ${baseSubject}` : baseSubject;
   const html = buildHtmlBody(
     input.firstName,
     input.monthIndex0,

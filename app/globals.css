@@ -31,6 +31,12 @@
   /* Cream-familie (overskriver stone-50/100) - varm baggrund + zone-fills. */
   --color-stone-50:  #EDE6D4;
   --color-stone-100: #E0D8C0;
+
+  /* Hvid dæmpet til en varm off-white så cards ikke clasher mod cream-bg.
+     Påvirker både bg-white og text-white. På mørke knapper (olive bg) er
+     forskellen mellem #FFF og #FAF7EE knap synlig - stadig læsbart, men
+     mere brand-konsistent end ren hvid på cream. */
+  --color-white: #FAF7EE;
 }
 
 /* Apply tabular figures whenever this class is set on a money-bearing element.

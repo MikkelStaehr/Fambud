@@ -45,7 +45,7 @@ export default async function AppLayout({
     <div className="flex h-screen flex-col md:flex-row">
       <MobileNav userEmail={user.email ?? ''} />
 
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4 md:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-stone-100 px-3 py-4 md:flex">
         <div className="px-2 pb-6">
           <FambudMark size="lg" />
         </div>

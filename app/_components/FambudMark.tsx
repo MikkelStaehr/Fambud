@@ -13,8 +13,8 @@
 type Props = {
   // Kontrol over størrelse:
   //   sm   = text-sm     (~14 px)         - kompakt mobile-nav
-  //   base = text-base   (~16 px)         - sidebar
-  //   lg   = text-2xl    (~24 px)         - signup/auth-skærme
+  //   base = text-base   (~16 px)         - sjælden, til footer-marks
+  //   lg   = text-3xl    (~30/36 px)      - sidebar + signup/auth
   //   xl   = text-5xl    (~48/60 px)      - landing top-nav
   //   hero = text-7xl    (~72/96 px)      - login (blast it i ansigtet)
   size?: 'sm' | 'base' | 'lg' | 'xl' | 'hero';
@@ -30,7 +30,7 @@ type Props = {
 const SIZES = {
   sm: 'text-sm',
   base: 'text-base',
-  lg: 'text-2xl',
+  lg: 'text-3xl sm:text-4xl',
   xl: 'text-5xl sm:text-6xl',
   hero: 'text-7xl sm:text-8xl',
 } as const;

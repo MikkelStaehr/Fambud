@@ -27,6 +27,7 @@ export type FamilyMemberRow = {
   workplace_address: string | null;
   workplace_zip_code: string | null;
   workplace_city: string | null;
+  monthly_summary_email_enabled: boolean;
 };
 
 export type SettingsData = {
@@ -55,7 +56,7 @@ export async function getSettingsData(): Promise<SettingsData> {
     supabase
       .from('family_members')
       .select(
-        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city'
+        'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city, monthly_summary_email_enabled'
       )
       .eq('household_id', householdId)
       .order('position', { ascending: true })
@@ -79,7 +80,7 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   const { data, error } = await supabase
     .from('family_members')
     .select(
-      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city'
+      'id, name, birthdate, user_id, position, email, role, joined_at, primary_income_source, home_address, home_zip_code, home_city, workplace_address, workplace_zip_code, workplace_city, monthly_summary_email_enabled'
     )
     .eq('household_id', householdId)
     .order('position', { ascending: true })

@@ -38,7 +38,10 @@ export type AuditAction =
   | 'member.removed'
   | 'member.role_changed'
   // Account lifecycle
-  | 'account.deleted';
+  | 'account.deleted'
+  // Periodic emails / cron jobs
+  | 'monthly_summary.sent'
+  | 'monthly_summary.failed';
 
 export type AuditResult = 'success' | 'failure' | 'denied';
 

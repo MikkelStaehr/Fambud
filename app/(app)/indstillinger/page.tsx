@@ -14,6 +14,7 @@ import {
   updateMyProfile,
   restartTour,
   deleteMyAccount,
+  setMonthlySummaryEmail,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
 
@@ -133,6 +134,48 @@ export default async function IndstillingerPage({
               className="text-xs font-medium text-neutral-500 hover:text-neutral-900"
             >
               Genstart rundture i appen →
+            </button>
+          </form>
+        </section>
+      )}
+
+      {/* Notifikationer - per-bruger email-præferencer */}
+      {me && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
+            Notifikationer
+          </h2>
+          <form
+            action={setMonthlySummaryEmail}
+            className="rounded-md border border-neutral-200 bg-white p-4"
+          >
+            <label
+              htmlFor="monthly_summary_email_enabled"
+              className="flex cursor-pointer items-start gap-3"
+            >
+              <input
+                id="monthly_summary_email_enabled"
+                name="monthly_summary_email_enabled"
+                type="checkbox"
+                defaultChecked={me.monthly_summary_email_enabled}
+                className="mt-0.5 h-4 w-4 cursor-pointer accent-emerald-700"
+              />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-neutral-900">
+                  Månedlig oversigts-email
+                </span>
+                <span className="mt-0.5 block text-xs text-neutral-500">
+                  Vi sender en kort mail i slutningen af hver måned med
+                  din indtægt, udgift og overskud. Slå fra hvis du ikke
+                  vil have den.
+                </span>
+              </span>
+            </label>
+            <button
+              type="submit"
+              className="mt-3 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
+            >
+              Gem
             </button>
           </form>
         </section>

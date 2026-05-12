@@ -438,6 +438,8 @@ export type Database = {
           workplace_zip_code: string | null;
           workplace_city: string | null;
           tours_completed: Record<string, string>;
+          monthly_summary_email_enabled: boolean;
+          last_monthly_summary_sent_at: string | null;
         };
         Insert: {
           id?: string;
@@ -459,6 +461,8 @@ export type Database = {
           workplace_zip_code?: string | null;
           workplace_city?: string | null;
           tours_completed?: Record<string, string>;
+          monthly_summary_email_enabled?: boolean;
+          last_monthly_summary_sent_at?: string | null;
         };
         Update: {
           id?: string;
@@ -480,6 +484,8 @@ export type Database = {
           workplace_zip_code?: string | null;
           workplace_city?: string | null;
           tours_completed?: Record<string, string>;
+          monthly_summary_email_enabled?: boolean;
+          last_monthly_summary_sent_at?: string | null;
         };
         Relationships: [];
       };

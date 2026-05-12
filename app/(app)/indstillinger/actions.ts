@@ -499,3 +499,26 @@ export async function deleteMyAccount(formData: FormData) {
   // lykkedes når de står på forsiden uden konto-adgang.
   redirect('/');
 }
+
+// Toggle på den månedlige oversigts-email. Checkbox-form: hvis brugeren
+// har afkrydset, sender browseren value="on"; hvis ikke afkrydset
+// sendes INTET felt med det navn. Vi læser derfor på "feltet eksisterer"
+// frem for at parse værdien.
+export async function setMonthlySummaryEmail(formData: FormData) {
+  const { supabase, user } = await getHouseholdContext();
+  const enabled = formData.get('monthly_summary_email_enabled') === 'on';
+
+  const { error } = await supabase
+    .from('family_members')
+    .update({ monthly_summary_email_enabled: enabled })
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('setMonthlySummaryEmail failed:', error.message);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Indstillingen kunne ikke gemmes - prøv igen.')
+    );
+  }
+  revalidatePath('/indstillinger');
+  redirect('/indstillinger');
+}

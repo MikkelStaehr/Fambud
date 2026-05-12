@@ -29,6 +29,7 @@ import {
   Users,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { HeroDemoMockup } from '@/app/_components/HeroDemoMockup';
 import { DemoStripMockup } from '@/app/_components/DemoStripMockup';
 import { HowItWorksSteps } from '@/app/_components/HowItWorksSteps';
@@ -61,13 +62,8 @@ function TopNav() {
   return (
     <nav className="sticky top-0 z-10 border-b border-neutral-200 bg-stone-50/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-        <Link
-          href="/"
-          aria-label="Fambud forsiden"
-          className="text-lg tracking-tight text-neutral-900 sm:text-xl"
-          style={{ fontFamily: FAMBUD_FONT }}
-        >
-          Fambud
+        <Link href="/" aria-label="Fambud forsiden">
+          <FambudMark size="xl" />
         </Link>
         <div className="flex items-center gap-1 sm:gap-1.5">
           <Link
@@ -436,12 +432,7 @@ function Footer() {
     <footer className="border-t border-neutral-200 bg-stone-50">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span
-            className="text-base tracking-tight text-neutral-700"
-            style={{ fontFamily: FAMBUD_FONT }}
-          >
-            Fambud
-          </span>
+          <FambudMark size="base" className="text-neutral-700" />
           <span>- familie + budget</span>
           <Link
             href="/privatliv"

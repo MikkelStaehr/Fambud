@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { BetaNotice } from './_components/BetaNotice';
-import { FambudMark } from './_components/FambudMark';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { FeedbackModal } from './_components/FeedbackModal';
 import { MobileNav } from './_components/MobileNav';
 import { SidebarNav } from './_components/SidebarNav';

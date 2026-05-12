@@ -3,13 +3,20 @@
 // /wordmark-test og brand-vedtaget. Font loades via next/font/local i
 // app/fonts.ts.
 //
+// Komponenten lever i app/_components/ (delt mellem landing og (app))
+// så både offentlige sider og auth'ed UI bruger samme wordmark.
+//
 // ⚠ LICENS: MADE Awelier er PERSONAL USE-licens. KAN IKKE deployes
 // til prod før vi køber kommerciel licens (~$50 hos Fontfabric.com).
 // Indtil licensen er på plads er wordmark'et kun til lokal/intern brug.
 
 type Props = {
-  // Kontrol over størrelse - sidebar = base, marketing/auth = lg.
-  size?: 'sm' | 'base' | 'lg';
+  // Kontrol over størrelse:
+  //   sm   = text-sm   (~14 px) - kompakt mobile-nav
+  //   base = text-base (~16 px) - sidebar
+  //   lg   = text-2xl  (~24 px) - login/signup/auth
+  //   xl   = text-3xl  (~30 px) - landing top-nav (markant større)
+  size?: 'sm' | 'base' | 'lg' | 'xl';
   // Hvis brugt på mørk baggrund (fx hero), vendes farven til hvid.
   inverted?: boolean;
   className?: string;
@@ -19,6 +26,7 @@ const SIZES = {
   sm: 'text-sm',
   base: 'text-base',
   lg: 'text-2xl',
+  xl: 'text-3xl sm:text-4xl',
 } as const;
 
 export function FambudMark({ size = 'base', inverted = false, className = '' }: Props) {

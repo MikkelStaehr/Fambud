@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { LogOut, Menu, X } from 'lucide-react';
-import { FambudMark } from './FambudMark';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { SidebarNav } from './SidebarNav';
 import { FeedbackModal } from './FeedbackModal';
 import { signOut } from '../actions';

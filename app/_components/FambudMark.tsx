@@ -19,7 +19,11 @@ type Props = {
   //   hero = text-7xl    (~72/96 px)      - login (blast it i ansigtet)
   size?: 'sm' | 'base' | 'lg' | 'xl' | 'hero';
   // Hvis brugt på mørk baggrund (fx hero), vendes farven til hvid.
+  // Ignoreres når color-prop'en er sat.
   inverted?: boolean;
+  // Eksplicit farve-override (CSS-farve). Bruges på fx /farve-test til
+  // at vise wordmark'et i alternative brand-paletter. Trumfer inverted.
+  color?: string;
   className?: string;
 };
 
@@ -31,16 +35,25 @@ const SIZES = {
   hero: 'text-7xl sm:text-8xl',
 } as const;
 
-export function FambudMark({ size = 'base', inverted = false, className = '' }: Props) {
+export function FambudMark({
+  size = 'base',
+  inverted = false,
+  color,
+  className = '',
+}: Props) {
+  const colorClass = color
+    ? '' // farve sættes via inline style i stedet
+    : inverted
+      ? 'text-white'
+      : 'text-neutral-900';
   return (
     <span
-      className={`inline-flex ${
-        inverted ? 'text-white' : 'text-neutral-900'
-      } ${SIZES[size]} ${className}`}
+      className={`inline-flex ${colorClass} ${SIZES[size]} ${className}`}
       style={{
         fontFamily: 'var(--font-made-awelier-black), system-ui, sans-serif',
         fontWeight: 900,
         letterSpacing: '0.05em',
+        ...(color ? { color } : {}),
       }}
       aria-label="Fambud"
     >

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { signup } from './actions';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { SubmitButton } from '@/app/_components/SubmitButton';
 import { readAuthStepCookie } from '@/lib/auth-step';
 import { LandingTokenField } from './_components/LandingTokenField';
@@ -22,7 +23,7 @@ export default async function SignupPage({
     return (
       <main className="flex min-h-screen items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Fambud</h1>
+          <FambudMark size="lg" />
 
           <div className="mt-8 rounded-md border border-neutral-200 bg-white p-6">
             <h2 className="text-base font-semibold text-neutral-900">Bekræft din email</h2>
@@ -50,7 +51,7 @@ export default async function SignupPage({
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Fambud</h1>
+          <FambudMark size="lg" />
           <p className="mt-1 text-sm text-neutral-500">Opret din husstand</p>
         </div>
 

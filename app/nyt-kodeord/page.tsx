@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { setNewPassword } from './actions';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { SubmitButton } from '@/app/_components/SubmitButton';
 
 export default async function NytKodeordPage({
@@ -25,7 +26,7 @@ export default async function NytKodeordPage({
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Fambud</h1>
+          <FambudMark size="lg" />
           <p className="mt-1 text-sm text-neutral-500">Vælg ny adgangskode</p>
         </div>
 

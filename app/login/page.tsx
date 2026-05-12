@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { login } from './actions';
+import { FambudMark } from '@/app/_components/FambudMark';
 import { SubmitButton } from '@/app/_components/SubmitButton';
 
 export default async function LoginPage({
@@ -16,10 +17,9 @@ export default async function LoginPage({
           <Link
             href="/"
             aria-label="Tilbage til forsiden"
-            className="inline-block text-5xl tracking-tight text-neutral-900 transition hover:text-emerald-800 sm:text-6xl"
-            style={{ fontFamily: 'var(--font-zt-nature), system-ui, sans-serif' }}
+            className="inline-block transition hover:opacity-80"
           >
-            fambud
+            <FambudMark size="hero" />
           </Link>
           <p className="mt-3 text-sm text-neutral-500">Log ind på din konto</p>
         </div>

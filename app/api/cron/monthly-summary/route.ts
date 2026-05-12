@@ -22,7 +22,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveSiteOrigin } from '@/lib/site-url';
 import {
   getMonthlySummaryForMember,
-  getNumContributors,
   sendMonthlySummaryEmail,
 } from '@/lib/email/monthly-summary';
 import { logAuditEvent } from '@/lib/audit-log';
@@ -91,9 +90,6 @@ export async function GET(request: NextRequest) {
   let skipped = 0;
   let failed = 0;
 
-  // Cache numContributors per household så vi ikke kører N+1.
-  const contributorsCache = new Map<string, number>();
-
   const origin = await resolveSiteOrigin();
   const appUrl = `${origin}/dashboard`;
   const settingsUrl = `${origin}/indstillinger`;
@@ -110,17 +106,10 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      let numContributors = contributorsCache.get(member.household_id);
-      if (numContributors == null) {
-        numContributors = await getNumContributors(supabase, member.household_id);
-        contributorsCache.set(member.household_id, numContributors);
-      }
-
       const summary = await getMonthlySummaryForMember(
         supabase,
         member.household_id,
-        member.name,
-        numContributors
+        member.name
       );
 
       await sendMonthlySummaryEmail({

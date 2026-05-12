@@ -1,19 +1,24 @@
-// Månedlig oversigts-email: per-person beregning af indtægt/udgift/
-// overskud + HTML/text-template + sender.
+// Månedlig oversigts-email: per-person beregning af "hvad sker der
+// på dine konti hver måned" + HTML/text-template + sender.
+//
+// Konto-perspektiv-model: emailen viser brugerens egne konti (dem hvor
+// accounts.owner_name matcher family_members.name). For hver:
+//   Indtægt   = recurring income-transactions
+//             + gennemsnit af sidste 3 primary-paychecks (recurrence='once'
+//               income_role='primary') per konto - samme forecast-mønster
+//               som getCashflowGraph bruger
+//             + transfers IND fra konti der IKKE er personens egne
+//   Udgift    = recurring expense-transactions
+//             + transfers UD til konti der IKKE er personens egne
+//   Overskud  = indtægt - udgift
+//
+// Transfers mellem personens egne konti (fx lønkonto → opsparing der
+// begge er Mikkels) tæller IKKE - de er interne flytninger, ikke reelt
+// indtægt eller udgift.
 //
 // Vi kører fra cron-context (service-role) så vi har INGEN getHouseholdContext-
-// adgang. Beregningen er bevidst minimal og duplikerer en lille smule af
-// cashflow.ts's logik, men holder helt isoleret fra det auth-aware lag.
-//
-// Per-person attribution-model:
-//   1. Konti hvor accounts.owner_name = personens navn → "private"
-//   2. Konti hvor accounts.owner_name = 'Fælles' → fælles, deles på
-//      antal bidragsydere (familiemembers med user_id eller email)
-//   3. Andre persons private konti ignoreres
-//
-// Beløb er monthly-equivalent (ikke historiske actuals). Det matcher
-// dashboard-modellen og gør at tallet er meningsfuldt uanset hvornår i
-// måneden emailen sendes.
+// adgang. Beregningen er bevidst minimal og duplikerer noget af cashflow.ts's
+// logik, men holder helt isoleret fra det auth-aware lag.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
@@ -26,48 +31,34 @@ export type MonthlySummary = {
   net: number;
 };
 
-// Computes en persons månedlige run-rate baseret på household-data.
-// Tager admin-klient så cron-route'n kan kalde uden auth-context.
+// Beregner personens månedlige konto-flow: hvad ind, hvad ud, hvad
+// tilbage. Tager admin-klient så cron-route'n kan kalde uden
+// auth-context, men kan også bruges fra auth-context (RLS dækker også).
 export async function getMonthlySummaryForMember(
   adminClient: SupabaseClient<Database>,
   householdId: string,
-  memberName: string,
-  numContributors: number
+  memberName: string
 ): Promise<MonthlySummary> {
-  // Hent alle ikke-arkiverede konti og partition dem efter ejer.
+  // Find personens egne ikke-arkiverede konti via owner_name-match.
   const { data: accounts, error: accountsErr } = await adminClient
     .from('accounts')
-    .select('id, owner_name')
+    .select('id')
     .eq('household_id', householdId)
+    .eq('owner_name', memberName)
     .eq('archived', false);
   if (accountsErr) throw accountsErr;
   if (!accounts || accounts.length === 0) {
     return { income: 0, expense: 0, net: 0 };
   }
 
-  const personalIds = new Set<string>();
-  const sharedIds = new Set<string>();
-  for (const acc of accounts) {
-    if (acc.owner_name === memberName) {
-      personalIds.add(acc.id);
-    } else if (acc.owner_name === 'Fælles') {
-      sharedIds.add(acc.id);
-    }
-  }
+  const myAccountIds = accounts.map((a) => a.id);
+  const myAccountSet = new Set(myAccountIds);
 
-  const relevantIds = [...personalIds, ...sharedIds];
-  if (relevantIds.length === 0) {
-    return { income: 0, expense: 0, net: 0 };
-  }
-
-  // Recurring transaktioner: brug monthlyEquivalent. Vi inkluderer alle
-  // recurrences (også 'once') men for 'once' bidrager monthlyEquivalent
-  // = 0, så de tæller ikke - acceptable simplificering for V1.
-  //
-  // .returns<>() overskriver Supabase's auto-inferens af join-typen
-  // (der i hand-written database.types.ts ikke har en relation declared
-  // mellem transactions og categories). Samme mønster som cashflow.ts.
-  type TxnRow = {
+  // Tre datakilder parallelt:
+  //   1. Recurring transactions på mine konti (income/expense via category)
+  //   2. Primary-once paychecks - gennemsnit af de seneste 3 per konto
+  //   3. Recurring transfers der rør mine konti (ind eller ud)
+  type RecurringTxn = {
     account_id: string;
     amount: number;
     recurrence:
@@ -79,59 +70,99 @@ export async function getMonthlySummaryForMember(
       | 'yearly';
     category: { kind: 'income' | 'expense' } | null;
   };
+  type Paycheck = {
+    account_id: string;
+    amount: number;
+    occurs_on: string;
+  };
+  type TransferRow = {
+    from_account_id: string;
+    to_account_id: string;
+    amount: number;
+    recurrence:
+      | 'once'
+      | 'weekly'
+      | 'monthly'
+      | 'quarterly'
+      | 'semiannual'
+      | 'yearly';
+  };
 
-  const { data: txns, error: txnsErr } = await adminClient
-    .from('transactions')
-    .select('account_id, amount, recurrence, category:categories(kind)')
-    .in('account_id', relevantIds)
-    .returns<TxnRow[]>();
-  if (txnsErr) throw txnsErr;
+  const [txnsRes, paychecksRes, transfersRes] = await Promise.all([
+    adminClient
+      .from('transactions')
+      .select('account_id, amount, recurrence, category:categories(kind)')
+      .in('account_id', myAccountIds)
+      .neq('recurrence', 'once')
+      .returns<RecurringTxn[]>(),
+    adminClient
+      .from('transactions')
+      .select('account_id, amount, occurs_on')
+      .in('account_id', myAccountIds)
+      .eq('recurrence', 'once')
+      .eq('income_role', 'primary')
+      .order('occurs_on', { ascending: false })
+      .returns<Paycheck[]>(),
+    // Transfers hvor MINDST én af endpoints er mine. Vi filtrerer i
+    // memory (Supabase JS-clienten har ikke en let .or().in()-syntaks
+    // med to lister), så vi henter alle husstandens recurring transfers
+    // og filtrerer. Normalt få rækker.
+    adminClient
+      .from('transfers')
+      .select('from_account_id, to_account_id, amount, recurrence')
+      .eq('household_id', householdId)
+      .neq('recurrence', 'once')
+      .returns<TransferRow[]>(),
+  ]);
 
-  let personalIncome = 0;
-  let personalExpense = 0;
-  let sharedIncome = 0;
-  let sharedExpense = 0;
+  if (txnsRes.error) throw txnsRes.error;
+  if (paychecksRes.error) throw paychecksRes.error;
+  if (transfersRes.error) throw transfersRes.error;
 
-  for (const txn of txns ?? []) {
+  let income = 0;
+  let expense = 0;
+
+  // 1. Recurring transactions
+  for (const txn of txnsRes.data ?? []) {
     const monthly = monthlyEquivalent(txn.amount, txn.recurrence);
     if (monthly === 0) continue;
     const kind = txn.category?.kind;
-    if (!kind) continue;
-    const isPersonal = personalIds.has(txn.account_id);
-    if (kind === 'income') {
-      if (isPersonal) personalIncome += monthly;
-      else sharedIncome += monthly;
-    } else {
-      if (isPersonal) personalExpense += monthly;
-      else sharedExpense += monthly;
-    }
+    if (kind === 'income') income += monthly;
+    else if (kind === 'expense') expense += monthly;
   }
 
-  const safeContributors = Math.max(1, numContributors);
-  const income =
-    personalIncome + Math.round(sharedIncome / safeContributors);
-  const expense =
-    personalExpense + Math.round(sharedExpense / safeContributors);
+  // 2. Paychecks: gennemsnit af de seneste 3 per konto. Matcher
+  //    cashflow.ts's forecast-mønster - lønudbetalinger gemmes som
+  //    once-transactions med income_role='primary', og vi bruger
+  //    rullende gennemsnit som månedligt income-tal.
+  const paychecksByAccount = new Map<string, number[]>();
+  for (const p of paychecksRes.data ?? []) {
+    const arr = paychecksByAccount.get(p.account_id) ?? [];
+    if (arr.length < 3) {
+      arr.push(p.amount);
+      paychecksByAccount.set(p.account_id, arr);
+    }
+  }
+  for (const amounts of paychecksByAccount.values()) {
+    if (amounts.length === 0) continue;
+    const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+    income += Math.round(avg);
+  }
+
+  // 3. Transfers ind/ud af mine konti.
+  //    Intern flytning (begge endpoints mine) tæller IKKE - det er bare
+  //    omplacering af samme penge.
+  for (const tr of transfersRes.data ?? []) {
+    const fromMine = myAccountSet.has(tr.from_account_id);
+    const toMine = myAccountSet.has(tr.to_account_id);
+    if (fromMine && toMine) continue; // intern omplacering
+    const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
+    if (monthly === 0) continue;
+    if (fromMine) expense += monthly;
+    if (toMine) income += monthly;
+  }
 
   return { income, expense, net: income - expense };
-}
-
-// Antal bidragsydere i husstanden - matcher CashflowAdvisor's logik
-// fra getAdvisorContext: tæller members med user_id eller email.
-// Børn (begge null) tæller ikke. Min 1.
-export async function getNumContributors(
-  adminClient: SupabaseClient<Database>,
-  householdId: string
-): Promise<number> {
-  const { data: members, error } = await adminClient
-    .from('family_members')
-    .select('user_id, email')
-    .eq('household_id', householdId);
-  if (error) throw error;
-  const contributors = (members ?? []).filter(
-    (m) => m.user_id !== null || m.email !== null
-  );
-  return Math.max(1, contributors.length);
 }
 
 // ----------------------------------------------------------------------------
@@ -174,11 +205,13 @@ function buildTextBody(
 
 Her er din kortfattede oversigt for ${month}:
 
-  Indtægt:   ${formatAmount(summary.income)} kr
-  Udgift:    ${formatAmount(summary.expense)} kr
-  Overskud:  ${formatAmount(summary.net)} kr
+  Ind på dine konti:    ${formatAmount(summary.income)} kr
+  Ud fra dine konti:    ${formatAmount(summary.expense)} kr
+  Tilbage hver måned:   ${formatAmount(summary.net)} kr
 
-Tallene er din egen månedlige run-rate (private konti + din andel af fælles).
+Tallene viser hvad der løber ind og ud af dine egne konti hver måned:
+løn, recurring indtægter, overførsler til fælles/opsparing, og faste
+udgifter på dine private konti.
 
 Åbn FamBud for det fulde overblik: ${appUrl}
 
@@ -222,26 +255,26 @@ function buildHtmlBody(
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td style="padding:12px 0;border-bottom:1px solid #f5f5f4;">
-                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Indtægt</div>
+                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Ind på dine konti</div>
                     <div style="margin-top:4px;font-size:24px;font-weight:600;color:#171717;font-variant-numeric:tabular-nums;">${formatAmount(summary.income)} kr</div>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:12px 0;border-bottom:1px solid #f5f5f4;">
-                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Udgift</div>
+                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Ud fra dine konti</div>
                     <div style="margin-top:4px;font-size:24px;font-weight:600;color:#171717;font-variant-numeric:tabular-nums;">${formatAmount(summary.expense)} kr</div>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:16px 0 12px;">
-                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Overskud</div>
+                    <div style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:0.08em;">Tilbage hver måned</div>
                     <div style="margin-top:4px;font-size:32px;font-weight:700;color:${netColor};font-variant-numeric:tabular-nums;">${formatAmount(summary.net)} kr</div>
                   </td>
                 </tr>
               </table>
 
               <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#525252;">
-                Tallene er din egen månedlige run-rate, beregnet ud fra dine private konti og din andel af jeres fælles økonomi.
+                Tallene viser hvad der løber ind og ud af dine egne konti hver måned: løn, recurring indtægter, overførsler til fælles eller opsparing, og faste udgifter på dine private konti.
               </p>
 
               <div style="margin-top:28px;text-align:center;">

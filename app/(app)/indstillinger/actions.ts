@@ -11,7 +11,6 @@ import { setFlashCookie } from '@/lib/flash';
 import { resolveSiteOrigin } from '@/lib/site-url';
 import {
   getMonthlySummaryForMember,
-  getNumContributors,
   sendMonthlySummaryEmail,
 } from '@/lib/email/monthly-summary';
 
@@ -560,12 +559,10 @@ export async function sendMyMonthlySummaryTest() {
   }
 
   try {
-    const numContributors = await getNumContributors(supabase, householdId);
     const summary = await getMonthlySummaryForMember(
       supabase,
       householdId,
-      me.name,
-      numContributors
+      me.name
     );
 
     const origin = await resolveSiteOrigin();

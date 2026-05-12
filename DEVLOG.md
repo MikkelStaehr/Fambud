@@ -3894,3 +3894,255 @@ nye filer i begge sessioner. Semgrep-reglen håndhæver det automatisk.
   `landing_flow_submissions` → conversion %, segmenteret på
   flow-state (system='none' vs 'sheet' fx). Bygges når der er nok
   data til det giver mening.
+
+---
+
+# Devlog — 12. maj 2026 (lønsedler-eksperiment, månedsmail, wordmark + olive-rebrand)
+
+Stor dag med 15 commits og en hel del "byg, test, juster, revert"-
+iteration. Tre store spor: en lønsedler-feature der blev bygget og
+revertet samme dag, en månedlig retention-email der måtte omskrives
+efter brugertest, og en komplet brand-revamp (font + farver) der
+landede på et clean kompromis.
+
+Migrations: 0060 tilføjet + 0061 dropper det igen + 0062 (monthly
+summary email). Net: én ny migration aktiv på prod.
+
+---
+
+## 1. Lønsedler-eksperiment: byg, test, ript ud
+
+**Commits:** `92e8e49` (PR 6), `12fa39d` (revert)
+
+Brugte 6-7 timer på at bygge en fuld lønseddel-registrerings-feature:
+ny `payslips`-tabel + `payslip_lines` med 12-værdi-enum
+([0060_payslips.sql](supabase/migrations/0060_payslips.sql)),
+per-bruger klassifikations-taxonomi der lærte over tid, fortegns-
+normalisering (brugeren skriver positive tal, server gemmer negative
+for am_bidrag/a_skat osv.), feriesaldo/overarbejde/afspadsering-felter,
+tre routes (`/loensedler`, `/loensedler/ny`, `/loensedler/[id]`),
+form med 4 default-rækker, tooltips på hver kategori, sidebar-entries
+i både NAV_MAIN og NAV_TOOLS.
+
+Brugeren testede det og spurgte simpelt: "hvorfor skulle folk gå ind
+måned efter måned?". Det rigtige spørgsmål. Manuel indtastning af 8-10
+lønseddel-linjer per måned for stabile sager er ren friktion uden
+tilsvarende værdi - feriesaldo og lønfejl-detection kan løses smartere
+via enkelt-felt input eller eksisterende indkomstdata.
+
+Migration 0061 droppede alle tabellerne. ~1700 linjer kode slettet.
+Ingen reel bruger-data tabt (kun lokal test). Hele oprydningen tog
+~30 min fordi vi havde holdt feature'en isoleret i sin egen
+mappe-struktur og kun rørt 2-3 delte filer.
+
+**Næste skridt** der erstatter den droppede idé: "månedlig audit"-agent
+der bruger eksisterende data frem for at kræve nyt input.
+
+---
+
+## 2. Månedlig oversigts-email: retention via Resend
+
+**Commits:** `0318dd8`, `84b3d67`, `8621180`
+
+I stedet for at lade brugeren registrere lønsedler selv: ÉN automatisk
+mail sidst i hver måned med "Ind på dine konti / Ud fra dine konti /
+Tilbage hver måned". Retention-mekanik der minder brugeren om hvorfor
+de betaler 19 kr/md.
+
+**Infrastruktur** ([0062_monthly_summary_email.sql](supabase/migrations/0062_monthly_summary_email.sql)):
+- Nye kolonner på `family_members`: `monthly_summary_email_enabled` (default true)
+  og `last_monthly_summary_sent_at` (idempotency)
+- Vercel Cron schedule `0 6 28 * *` (28. i hver måned, kl. 06:00)
+  konfigureret i ny [vercel.json](vercel.json)
+- Cron-route [/api/cron/monthly-summary](app/api/cron/monthly-summary/route.ts)
+  beskyttet med `Authorization: Bearer ${CRON_SECRET}`
+- Email-template + sender i [lib/email/monthly-summary.ts](lib/email/monthly-summary.ts)
+  med HTML + text-versioner
+
+**Per-person attribution v1** (forkert): summerede recurring income/
+expense på private + fælles-share-baseret-på-numContributors. Mailen
+viste `Indtægt = 0` fordi paychecks gemmes som `recurrence='once'` med
+`income_role='primary'` - vi filtrerede dem væk. Transfers indgik
+heller ikke i udgift.
+
+**Per-person attribution v2** ([8621180](https://github.com/MikkelStaehr/Fambud/commit/8621180)):
+omskrev til **konto-perspektiv**. For hver brugers private konti
+(`accounts.owner_name = familiemember.name`):
+
+- Indtægt = recurring income + gennemsnit af sidste 3 primary-paychecks
+  per konto + transfers IND fra konti der ikke er ens egne
+- Udgift = recurring expense + transfers UD til konti der ikke er ens egne
+- Interne flytninger (begge endpoints mine) tæller IKKE som flow
+
+Email-labels opdateret til at matche modellen: "Ind på dine konti /
+Ud fra dine konti / Tilbage hver måned".
+
+**"Send test til mig selv"-knap** ([84b3d67](https://github.com/MikkelStaehr/Fambud/commit/84b3d67))
+på /indstillinger. Validerer hele pipelinen (data-beregning + Resend +
+deliverability) uden at vente på den månedlige cron. Subject præfikses
+med `[TEST]` via en isTest-flag i `sendMonthlySummaryEmail`. Opdaterer
+ikke `last_monthly_summary_sent_at` så det rigtige månedlige send
+fyrer stadig.
+
+---
+
+## 3. Wordmark-valg: ZT Nature → MADE Awelier Black 900
+
+**Commits:** `40e7b05`, `0cef695`, `4acd4c5`, `2f7a669`, `6b46005`, `264a8e0`
+
+Brugeren havde downloadet fem font-familier til `font/`-mappen
+(MADE Awelier, MADE INFINITY x3 varianter, MADE Voyager, Magnolia,
+ZT Nature). Vi byggede `/wordmark-test` der renderede "fambud" i alle
+fonts × alle vægte × tre størrelser × lys/mørk/emerald baggrund - et
+helt galleri der lod brugeren vælge uden at gætte.
+
+Efter sammenligning + tre justerede kandidater med specifikke
+letter-spacing: **MADE Awelier Black 900 + 0.05em letter-spacing,
+lowercase "fambud"** blev valgt.
+
+**Implementation:**
+- Ny `madeAwelierBlack` i [app/fonts.ts](app/fonts.ts) (kun Black-vægten
+  loades, ~50 KB OTF subset'es ned af Next.js)
+- [FambudMark.tsx](app/_components/FambudMark.tsx) skiftet til ny
+  font, lowercase indhold, inline letter-spacing 0.05em
+- Komponenten flyttet fra `app/(app)/_components/` til `app/_components/`
+  så landing og (app) deler den
+- Hardcoded "Fambud"-strenge på `app/page.tsx` (TopNav + Footer) og
+  alle auth-sider (signup, glemt-kodeord, nyt-kodeord) erstattet med
+  `<FambudMark />`
+- Login fik **hero-størrelse** (`text-7xl sm:text-8xl` = 72/96 px):
+  "BLAST DET IND I ANSIGTET PÅ FOLK"
+
+**Iteration på størrelser:**
+- Først `xl` = `text-3xl sm:text-4xl` på landing top-nav → for lille
+- Bumpet til `text-5xl sm:text-6xl` (48/60 px) → ramte
+- Sidebar `lg` bumpet fra `text-2xl` til `text-3xl sm:text-4xl` (30/36 px)
+  efter brugeren rapporterede det var "alt for småt"
+
+**⚠ LICENS-NOTE:** MADE Awelier er Personal Use. Skal KØBES (~$50 hos
+Fontfabric.com) før prod-deploy. Dokumenteret med tydelige kommentarer
+i `app/fonts.ts` og `FambudMark.tsx` så det ikke glemmes.
+
+---
+
+## 4. Olive-rebrand: byg, prøv, juster, finaliser
+
+**Commits:** `2d568a9`, `e31a249`, `24c81db`, `a756331`
+
+Brugeren gav to farver: **#4B4D39 olive + #EDE6D4 cream**. Bygget
+[/farve-test](app/farve-test/page.tsx) som preview-side med palette-
+swatches (incl. afledte farver: olive-dark for hover, olive-light for
+muted text, muted-lime POSITIVE, muted-terracotta NEGATIVE), wordmark
+i begge farver, CTAs (primary/secondary/disabled), hero-overskrift-
+mockup, dashboard-mockup med "Goddag, Mikkel" + overskud-tal +
+begivenheds-kort. /wordmark-test slettet fordi font-valget var truffet.
+
+Brugeren godkendte med "Okay det er jeg faktisk virkelig vild med".
+
+**Rebrand-strategi** der sparede 272 forekomster af edits i 72 filer:
+override Tailwind 4's farve-tokens i `@theme`-blokken i globals.css.
+Når `--color-emerald-700` redefineres til `#4B4D39`, regenererer
+Tailwind alle `bg-emerald-700` / `text-emerald-700` / `border-emerald-700`
+utilities automatisk. **ÉN fil ændret, hele appen reskinnet.**
+
+**Første forsøg** ([e31a249](https://github.com/MikkelStaehr/Fambud/commit/e31a249)):
+overskrev emerald-skalaen (50→950) + stone-50/100 til cream-tones.
+Resultat: hele appen i olive+cream.
+
+**Justering** ([24c81db](https://github.com/MikkelStaehr/Fambud/commit/24c81db)):
+brugeren rapporterede at dashboardet havde "hvid clash" mod cream-bg.
+Dæmpet `--color-white` til `#FAF7EE` (warm off-white), sidebar
+ændret fra `bg-white` til `bg-stone-100` (deep-cream).
+
+**Final beslutning** ([a756331](https://github.com/MikkelStaehr/Fambud/commit/a756331)):
+brugeren: "det er altså for Femina dameblad. Lad os beholde den
+grønne olivenfarve, det holder fint, men lad os komme tilbage til de
+hvide". Revert cream-baggrund + warm off-white, behold olive-paletten.
+
+**Endeligt resultat:**
+- Olive-skalaen forbliver (alle 11 shades fra `emerald-50` til `emerald-950`)
+- Stone og hvid tilbage til Tailwind-default
+- Sidebar tilbage til hvid
+- App'en føles som arbejdsmiljø med distinkt brand-farve, ikke som
+  lifestyle-magasin
+
+---
+
+## 5. Læringspunkter
+
+**Iteration er ikke "fejl".** Lønsedler-feature'en blev bygget og
+revertet samme dag. Det er ikke spildt arbejde - det er et eksperiment
+der gav et konkret svar ("manuel indtastning hver måned er forkert
+værktøj"). Pivoten til månedlig email-audit blev født af læringen.
+
+**Bruger-feedback før byg = fundament.** Den oprindelige månedsmail
+viste `Indtægt = 0` fordi vi ikke kendte paycheck-format. Havde jeg
+spurgt brugeren "hvilket data forventer du at se?" først, var v1
+korrekt fra start. I stedet brugte vi en brugertestcyklus + omskrivning.
+Ikke billigt. Læring: når data-modellen har subtilitet, get det
+bekræftet på forhånd.
+
+**Theme-tokens > find-and-replace** for visuelle ændringer. Vi rebrandede
+hele app'en uden at røre én komponent ved at override Tailwind 4's
+`@theme`-CSS-variabler. Bevarer komponent-kontrakten, gør revert
+trivielt, og lader brugeren iterate på palette uden frygt for at
+brække noget. Bør bruges som default-mønster for design-system-
+ændringer fremover.
+
+**Brand-stilen kan være kontekst-afhængig.** Olive + cream føltes
+fantastisk på landing/sales-context. Samme palette i app'en føltes
+"for Femina dameblad" - for soft til arbejdsmiljø. Endte med kompromis:
+olive (brand-identitet) + hvid (work-context). Det er en lovlig
+beslutning der ikke kræver to forskellige temaer - olive alene bærer
+identiteten, hvid-baggrund forbliver "funktionelt clean".
+
+**"Useriøst dameblad" er kalibreret feedback.** Når brugeren bruger
+det udtryk er det data, ikke fornærmelse - en ærlig genkendelse af at
+visual-feel ikke matchede use-case. At lytte til den slags præcise
+formuleringer kortere debat-cyklusser.
+
+---
+
+## 6. Status
+
+**Commits:** 15 fra `92e8e49` til `a756331` på main.
+
+**Migrations kørt på prod:**
+- 0060 life_events-PAYSLIPS (kørt + droppet samme dag - reverteret af 0061)
+- 0061 revert_payslips
+- 0062 monthly_summary_email
+
+**Build:** tsc + build clean efter hver commit. Lint clean på touched
+filer.
+
+**Env-vars påkrævet på Vercel før månedsmail virker:**
+- `CRON_SECRET` (generér med `openssl rand -hex 32`)
+- `RESEND_API_KEY` (eksisterende)
+- `RESEND_FROM_EMAIL` (eksisterende)
+- `SITE_URL` (eksisterende)
+
+**Wordmark licens-tilstand:** PERSONAL USE. Skal KØBES før næste
+prod-deploy af `main`.
+
+---
+
+## Åbne tråde
+
+- **MADE Awelier kommerciel licens:** ~$50 hos Fontfabric.com. Skal
+  købes før vi pusher `main` til fambud.dk. Tydeligt dokumenteret
+  i kode med ⚠-markeringer.
+- **Røde elementer + olive-palette:** "slet"-knapper, fejl-bokse,
+  underskud-tal er stadig klart Tailwind-røde (`red-700/800`). Kan
+  overskrives til terracotta-toner (`#A0392E`) for at matche
+  jordtone-paletten - separat commit, hvis ønsket.
+- **Charts har faste palette-farver:** `CashflowGraph` (sankey) og
+  `CategoryGroupChart` bruger hardcoded farve-arrays til kategori-
+  segmentation. Brand-rebrand'en røre dem ikke. Hvis vi vil have
+  olive-tonede charts, skal hver komponent opdateres separat.
+- **Månedlig email - test første rigtige send:** næste 28. i måneden
+  fyrer cron'en automatisk. Worth at watch'e function-logs den dag
+  for fejl. Eller manuelt trigger via test-knap igen næste uge for
+  smoke-test.
+- **Conversion-tracking dashboard:** stadig ikke bygget. Data
+  akkumulerer i `landing_flow_submissions`, men vi har ingen UI til
+  at læse det. Næste sprint kandidat.

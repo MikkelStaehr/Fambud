@@ -12,10 +12,11 @@
 
 type Props = {
   // Kontrol over størrelse:
-  //   sm   = text-sm   (~14 px) - kompakt mobile-nav
-  //   base = text-base (~16 px) - sidebar
-  //   lg   = text-2xl  (~24 px) - login/signup/auth
-  //   xl   = text-3xl  (~30 px) - landing top-nav (markant større)
+  //   sm   = text-sm     (~14 px)   - kompakt mobile-nav
+  //   base = text-base   (~16 px)   - sidebar
+  //   lg   = text-2xl    (~24 px)   - login/signup/auth
+  //   xl   = text-5xl    (~48 px mobile, 60 px desktop)
+  //                                  - landing top-nav (markant større)
   size?: 'sm' | 'base' | 'lg' | 'xl';
   // Hvis brugt på mørk baggrund (fx hero), vendes farven til hvid.
   inverted?: boolean;
@@ -26,7 +27,7 @@ const SIZES = {
   sm: 'text-sm',
   base: 'text-base',
   lg: 'text-2xl',
-  xl: 'text-3xl sm:text-4xl',
+  xl: 'text-5xl sm:text-6xl',
 } as const;
 
 export function FambudMark({ size = 'base', inverted = false, className = '' }: Props) {

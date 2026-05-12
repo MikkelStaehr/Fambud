@@ -3,6 +3,34 @@
 @theme {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* ============================================================================
+   * Brand-rebrand: olive + cream palette
+   * ----------------------------------------------------------------------------
+   * Vi overskriver Tailwind's emerald-skala (brand-primær) og stone-50/100
+   * (varm baggrund) så alle eksisterende bg-emerald-X / text-emerald-X /
+   * bg-stone-50-klasser automatisk rendres i den nye palette, uden at vi
+   * skal røre 272 forekomster i 72 filer.
+   *
+   * Designet på /farve-test og brugergodkendt.
+   * ========================================================================== */
+
+  /* Olive-familie (erstatter emerald) - brand-primær. */
+  --color-emerald-50:  #EFEDD8;
+  --color-emerald-100: #DFDDC2;
+  --color-emerald-200: #C5C5A6;
+  --color-emerald-300: #A8A988;
+  --color-emerald-400: #8B8C6E;
+  --color-emerald-500: #70725A;
+  --color-emerald-600: #5F6244;
+  --color-emerald-700: #4B4D39;
+  --color-emerald-800: #3B3D2B;
+  --color-emerald-900: #2B2D1B;
+  --color-emerald-950: #1B1D0E;
+
+  /* Cream-familie (overskriver stone-50/100) - varm baggrund + zone-fills. */
+  --color-stone-50:  #EDE6D4;
+  --color-stone-100: #E0D8C0;
 }
 
 /* Apply tabular figures whenever this class is set on a money-bearing element.

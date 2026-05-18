@@ -31,10 +31,18 @@ export async function getAccountById(id: string): Promise<Account> {
 }
 
 // Steady-state cashflow per account in monthly øre. "in" tæller penge der
-// ankommer på kontoen (income-transaktioner + indgående overførsler) og
-// "out" tæller penge der forlader kontoen (expense-transaktioner + udgående
-// overførsler). Engangs-poster ('once') tælles ikke med - vi vil have det
-// stabile billede, ikke en bestemt måneds tilfældigheder.
+// ankommer på kontoen og "out" tæller penge der forlader den - normaliseret
+// til kr/md uanset originalt interval.
+//
+// Tre datakilder:
+//   1. Recurring transactions (income/expense via kategori-kind)
+//   2. Recurring transfers (ind/ud mellem konti)
+//   3. Primary-paychecks gemt som recurrence='once' + income_role='primary' -
+//      gennemsnit af de seneste 3 per konto. Lønudbetalinger har ingen
+//      "recurrence" i traditional forstand, men dashboardet bruger
+//      rullende gennemsnit som forecast. Samme mønster her, så lønkonti
+//      viser deres reelle månedlige indtægt på /konti i stedet for "0
+//      indtægt" som de gjorde før (bug spottet ved bruger-test).
 //
 // Bruges af /konti til at erstatte den misvisende opening_balance-saldo med
 // en flow-orienteret repr i tråd med appens cashflow-filosofi.
@@ -43,7 +51,7 @@ export type AccountFlow = { in: number; out: number };
 export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
   const { supabase, householdId } = await getHouseholdContext();
 
-  const [txnsRes, transfersRes] = await Promise.all([
+  const [txnsRes, transfersRes, paychecksRes] = await Promise.all([
     supabase
       .from('transactions')
       .select(
@@ -64,10 +72,23 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
       .select('from_account_id, to_account_id, amount, recurrence')
       .eq('household_id', householdId)
       .neq('recurrence', 'once'),
+    supabase
+      .from('transactions')
+      .select('account_id, amount, occurs_on')
+      .eq('household_id', householdId)
+      .eq('income_role', 'primary')
+      .eq('recurrence', 'once')
+      .order('occurs_on', { ascending: false })
+      .returns<{
+        account_id: string;
+        amount: number;
+        occurs_on: string;
+      }[]>(),
   ]);
 
   if (txnsRes.error) throw txnsRes.error;
   if (transfersRes.error) throw transfersRes.error;
+  if (paychecksRes.error) throw paychecksRes.error;
 
   const flows = new Map<string, AccountFlow>();
   const bump = (id: string, key: 'in' | 'out', amount: number) => {
@@ -87,6 +108,22 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
     const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
     bump(tr.from_account_id, 'out', monthly);
     bump(tr.to_account_id, 'in', monthly);
+  }
+
+  // Paychecks: tag gennemsnit af de seneste 3 per konto. Sortering er
+  // allerede nyeste-først fra query'en.
+  const paychecksByAccount = new Map<string, number[]>();
+  for (const p of paychecksRes.data ?? []) {
+    const arr = paychecksByAccount.get(p.account_id) ?? [];
+    if (arr.length < 3) {
+      arr.push(p.amount);
+      paychecksByAccount.set(p.account_id, arr);
+    }
+  }
+  for (const [accountId, amounts] of paychecksByAccount.entries()) {
+    if (amounts.length === 0) continue;
+    const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+    bump(accountId, 'in', Math.round(avg));
   }
 
   return flows;

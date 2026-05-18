@@ -214,6 +214,7 @@ export function detectCashflowIssues(
 
     const d = perAccount.get(account.id) ?? {
       income: 0,
+      myIncome: 0,
       expense: 0,
       transfersIn: 0,
       transfersOut: 0,

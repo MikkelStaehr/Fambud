@@ -22,7 +22,8 @@ import { effectiveAmount, monthlyEquivalent } from '@/lib/format';
 import { getHouseholdContext } from './auth';
 
 export type AccountCashflowDetail = {
-  income: number;        // monthlyEquivalent af kategori=income transaktioner
+  income: number;        // monthlyEquivalent af kategori=income transaktioner (husstands-totaler)
+  myIncome: number;      // som income, men paychecks filtreret til den indloggede brugers egne
   expense: number;       // monthlyEquivalent af kategori=expense transaktioner
   transfersIn: number;   // monthlyEquivalent af indgående overførsler
   transfersOut: number;  // monthlyEquivalent af udgående overførsler
@@ -43,9 +44,9 @@ export type CashflowGraphData = {
 // cache() memoizer pr. React-request, så getDashboardData og dashboard-page
 // der begge læser cashflow-data ikke laver dobbelt round-trip mod DB'en.
 export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
-  const { supabase, householdId } = await getHouseholdContext();
+  const { supabase, householdId, user } = await getHouseholdContext();
 
-  // Vi henter tre datasæt parallelt:
+  // Vi henter fire datasæt parallelt:
   //   1. Recurring (ikke-once) transaktioner - almindelig income/expense
   //      hvor monthlyEquivalent giver mening
   //   2. Recurring transfers - transfers mellem konti (også monthlyEquivalent)
@@ -54,7 +55,17 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   //      bruger gennemsnit af de seneste 3 som forecast pr. konto, så
   //      lønindkomst dukker op i grafen lige som den tidligere
   //      "Månedsløn"-recurring-transaktion gjorde.
-  const [txnsRes, transfersRes, paychecksRes] = await Promise.all([
+  //   4. Min egen family_member id - bruges til at separere "myIncome"
+  //      (mine paychecks) fra "income" (husstandens samlede paychecks).
+  //      Dashboard'et viser min personlige cashflow-historie og må ikke
+  //      lægge partnerens løn på som min indtægt.
+  const [myMemberRes, txnsRes, transfersRes, paychecksRes] = await Promise.all([
+    supabase
+      .from('family_members')
+      .select('id')
+      .eq('household_id', householdId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
     supabase
       .from('transactions')
       .select(
@@ -90,15 +101,18 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
       }[]>(),
   ]);
 
+  if (myMemberRes.error) throw myMemberRes.error;
   if (txnsRes.error) throw txnsRes.error;
   if (transfersRes.error) throw transfersRes.error;
   if (paychecksRes.error) throw paychecksRes.error;
+
+  const myMemberId = myMemberRes.data?.id ?? null;
 
   const perAccount = new Map<string, AccountCashflowDetail>();
   const detailFor = (id: string) => {
     let d = perAccount.get(id);
     if (!d) {
-      d = { income: 0, expense: 0, transfersIn: 0, transfersOut: 0 };
+      d = { income: 0, myIncome: 0, expense: 0, transfersIn: 0, transfersOut: 0 };
       perAccount.set(id, d);
     }
     return d;
@@ -106,11 +120,19 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
 
   // Aggregér income/expense pr. konto (kanten Indtægter→konto eller
   // konto→Udgifter er summen af alle transaktioner, ikke én pr. række).
+  // Recurring income er konto-niveau (ingen member-attribution) - vi tæller
+  // det med i både income og myIncome fordi "hvad lander på kontoen" er det
+  // samme fra min synsvinkel.
   for (const t of txnsRes.data ?? []) {
     const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
     const monthly = monthlyEquivalent(eff, t.recurrence);
-    if (t.category?.kind === 'income') detailFor(t.account_id).income += monthly;
-    else if (t.category?.kind === 'expense') detailFor(t.account_id).expense += monthly;
+    if (t.category?.kind === 'income') {
+      const d = detailFor(t.account_id);
+      d.income += monthly;
+      d.myIncome += monthly;
+    } else if (t.category?.kind === 'expense') {
+      detailFor(t.account_id).expense += monthly;
+    }
   }
 
   // Forecast fra primary-once paychecks: gruppér efter (account, member),
@@ -118,18 +140,30 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   // PrimaryIncomeForecast-logikken i income.ts. Hvis der er færre end 3
   // paychecks, bruger vi gennemsnittet af det vi har - bedre end ingenting,
   // selvom forecastet er mindre præcist.
-  const paycheckGroups = new Map<string, number[]>();
+  //
+  // Vi sporer member-id pr. gruppe så vi kan tilføje paycheck-gennemsnittet
+  // til "myIncome" KUN hvis det er den indloggede brugers egne paychecks.
+  // Det er dén regel der gør at en delt lønkonto ikke fejlagtigt får begge
+  // medlemmers lønninger lagt sammen som "min indtægt".
+  const paycheckGroups = new Map<string, { memberId: string | null; amounts: number[] }>();
   for (const p of paychecksRes.data ?? []) {
     const key = `${p.account_id}|${p.family_member_id ?? ''}`;
-    const arr = paycheckGroups.get(key) ?? [];
-    if (arr.length < 3) arr.push(p.amount);
-    paycheckGroups.set(key, arr);
+    let grp = paycheckGroups.get(key);
+    if (!grp) {
+      grp = { memberId: p.family_member_id, amounts: [] };
+      paycheckGroups.set(key, grp);
+    }
+    if (grp.amounts.length < 3) grp.amounts.push(p.amount);
   }
-  for (const [key, amounts] of paycheckGroups) {
+  for (const [key, { memberId, amounts }] of paycheckGroups) {
     if (amounts.length === 0) continue;
     const accountId = key.split('|')[0];
     const avg = Math.round(amounts.reduce((s, a) => s + a, 0) / amounts.length);
-    detailFor(accountId).income += avg;
+    const d = detailFor(accountId);
+    d.income += avg;
+    if (memberId != null && memberId === myMemberId) {
+      d.myIncome += avg;
+    }
   }
 
   // Transfers tæller mod hver kontos in/out aggregat (perAccount), MEN vi

@@ -183,9 +183,21 @@ function AccountRow({
   const inAmount = flow?.in ?? 0;
   const outAmount = flow?.out ?? 0;
   const hasFlow = inAmount > 0 || outAmount > 0;
+  // Net flow: positive = overskud, negative = underskud. Vi viser kun
+  // net-linjen når BÅDE in og out er > 0 (typisk daglig-brug-konti).
+  // Rene opsparings-konti har kun in og skal ikke have net-linje.
+  const hasBothFlows = inAmount > 0 && outAmount > 0;
+  const net = inAmount - outAmount;
+  const isDeficit = hasBothFlows && net < 0;
+  const isSurplus = hasBothFlows && net > 0;
   return (
     <div
-      className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${a.archived ? 'opacity-60' : ''}`}
+      // border-l-4 reserveres altid (transparent) så rækker med og uden
+      // underskud-markør har samme indrykning. Underskud-rækker får
+      // amber-tinted border for at kunne spottes ved scrolling.
+      className={`flex flex-col gap-3 border-l-4 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${
+        isDeficit ? 'border-l-amber-500' : 'border-l-transparent'
+      } ${a.archived ? 'opacity-60' : ''}`}
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-neutral-900">
@@ -233,6 +245,17 @@ function AccountRow({
             {outAmount > 0 && (
               <span className="tabnum font-mono text-red-700">
                 Ud −{formatAmount(outAmount)} kr
+              </span>
+            )}
+            {hasBothFlows && (
+              <span
+                className={`tabnum font-mono text-[11px] font-semibold ${
+                  isSurplus ? 'text-emerald-700' : 'text-amber-700'
+                }`}
+              >
+                {isSurplus
+                  ? `+${formatAmount(net)} kr overskud`
+                  : `−${formatAmount(Math.abs(net))} kr underskud`}
               </span>
             )}
             <span className="text-[10px] text-neutral-400">/ måned</span>

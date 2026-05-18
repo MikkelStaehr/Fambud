@@ -17,7 +17,13 @@ import {
   formatLongDateDA,
   formatMonthYearDA,
 } from '@/lib/format';
-import { buildFixFor, detectCashflowIssues } from '@/lib/cashflow-analysis';
+import {
+  buildFixFor,
+  detectCashflowIssues,
+  diagnoseDeficit,
+  type DeficitReason,
+} from '@/lib/cashflow-analysis';
+import type { CashflowIssue } from '@/lib/cashflow-analysis';
 import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import { CashflowGraph } from './_components/CashflowGraph';
 import { CashflowWarnings } from './_components/CashflowWarnings';
@@ -91,16 +97,34 @@ export default async function DashboardPage() {
     .map((f) => f.member.name);
 
   const issues = detectCashflowIssues(accounts, graph.perAccount);
-  const fixes = issues
-    .map((issue) => ({ issue, fix: buildFixFor(issue, accounts, graph.perAccount, ctx) }))
-    .filter((entry) => entry.fix !== null) as {
-    issue: typeof issues[number];
+  const issuesWithFix = issues.map((issue) => ({
+    issue,
+    fix: buildFixFor(issue, accounts, graph.perAccount, ctx),
+  }));
+  const fixes = issuesWithFix.filter((e) => e.fix !== null) as {
+    issue: CashflowIssue;
     fix: NonNullable<ReturnType<typeof buildFixFor>>;
   }[];
+  // Husstands-niveau underskud hvor BRUGERENS egen andel er dækket
+  // (buildFixFor returnerede null), men kontoen samlet set stadig er
+  // i underskud - typisk fordi partneren ikke har sat sin halvdel op.
+  // Diagnoser hver med forklaring til UI'et.
+  const objectiveDeficits: {
+    issue: CashflowIssue;
+    reason: DeficitReason;
+  }[] = issuesWithFix
+    .filter((e) => e.fix === null)
+    .map((e) => ({
+      issue: e.issue,
+      reason: diagnoseDeficit(e.issue.account, ctx),
+    }));
   const visibleAccounts = accounts.filter(
     (a) => !a.archived && a.kind !== 'credit'
   );
-  const deficitAccountIds = new Set(fixes.map((f) => f.issue.account.id));
+  const deficitAccountIds = new Set([
+    ...fixes.map((f) => f.issue.account.id),
+    ...objectiveDeficits.map((d) => d.issue.account.id),
+  ]);
 
 
   const today = new Date();
@@ -152,6 +176,7 @@ export default async function DashboardPage() {
       <div className="mt-8">
         <CashflowWarnings
           fixes={fixes}
+          objectiveDeficits={objectiveDeficits}
           pendingMembers={ctx.pendingMembers}
         />
       </div>

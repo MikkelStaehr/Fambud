@@ -158,6 +158,43 @@ export function buildFixFor(
   };
 }
 
+// Diagnose af et husstands-niveau underskud: HVORFOR dækker indkomne
+// midler ikke kontoens udgifter? Bruges af dashboard-advisoren til at
+// forklare hvorfor en konto er underdækket selv når den indloggede
+// bruger har lagt sin egen halvdel ind.
+//
+// To kilder vi differentierer mellem i V1:
+//   - pending_member: husstanden har family_members med email men ingen
+//     user_id (pre-godkendt, ikke signet up endnu). Hvis konto er
+//     'Fælles' og der er pending-medlemmer, er det den mest sandsynlige
+//     forklaring.
+//   - underfunded: alle aktive bidragsydere har sat overførsler op,
+//     men summen er stadig under outflow. Brugeren skal forhandle med
+//     partneren eller skære udgifter.
+//
+// Mere granulær diagnose (fx "Louise er signet up men har ikke oprettet
+// overførsel endnu") kræver at vi udvider AdvisorContext med en
+// contributors-liste - kan komme i v2.
+export type DeficitReason =
+  | { kind: 'pending_member'; memberNames: string[] }
+  | { kind: 'underfunded' };
+
+export function diagnoseDeficit(
+  account: Account,
+  ctx: AdvisorContext
+): DeficitReason {
+  if (
+    account.owner_name === 'Fælles' &&
+    ctx.pendingMembers.length > 0
+  ) {
+    return {
+      kind: 'pending_member',
+      memberNames: ctx.pendingMembers.map((m) => m.name),
+    };
+  }
+  return { kind: 'underfunded' };
+}
+
 // Regnet ud fra detalje-flow så vi separerer transfers fra
 // expenses/income. En konto kan have transfersOut > income og stadig være
 // "fin" - det er bare en sluse til opsparing. Underdækning kræver at de

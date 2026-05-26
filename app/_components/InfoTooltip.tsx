@@ -72,7 +72,11 @@ export function InfoTooltip({
       {open && (
         <span
           role="tooltip"
-          className={`absolute z-20 w-64 rounded-md border border-neutral-200 bg-white p-3 text-left text-xs leading-relaxed text-neutral-700 shadow-lg ${positionClasses[position]}`}
+          // normal-case/tracking-normal/font-normal nulstiller arvet
+          // overskrift-typografi: tooltips sidder ofte inde i en
+          // `uppercase tracking-wider`-sektionsoverskrift, og uden reset
+          // ville forklaringsteksten blive skrevet HELT MED CAPS.
+          className={`absolute z-20 w-64 rounded-md border border-neutral-200 bg-white p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-neutral-700 shadow-lg ${positionClasses[position]}`}
         >
           {children}
         </span>

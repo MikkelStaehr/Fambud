@@ -44,8 +44,8 @@ function PrivatPanel({ privat }: { privat: PrivatFaellesSummary['privat'] }) {
   const { income, expense, transfersOut, net } = privat;
   const netPositive = net >= 0;
   return (
-    <div className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
-      <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/60 px-4 py-2.5">
+    <div className="rounded-lg border border-emerald-200 bg-white">
+      <div className="flex items-center justify-between rounded-t-lg border-b border-emerald-100 bg-emerald-50/60 px-4 py-2.5">
         <span className="inline-flex items-center gap-2">
           <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Privat
@@ -101,8 +101,8 @@ function FaellesPanel({ faelles }: { faelles: PrivatFaellesSummary['faelles'] })
   const { expense, transfersIn, net } = faelles;
   const covered = net >= 0;
   return (
-    <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-      <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
+    <div className="rounded-lg border border-amber-200 bg-white">
+      <div className="flex items-center justify-between rounded-t-lg border-b border-amber-100 bg-amber-50/60 px-4 py-2.5">
         <span className="inline-flex items-center gap-2">
           <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Fælles
@@ -111,7 +111,7 @@ function FaellesPanel({ faelles }: { faelles: PrivatFaellesSummary['faelles'] })
             Husstandens delte
           </span>
         </span>
-        <InfoTooltip>
+        <InfoTooltip position="left">
           Jeres fælleskonti (Budget, Husholdning, Buffer): hvad de koster om
           måneden, og hvor meget der overføres ind fra husstanden. Et negativt
           tal betyder at de fælles udgifter ikke er fuldt dækket endnu.

@@ -249,7 +249,7 @@ export default async function WizardLonkontoPage({
           Næsten ingen lønudbetalinger er præcis ens - overtid, sygedage,
           ferietillæg, bonus og pension-justeringer giver små udsving fra
           måned til måned. Vi tager gennemsnittet af de seneste 3 udbetalinger
-          som forecast for resten af året, så HeroStatus, cashflow-grafen og
+          som forecast for resten af året, så dashboardet, cashflow-grafen og
           rådighedsbeløb regner ud fra hvad du faktisk får - ikke en
           idealiseret basislønsedlen.
         </p>

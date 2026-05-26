@@ -52,6 +52,14 @@ export const getHouseholdContext = cache(async () => {
   return { supabase, householdId: data.household_id, user };
 });
 
+// Den indloggede brugers auth-id. Bruges fx af /konti til at klassificere
+// konti som Privat (created_by === mig) vs Fælles. Tynd wrapper over den
+// cachede getHouseholdContext, så det ikke koster en ekstra DB-tur.
+export async function getCurrentUserId(): Promise<string> {
+  const { user } = await getHouseholdContext();
+  return user.id;
+}
+
 // Wizard / onboarding helpers - used by the (app) layout to gate access and
 // by the wizard pages to read user-specific state.
 

@@ -30,23 +30,31 @@ export async function getAccountById(id: string): Promise<Account> {
   return data;
 }
 
-// Steady-state cashflow per account in monthly øre. "in" tæller penge der
-// ankommer på kontoen og "out" tæller penge der forlader den - normaliseret
-// til kr/md uanset originalt interval.
+// Steady-state cashflow per account in monthly øre, opdelt på kilde så
+// /konti kan vise "udgifter" og "overført til andre konti" hver for sig
+// (de er to vidt forskellige ting: forbrug vs. flytning af egne penge).
 //
-// Tre datakilder:
+// Datakilder:
 //   1. Recurring transactions (income/expense via kategori-kind)
 //   2. Recurring transfers (ind/ud mellem konti)
-//   3. Primary-paychecks gemt som recurrence='once' + income_role='primary' -
-//      gennemsnit af de seneste 3 per konto. Lønudbetalinger har ingen
-//      "recurrence" i traditional forstand, men dashboardet bruger
-//      rullende gennemsnit som forecast. Samme mønster her, så lønkonti
-//      viser deres reelle månedlige indtægt på /konti i stedet for "0
-//      indtægt" som de gjorde før (bug spottet ved bruger-test).
+//   3. Primary-paychecks gemt som recurrence='once' + income_role='primary'.
+//      VIGTIGT: vi grupperer pr. (konto, family_member) og tager de 3 seneste
+//      for HVER person hver for sig, og summer derefter. Tidligere tog vi
+//      gennemsnit af de 3 seneste paychecks på kontoen UANSET hvem de
+//      tilhørte - hvis to personer havde lønsedler på samme konto blev "de
+//      seneste 3" en meningsløs blanding (bug spottet ved bruger-test:
+//      /konti viste 26.233 mens /indkomst-forecast og dashboard viste
+//      31.396). Vi viser kontoens FAKTISKE samlede indtægt - hver lønkonto
+//      tilhører normalt én person, så det er typisk dén persons løn.
 //
 // Bruges af /konti til at erstatte den misvisende opening_balance-saldo med
 // en flow-orienteret repr i tråd med appens cashflow-filosofi.
-export type AccountFlow = { in: number; out: number };
+export type AccountFlow = {
+  income: number;        // kontoens samlede indtægt (recurring income + paychecks pr. person)
+  transfersIn: number;   // overført ind fra andre konti
+  expense: number;       // faste udgifter PÅ kontoen
+  transfersOut: number;  // overført ud til andre konti
+};
 
 export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
   const { supabase, householdId } = await getHouseholdContext();
@@ -74,13 +82,14 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
       .neq('recurrence', 'once'),
     supabase
       .from('transactions')
-      .select('account_id, amount, occurs_on')
+      .select('account_id, family_member_id, amount, occurs_on')
       .eq('household_id', householdId)
       .eq('income_role', 'primary')
       .eq('recurrence', 'once')
       .order('occurs_on', { ascending: false })
       .returns<{
         account_id: string;
+        family_member_id: string | null;
         amount: number;
         occurs_on: string;
       }[]>(),
@@ -91,39 +100,45 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
   if (paychecksRes.error) throw paychecksRes.error;
 
   const flows = new Map<string, AccountFlow>();
-  const bump = (id: string, key: 'in' | 'out', amount: number) => {
-    const cur = flows.get(id) ?? { in: 0, out: 0 };
-    cur[key] += amount;
-    flows.set(id, cur);
+  const flowFor = (id: string): AccountFlow => {
+    let cur = flows.get(id);
+    if (!cur) {
+      cur = { income: 0, transfersIn: 0, expense: 0, transfersOut: 0 };
+      flows.set(id, cur);
+    }
+    return cur;
   };
 
   for (const t of txnsRes.data ?? []) {
     const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
     const monthly = monthlyEquivalent(eff, t.recurrence);
-    if (t.category?.kind === 'income') bump(t.account_id, 'in', monthly);
-    else if (t.category?.kind === 'expense') bump(t.account_id, 'out', monthly);
+    if (t.category?.kind === 'income') flowFor(t.account_id).income += monthly;
+    else if (t.category?.kind === 'expense') flowFor(t.account_id).expense += monthly;
   }
 
   for (const tr of transfersRes.data ?? []) {
     const monthly = monthlyEquivalent(tr.amount, tr.recurrence);
-    bump(tr.from_account_id, 'out', monthly);
-    bump(tr.to_account_id, 'in', monthly);
+    flowFor(tr.from_account_id).transfersOut += monthly;
+    flowFor(tr.to_account_id).transfersIn += monthly;
   }
 
-  // Paychecks: tag gennemsnit af de seneste 3 per konto. Sortering er
-  // allerede nyeste-først fra query'en.
-  const paychecksByAccount = new Map<string, number[]>();
+  // Paychecks: gruppér pr. (konto, member), tag de 3 seneste for HVER person,
+  // average hver person for sig, og summer derefter ind på kontoen. Det giver
+  // kontoens reelle samlede indtægt uden den gamle "blandet-by-date"-bug.
+  const paycheckGroups = new Map<string, { accountId: string; amounts: number[] }>();
   for (const p of paychecksRes.data ?? []) {
-    const arr = paychecksByAccount.get(p.account_id) ?? [];
-    if (arr.length < 3) {
-      arr.push(p.amount);
-      paychecksByAccount.set(p.account_id, arr);
+    const key = `${p.account_id}|${p.family_member_id ?? ''}`;
+    let grp = paycheckGroups.get(key);
+    if (!grp) {
+      grp = { accountId: p.account_id, amounts: [] };
+      paycheckGroups.set(key, grp);
     }
+    if (grp.amounts.length < 3) grp.amounts.push(p.amount);
   }
-  for (const [accountId, amounts] of paychecksByAccount.entries()) {
+  for (const { accountId, amounts } of paycheckGroups.values()) {
     if (amounts.length === 0) continue;
     const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
-    bump(accountId, 'in', Math.round(avg));
+    flowFor(accountId).income += Math.round(avg);
   }
 
   return flows;

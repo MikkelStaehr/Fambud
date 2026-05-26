@@ -47,7 +47,7 @@ export async function IncomeForecastBanner() {
           <InfoTooltip>
             Forecast = gennemsnit af de 3 seneste lønudbetalinger pr.
             person. Fanger udsving fra overtid, ferietillæg og bonus så
-            HeroStatus + cashflow viser hvad I faktisk får - ikke en
+            dashboardet og cashflow viser hvad I faktisk får - ikke en
             idealiseret basisløn. Med 1-2 paychecks bruger vi gennemsnittet
             af det vi har; med 3+ er det præcist.
           </InfoTooltip>

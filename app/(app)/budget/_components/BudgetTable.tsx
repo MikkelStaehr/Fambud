@@ -268,7 +268,7 @@ export function BudgetTable({ rows }: Props) {
                 : 'text-neutral-600 hover:text-neutral-900'
             }`}
           >
-            Private{' '}
+            Privat{' '}
             <span className="tabnum ml-1 font-mono opacity-70">
               {formatAmount(privateTotal * mult)} kr/{periodShort}
             </span>

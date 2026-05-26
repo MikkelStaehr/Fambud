@@ -4,12 +4,10 @@ import {
   getCashflowGraph,
   getCurrentMemberFirstName,
   getDashboardData,
-  getFamilyMembers,
   getLifeEvents,
   getMonthlyExpensesByGroup,
   getOnboardingProgress,
   getOtherMembersOnboardingStatus,
-  getPrimaryIncomeForecast,
   getUpcomingEvents,
   shouldShowTour,
 } from '@/lib/dal';
@@ -19,6 +17,7 @@ import {
 } from '@/lib/format';
 import {
   buildFixFor,
+  computePrivatFaelles,
   detectCashflowIssues,
   diagnoseDeficit,
   type DeficitReason,
@@ -30,7 +29,7 @@ import { CashflowWarnings } from './_components/CashflowWarnings';
 import { CategoryGroupChart } from './_components/CategoryGroupChart';
 import { DashboardTour } from './_components/DashboardTour';
 import { FamilyStatus } from './_components/FamilyStatus';
-import { HeroStatus } from './_components/HeroStatus';
+import { PrivatFaellesOverview } from './_components/PrivatFaellesOverview';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { LifeEventsWidget } from './_components/LifeEventsWidget';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
@@ -52,7 +51,7 @@ export default async function DashboardPage() {
   // memoized data via React's cache() så både getDashboardData (intern
   // monthlyTotals-aggregering) og CashflowGraph-rendering deler én DB-tur.
   const [
-    { monthlyTotals, yearMonth },
+    { yearMonth },
     onboardingProgress,
     firstName,
     accounts,
@@ -60,7 +59,6 @@ export default async function DashboardPage() {
     ctx,
     expenseGroups,
     upcomingEvents,
-    familyMembers,
     otherMembersStatus,
     lifeEvents,
     shouldAutoStartTour,
@@ -73,28 +71,10 @@ export default async function DashboardPage() {
     getAdvisorContext(),
     getMonthlyExpensesByGroup(),
     getUpcomingEvents(),
-    getFamilyMembers(),
     getOtherMembersOnboardingStatus(),
     getLifeEvents(),
     shouldShowTour('dashboard'),
   ]);
-
-  // "Manglende bidragydere" til HeroStatus: familiemedlemmer der har sat
-  // primary_income_source men endnu ikke har én eneste paycheck registreret.
-  // Når der er sådanne, er et tilsyneladende underskud sandsynligvis bare
-  // "venter på data" og bør ikke alarmere.
-  const incomeContributors = familyMembers.filter(
-    (m) => m.primary_income_source != null
-  );
-  const forecastChecks = await Promise.all(
-    incomeContributors.map(async (m) => ({
-      member: m,
-      forecast: await getPrimaryIncomeForecast(m.id),
-    }))
-  );
-  const missingIncomeContributors = forecastChecks
-    .filter((f) => f.forecast.paychecksUsed === 0)
-    .map((f) => f.member.name);
 
   const issues = detectCashflowIssues(accounts, graph.perAccount);
   const issuesWithFix = issues.map((issue) => ({
@@ -126,6 +106,14 @@ export default async function DashboardPage() {
     ...objectiveDeficits.map((d) => d.issue.account.id),
   ]);
 
+  // Privat/Fælles-oversigten: den gennemgående røde tråd. Samme
+  // klassificering bruges på alle sider via computePrivatFaelles.
+  const privatFaelles = computePrivatFaelles(
+    accounts,
+    graph.perAccount,
+    ctx.currentUserId
+  );
+
 
   const today = new Date();
   const longDate = formatLongDateDA(today);
@@ -135,8 +123,6 @@ export default async function DashboardPage() {
 
   const greeting = greetingFor(today);
   const personalGreeting = firstName ? `${greeting}, ${firstName}` : greeting;
-
-  const { income, expense, net } = monthlyTotals;
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -162,16 +148,10 @@ export default async function DashboardPage() {
       <IncomeForecastBanner />
 
       {/* Tier 1 - det brugeren skal se lynhurtigt:
-          1. HeroStatus: "Er du på rette spor?" (netto + statustekst)
+          1. Din måned: Privat + Fælles klart adskilt (den røde tråd)
           2. Cashflow-tjek (advarsler - kompakt, fuld bredde)
           3. To-kolonne: Næste 7 dage + Udgifter pr. gruppe */}
-      <HeroStatus
-        income={income}
-        expense={expense}
-        net={net}
-        monthLabel={monthCap}
-        missingIncomeContributors={missingIncomeContributors}
-      />
+      <PrivatFaellesOverview summary={privatFaelles} monthLabel={monthCap} />
 
       <div className="mt-8">
         <CashflowWarnings

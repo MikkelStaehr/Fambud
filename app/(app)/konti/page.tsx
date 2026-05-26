@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import { Plus, Pencil, Archive, ArchiveRestore } from 'lucide-react';
-import { getAccounts, getAccountFlows, shouldShowTour, type AccountFlow } from '@/lib/dal';
+import {
+  getAccounts,
+  getAccountFlows,
+  getCurrentUserId,
+  shouldShowTour,
+  type AccountFlow,
+} from '@/lib/dal';
+import { classifyAccountTrack, type AccountTrack } from '@/lib/cashflow-analysis';
 import { KontiTour } from './_components/KontiTour';
 import {
   ACCOUNT_KIND_LABEL_DA,
@@ -11,33 +18,41 @@ import {
 import { archiveAccount, restoreAccount } from './actions';
 import type { Account, AccountKind } from '@/lib/database.types';
 
-// Sektioner på /konti grupperer konti efter formål, så man hurtigt kan se
-// hvad der hører hvor - i stedet for én lang flad liste. Lån (kind='credit')
-// vises ikke her; de bor på /laan og linkes nederst.
-const SECTION_GROUPS: {
-  key: string;
+// /konti følger appens gennemgående røde tråd: konti deles i to spor,
+// Privat og Fælles. Inden for hvert spor grupperes efter formål (daglig
+// brug / opsparing / andet) så man hurtigt kan se hvad der hører hvor.
+// Lån (kind='credit') vises ikke her; de bor på /laan og linkes nederst.
+const TRACKS: {
+  track: Exclude<AccountTrack, 'other'>;
   label: string;
   description: string;
-  kinds: AccountKind[];
+  badgeClass: string;
+  borderClass: string;
 }[] = [
   {
-    key: 'daily',
-    label: 'Daglig brug',
-    description: 'Lønkonto, budget, husholdning og kontanter',
-    kinds: ['checking', 'budget', 'household', 'cash'],
+    track: 'privat',
+    label: 'Privat',
+    description: 'Dine egne konti',
+    badgeClass: 'bg-emerald-700',
+    borderClass: 'border-emerald-200',
   },
   {
-    key: 'savings',
-    label: 'Opsparing & investering',
-    description: 'Bufferopsparing, mål-opsparing og depoter',
-    kinds: ['savings', 'investment'],
+    track: 'faelles',
+    label: 'Fælles',
+    description: 'Husstandens delte konti',
+    badgeClass: 'bg-amber-700',
+    borderClass: 'border-amber-200',
   },
-  {
-    key: 'other',
-    label: 'Andet',
-    description: 'Konti der ikke passer i en af kategorierne',
-    kinds: ['other'],
-  },
+];
+
+const PURPOSE_GROUPS: {
+  key: string;
+  label: string;
+  kinds: AccountKind[];
+}[] = [
+  { key: 'daily', label: 'Daglig brug', kinds: ['checking', 'budget', 'household', 'cash'] },
+  { key: 'savings', label: 'Opsparing & investering', kinds: ['savings', 'investment'] },
+  { key: 'other', label: 'Andet', kinds: ['other'] },
 ];
 
 export default async function KontiPage({
@@ -47,9 +62,10 @@ export default async function KontiPage({
 }) {
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const [accounts, flows, autoStartTour] = await Promise.all([
+  const [accounts, flows, currentUserId, autoStartTour] = await Promise.all([
     getAccounts({ includeArchived: showArchived }),
     getAccountFlows(),
+    getCurrentUserId(),
     shouldShowTour('konti'),
   ]);
 
@@ -63,6 +79,15 @@ export default async function KontiPage({
   const activeAccounts = nonLoan.filter((a) => !a.archived);
   const archivedAccounts = nonLoan.filter((a) => a.archived);
 
+  // Klassificér aktive konti i Privat / Fælles (samme regel som dashboardet).
+  // 'other' = partnerens private konti; de vises ikke i mit overblik.
+  const accountsByTrack = (track: Exclude<AccountTrack, 'other'>) =>
+    activeAccounts.filter((a) => classifyAccountTrack(a, currentUserId) === track);
+  const shownCount = TRACKS.reduce(
+    (sum, t) => sum + accountsByTrack(t.track).length,
+    0
+  );
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <KontiTour autoStart={autoStartTour} />
@@ -72,7 +97,7 @@ export default async function KontiPage({
             Konti
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            {activeAccounts.length} {activeAccounts.length === 1 ? 'konto' : 'konti'}
+            {shownCount} {shownCount === 1 ? 'konto' : 'konti'}
             {showArchived && archivedAccounts.length > 0
               ? ` · ${archivedAccounts.length} arkiveret`
               : ''}
@@ -99,17 +124,21 @@ export default async function KontiPage({
         </div>
       </header>
 
-      <div data-tour="konti-sections" className="mt-6 space-y-6">
-        {SECTION_GROUPS.map((g) => {
-          const inGroup = activeAccounts.filter((a) => g.kinds.includes(a.kind));
+      <div data-tour="konti-sections" className="mt-6 space-y-8">
+        {TRACKS.map((t) => {
+          const trackAccounts = accountsByTrack(t.track);
           return (
-            <section key={g.key}>
-              <div className="flex items-end justify-between">
-                <div>
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                    {g.label}
-                  </h2>
-                  <p className="mt-0.5 text-xs text-neutral-400">{g.description}</p>
+            <section key={t.track}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ${t.badgeClass}`}
+                  >
+                    {t.label}
+                  </span>
+                  <span className="text-sm font-medium text-neutral-900">
+                    {t.description}
+                  </span>
                 </div>
                 <Link
                   href="/konti/ny"
@@ -120,21 +149,38 @@ export default async function KontiPage({
                 </Link>
               </div>
 
-              <div className="mt-2 overflow-hidden rounded-md border border-neutral-200 bg-white">
-                {inGroup.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-neutral-400">
-                    Ingen konti i denne kategori
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-neutral-100">
-                    {inGroup.map((a) => (
-                      <li key={a.id}>
-                        <AccountRow account={a} flow={flows.get(a.id)} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {trackAccounts.length === 0 ? (
+                <div className={`overflow-hidden rounded-md border ${t.borderClass} bg-white px-4 py-6 text-center text-sm text-neutral-400`}>
+                  {t.track === 'privat'
+                    ? 'Ingen private konti endnu'
+                    : 'Ingen fælleskonti endnu'}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {PURPOSE_GROUPS.map((g) => {
+                    const inGroup = trackAccounts.filter((a) =>
+                      g.kinds.includes(a.kind)
+                    );
+                    if (inGroup.length === 0) return null;
+                    return (
+                      <div key={g.key}>
+                        <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                          {g.label}
+                        </h3>
+                        <div className={`overflow-hidden rounded-md border ${t.borderClass} bg-white`}>
+                          <ul className="divide-y divide-neutral-100">
+                            {inGroup.map((a) => (
+                              <li key={a.id}>
+                                <AccountRow account={a} flow={flows.get(a.id)} />
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           );
         })}
@@ -180,8 +226,12 @@ function AccountRow({
   account: Account;
   flow: AccountFlow | undefined;
 }) {
-  const inAmount = flow?.in ?? 0;
-  const outAmount = flow?.out ?? 0;
+  const income = flow?.income ?? 0;
+  const transfersIn = flow?.transfersIn ?? 0;
+  const expense = flow?.expense ?? 0;
+  const transfersOut = flow?.transfersOut ?? 0;
+  const inAmount = income + transfersIn;
+  const outAmount = expense + transfersOut;
   const hasFlow = inAmount > 0 || outAmount > 0;
   // Net flow: positive = overskud, negative = underskud. Vi viser kun
   // net-linjen når BÅDE in og out er > 0 (typisk daglig-brug-konti).
@@ -242,9 +292,18 @@ function AccountRow({
                 Ind +{formatAmount(inAmount)} kr
               </span>
             )}
-            {outAmount > 0 && (
+            {/* "Ud" splittet i to: faste udgifter (forbrug) og overførsler
+                til andre konti (flytning af egne penge). Det er to vidt
+                forskellige ting og blev tidligere lagt sammen til ét
+                misvisende "Ud"-tal. */}
+            {expense > 0 && (
               <span className="tabnum font-mono text-red-700">
-                Ud −{formatAmount(outAmount)} kr
+                Udgifter −{formatAmount(expense)} kr
+              </span>
+            )}
+            {transfersOut > 0 && (
+              <span className="tabnum font-mono text-neutral-500">
+                Overført −{formatAmount(transfersOut)} kr
               </span>
             )}
             {hasBothFlows && (

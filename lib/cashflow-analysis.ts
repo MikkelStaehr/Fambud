@@ -195,6 +195,101 @@ export function diagnoseDeficit(
   return { kind: 'underfunded' };
 }
 
+// ----------------------------------------------------------------------------
+// Privat / Fælles - den gennemgående "røde tråd" på tværs af alle sider
+// ----------------------------------------------------------------------------
+// Hele appen skelner mellem to klart adskilte spor, og INTET tal blander dem:
+//   • Privat  = den indloggede brugers egen økonomi (egne paychecks, eget
+//               privat forbrug, egne overførsler ud). Klassificeres som
+//               konti der IKKE er 'Fælles' og er oprettet af brugeren selv.
+//   • Fælles  = husstandens delte konti (owner_name='Fælles': Budget,
+//               Husholdning, Buffer, lån). Begge partnere bidrager.
+//
+// Partnerens private konti (oprettet af en anden, ikke-Fælles) tælles IKKE
+// med - de er private for partneren. Partnerens INDKOMST vises kun på
+// /indkomst (via RLS-policy 0063), ikke i Privat/Fælles-aggregeringen her.
+//
+// Vi bruger myIncome (ikke income) til Privat, så en evt. delt lønkonto ikke
+// lægger partnerens løn på som din indtægt - samme regel som dashboard-grafen.
+export type PrivatFaellesSummary = {
+  privat: {
+    income: number;        // mine paychecks + recurring income på mine konti
+    expense: number;       // mit private forbrug
+    transfersOut: number;  // overført ud (til fælles + egen opsparing)
+    net: number;           // income - expense - transfersOut
+  };
+  faelles: {
+    expense: number;       // udgifter på fælleskonti
+    transfersIn: number;   // overført ind til fælleskonti (begge partnere)
+    net: number;           // transfersIn - expense (negativ = underdækket)
+  };
+};
+
+// Per-konto klassificering - den ENE kilde til sandhed om hvilket spor en
+// konto hører til. Bruges af både dashboardet (aggregering) og /konti
+// (gruppering), så en konto altid lander samme sted overalt.
+//   • faelles = owner_name 'Fælles' (Budget, Husholdning, Buffer, lån)
+//   • privat  = mine egne konti (oprettet af mig, ikke fælles) - inkl.
+//               børnekonti jeg administrerer
+//   • other   = partnerens egne private konti (ekskluderes fra mit overblik)
+export type AccountTrack = 'privat' | 'faelles' | 'other';
+
+export function classifyAccountTrack(
+  account: Pick<Account, 'owner_name' | 'created_by'>,
+  currentUserId: string
+): AccountTrack {
+  if (account.owner_name === 'Fælles') return 'faelles';
+  if (account.created_by === currentUserId) return 'privat';
+  return 'other';
+}
+
+export function computePrivatFaelles(
+  accounts: Account[],
+  perAccount: Map<string, AccountCashflowDetail>,
+  currentUserId: string
+): PrivatFaellesSummary {
+  let pIncome = 0;
+  let pExpense = 0;
+  let pTransfersOut = 0;
+  let fExpense = 0;
+  let fTransfersIn = 0;
+
+  for (const a of accounts) {
+    if (a.archived) continue;
+    // Lån håndteres på /laan og er ikke en del af det månedlige cashflow her.
+    if (a.kind === 'credit') continue;
+    const d = perAccount.get(a.id);
+    if (!d) continue;
+
+    const track = classifyAccountTrack(a, currentUserId);
+    if (track === 'faelles') {
+      fExpense += d.expense;
+      fTransfersIn += d.transfersIn;
+    } else if (track === 'privat') {
+      // Mine egne konti. myIncome sikrer at en evt. delt lønkonto ikke
+      // tæller partnerens løn med.
+      pIncome += d.myIncome;
+      pExpense += d.expense;
+      pTransfersOut += d.transfersOut;
+    }
+    // track === 'other': partnerens private konto - ekskluderet fra begge.
+  }
+
+  return {
+    privat: {
+      income: pIncome,
+      expense: pExpense,
+      transfersOut: pTransfersOut,
+      net: pIncome - pExpense - pTransfersOut,
+    },
+    faelles: {
+      expense: fExpense,
+      transfersIn: fTransfersIn,
+      net: fTransfersIn - fExpense,
+    },
+  };
+}
+
 // Regnet ud fra detalje-flow så vi separerer transfers fra
 // expenses/income. En konto kan have transfersOut > income og stadig være
 // "fin" - det er bare en sluse til opsparing. Underdækning kræver at de

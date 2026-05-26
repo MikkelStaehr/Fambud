@@ -67,7 +67,7 @@ export function CategoryGroupChart({ privateGroups, sharedGroups }: Props) {
               : 'text-neutral-600 hover:text-neutral-900'
           }`}
         >
-          Private
+          Privat
         </button>
       </div>
 

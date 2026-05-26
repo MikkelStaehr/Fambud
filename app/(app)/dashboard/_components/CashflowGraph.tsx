@@ -151,7 +151,7 @@ export function CashflowGraph({
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-neutral-500">
         <Legend color={INCOME_FILL} label="Indtægt / overført ind" />
-        <Legend color={TYPE_FILL.private} label="Private udgifter" />
+        <Legend color={TYPE_FILL.private} label="Privat forbrug" />
         <Legend color={TYPE_FILL.shared} label="Til fælles" />
         <Legend color={TYPE_FILL.savings} label="Til opsparing" />
       </div>
@@ -178,7 +178,7 @@ function AccountWaterfall({
   // med - dashboardet er min personlige historie) + transfers ind. På
   // Fælles Budget er myIncome=0 men transfersIn er hele inflow'et.
   const isShared = account.owner_name === 'Fælles';
-  const expenseLabel = isShared ? 'Faste udgifter' : 'Private udgifter';
+  const expenseLabel = isShared ? 'Faste udgifter' : 'Privat forbrug';
 
   type Outflow = { label: string; type: OutflowType; amount: number };
   const outflows: Outflow[] = [];

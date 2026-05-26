@@ -1,9 +1,16 @@
 import { Sparkles } from 'lucide-react';
 import { getEconomyPlanData } from '@/lib/dal';
-import { splitFaellesExpenses, bufferRecommendation } from '@/lib/economy-plan';
+import {
+  splitFaellesExpenses,
+  bufferRecommendation,
+  computeFiftyThirtyTwenty,
+} from '@/lib/economy-plan';
 import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import { FaellesSplitSection } from './_components/FaellesSplitSection';
 import { BufferSection } from './_components/BufferSection';
+import { AllokerSection } from './_components/AllokerSection';
+import { FiftyThirtyTwentySection } from './_components/FiftyThirtyTwentySection';
+import { LaaneoptimeringSection } from './_components/LaaneoptimeringSection';
 
 // Økonomi-rådgiveren: analyserer det husstanden har indtastet og foreslår en
 // konkret opsætning. Bygges i faser - denne første dækker fordelingen af de
@@ -17,6 +24,19 @@ export default async function RaadgiverPage() {
     plan.monthlyFixedExpenses,
     plan.bufferMonthlyContribution
   );
+  const bufferOnTrack =
+    buffer.monthsAtCurrentRate != null &&
+    buffer.monthsAtCurrentRate <= buffer.reachInMonths;
+
+  // 50/30/20 på den indloggede brugers egen økonomi (privacy-sikkert).
+  const meMember = plan.members.find((m) => m.userId === plan.currentUserId);
+  const ftt = meMember
+    ? computeFiftyThirtyTwenty({
+        income: meMember.monthlyIncome,
+        faellesContribution: meMember.currentContribution,
+        privateGroups: plan.privateExpenseGroups,
+      })
+    : null;
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -77,6 +97,71 @@ export default async function RaadgiverPage() {
           monthlyLoanPayments={plan.monthlyLoanPayments}
           hasLoans={plan.hasLoans}
         />
+      </section>
+
+      {/* Sektion: Allokér dit overskud */}
+      <section className="mt-8">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+            Privat
+          </span>
+          <h2 className="text-sm font-medium text-neutral-900">
+            Allokér dit overskud
+          </h2>
+          <InfoTooltip>
+            En prioritering af det du har tilbage hver måned. Baseret på dit
+            faktiske overskud - ikke et opdigtet beløb. Rækkefølgen følger
+            klassisk personlig økonomi: sikkerhed (buffer) før dyr gæld før
+            langsigtet opsparing.
+          </InfoTooltip>
+        </div>
+
+        <AllokerSection
+          surplus={plan.privatSurplus}
+          bufferOnTrack={bufferOnTrack}
+          mostExpensiveLoan={plan.mostExpensiveLoan}
+        />
+      </section>
+
+      {/* Sektion: 50/30/20-budgetmodel */}
+      {ftt && (
+        <section className="mt-8">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+              Privat
+            </span>
+            <h2 className="text-sm font-medium text-neutral-900">
+              50/30/20-budgetmodel
+            </h2>
+            <InfoTooltip>
+              En klassisk tommelfingerregel: ca. 50% af nettoindkomsten til
+              nødvendigheder, 30% til forbrug, 20% til opsparing. Vist for din
+              egen økonomi (partnerens private forbrug er skjult). Klassificeringen
+              er gennemsigtig, så du kan vurdere om den passer.
+            </InfoTooltip>
+          </div>
+
+          <FiftyThirtyTwentySection ftt={ftt} />
+        </section>
+      )}
+
+      {/* Sektion: Låneoptimering */}
+      <section className="mt-8">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+            Fælles
+          </span>
+          <h2 className="text-sm font-medium text-neutral-900">
+            Låneoptimering
+          </h2>
+          <InfoTooltip>
+            Hvilket lån skal ekstra afdrag på først? Avalanche (højeste rente
+            først) sparer mest i renter; snowball (mindste lån først) giver en
+            hurtig sejr. Tallene er beregnet ud fra restgæld, rente og ydelse.
+          </InfoTooltip>
+        </div>
+
+        <LaaneoptimeringSection loans={plan.loans} />
       </section>
     </div>
   );

@@ -4,6 +4,7 @@
 // her henter og former vi bare rådata.
 
 import { monthlyEquivalent } from '@/lib/format';
+import { computePrivatFaelles } from '@/lib/cashflow-analysis';
 import { getHouseholdContext } from './auth';
 import { getCashflowGraph } from './cashflow';
 import { getAdvisorContext } from './advisor';
@@ -12,7 +13,9 @@ import { getFamilyMembers } from './family';
 import { getPrimaryIncomeForecast } from './income';
 import { getHouseholdFinancialSummary } from './dashboard';
 import { getLoans } from './loans';
+import { getMonthlyExpensesByGroup } from './expenses-by-category';
 import type { PlanMember } from '@/lib/economy-plan';
+import type { CategoryGroup } from '@/lib/categories';
 
 export type EconomyPlanData = {
   members: PlanMember[];
@@ -31,6 +34,30 @@ export type EconomyPlanData = {
   // ikke naivt foreslår at "finde" nye penge i budgettet.
   monthlyLoanPayments: number;
   hasLoans: boolean;
+  // Dyreste lån (højeste rente) - til "ekstra afdrag her sparer mest"-råd,
+  // med restgæld + ydelse så vi kan beregne håndgribelig effekt.
+  mostExpensiveLoan: {
+    name: string;
+    rate: number;
+    balance: number;        // restgæld (øre)
+    monthlyPayment: number; // ydelse normaliseret til kr/md (øre)
+  } | null;
+  // Alle lån - til låneoptimering (avalanche vs snowball).
+  loans: {
+    id: string;
+    name: string;
+    balance: number;
+    rate: number | null;
+    monthlyPayment: number;
+  }[];
+  // Den indloggede brugers uallokerede overskud/md (= dashboardets "tilbage
+  // hver måned"): indkomst minus privat forbrug minus alle overførsler ud.
+  // Det er de penge der reelt er fri til at allokere.
+  privatSurplus: number;
+  // Den indloggede brugers private udgifter pr. kategori-gruppe - til
+  // 50/30/20-modellen. (Partnerens private udgifter er skjult via RLS, så
+  // dette er kun brugerens egne grupper.)
+  privateExpenseGroups: { group: CategoryGroup; monthly: number }[];
   // Brugerens lønkonto - kilde til de Opret-overførsler rådgiveren foreslår.
   suggestedSourceId: string | null;
   suggestedSourceName: string | null;
@@ -42,7 +69,7 @@ export type EconomyPlanData = {
 export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   const { user } = await getHouseholdContext();
 
-  const [familyMembers, graph, ctx, accounts, financial, loans] =
+  const [familyMembers, graph, ctx, accounts, financial, loans, expenseGroups] =
     await Promise.all([
       getFamilyMembers(),
       getCashflowGraph(),
@@ -50,6 +77,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       getAccounts(),
       getHouseholdFinancialSummary(),
       getLoans(),
+      getMonthlyExpensesByGroup(),
     ]);
 
   // Bidragydere = voksne der enten er logget ind eller pre-godkendt via
@@ -147,6 +175,32 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     0
   );
 
+  // Dyreste lån = højeste rente (apr foretrukket, ellers interest_rate).
+  // Restgæld = abs(opening_balance) (samme som /laan viser).
+  let mostExpensiveLoan: EconomyPlanData['mostExpensiveLoan'] = null;
+  for (const l of loans) {
+    const rate = l.apr ?? l.interest_rate;
+    if (rate == null) continue;
+    if (!mostExpensiveLoan || rate > mostExpensiveLoan.rate) {
+      mostExpensiveLoan = {
+        name: l.name,
+        rate,
+        balance: Math.abs(l.opening_balance),
+        monthlyPayment: l.payment_amount
+          ? monthlyEquivalent(l.payment_amount, l.payment_interval)
+          : 0,
+      };
+    }
+  }
+
+  // Den indloggede brugers uallokerede overskud (samme tal som dashboardets
+  // Privat-panel "tilbage hver måned").
+  const privatSurplus = computePrivatFaelles(
+    accounts,
+    graph.perAccount,
+    user.id
+  ).privat.net;
+
   return {
     members,
     faellesMonthlyExpense,
@@ -157,6 +211,21 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     bufferAccountName: bufferAccount?.name ?? null,
     monthlyLoanPayments,
     hasLoans: loans.length > 0,
+    mostExpensiveLoan,
+    loans: loans.map((l) => ({
+      id: l.id,
+      name: l.name,
+      balance: Math.abs(l.opening_balance),
+      rate: l.apr ?? l.interest_rate,
+      monthlyPayment: l.payment_amount
+        ? monthlyEquivalent(l.payment_amount, l.payment_interval)
+        : 0,
+    })),
+    privatSurplus,
+    privateExpenseGroups: expenseGroups.private.map((g) => ({
+      group: g.group,
+      monthly: g.monthly,
+    })),
     suggestedSourceId: myLonkonto?.id ?? null,
     suggestedSourceName: myLonkonto?.name ?? null,
     faellesAccounts: faellesAccountList.map((a) => ({ id: a.id, name: a.name })),

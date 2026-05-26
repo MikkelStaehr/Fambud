@@ -26,3 +26,4 @@ export * from './income';
 export * from './loans';
 export * from './life-events';
 export * from './predictable';
+export * from './economy-plan';

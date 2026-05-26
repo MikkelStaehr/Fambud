@@ -17,6 +17,7 @@ import {
   Wrench,
   Goal,
   CalendarPlus,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -44,6 +45,11 @@ const NAV_MAIN: NavItem[] = [
 // udgifter, registrere husholdningskøb, sætte opsparingsmål). Adskilt fra
 // hovedflow'et så sidebaren ikke blander "se" og "vedligehold".
 const NAV_TOOLS: NavItem[] = [
+  // Rådgiveren analyserer det indtastede og anbefaler en konkret opsætning
+  // (fordeling af fælles udgifter, buffer-mål, manglende opsætning). Øverst
+  // i værktøjerne fordi det er det naturlige startpunkt når man vil have
+  // hjælp til at strukturere økonomien.
+  { href: '/raadgiver', label: 'Rådgiver', icon: Sparkles },
   { href: '/faste-udgifter', label: 'Faste udgifter', icon: ClipboardList },
   { href: '/husholdning', label: 'Husholdning', icon: ShoppingBasket },
   { href: '/opsparinger', label: 'Opsparinger & buffer', icon: PiggyBank },

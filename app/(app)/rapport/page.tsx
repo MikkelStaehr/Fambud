@@ -1,26 +1,34 @@
 // /rapport - samlet finansrapport til bankmødet (og som personligt
-// statusbillede). Ét overblik over husstandens FÆLLES økonomi: samlet
-// indkomst, fælles faste udgifter, gæld og rådighedsbeløb.
+// statusbillede). Ét komplet månedligt regnskab over husstandens FÆLLES
+// økonomi: indkomst, faste udgifter, lån, husholdning, opsparing og det der
+// reelt er frit til sidst.
 //
 // Print-optimeret: "Gem som PDF"-knappen åbner browserens print-dialog
 // (window.print). App-chrome (sidebar, top-bar, beta-notice) er skjult i
 // print via print:hidden i layout'et, så kun selve rapporten kommer med.
 //
-// To ting der er nemme at få galt i halsen:
+// Vigtige modelvalg (nemme at få galt i halsen):
 //   - Husstandens indkomst = Σ income pr. konto fra cashflow-grafen (det
 //     inkluderer løn-forecast, modsat getHouseholdFinancialSummary der kun
 //     tæller tilbagevendende income).
-//   - Låneydelser er bogført som "Bolig & lån"-udgifter, men vises som en
-//     SELVSTÆNDIG post: vi trækker låneandelen ud af de faste udgifter, så
-//     Faste udgifter + Låneydelser + Rådighedsbeløb går rent op i indkomsten.
-//     Rådighedsbeløb = indkomst - faste udgifter (ekskl. lån) - låneydelser.
+//   - Faste udgifter bruger SAMME kilde som /budget (kun budget-konti:
+//     checking/budget/other). Det holder husholdnings-konto-forbrug ude af
+//     de faste udgifter - husholdning er en egen post. Tidligere lækkede det
+//     ind som en "Andet"-post fordi getMonthlyExpensesByGroup ikke filtrerer
+//     på kontotype.
+//   - Låneydelser er bogført som "Bolig & lån"-udgifter; vi trækker låne-
+//     andelen ud så de står som en egen post (ikke dobbelt).
+//   - Husholdning = fælles forbrug på husholdnings-/kontantkonti.
+//   - Opsparing = faste overførsler ind på opsparings-/investeringskonti.
 //   - Private udgifter udelades: en bank vurderer husstandens fælles
 //     forpligtelser, ikke den enkeltes private forbrug.
 
 import {
   getEconomyPlanData,
   getCashflowGraph,
-  getMonthlyExpensesByGroup,
+  getAccounts,
+  getBudgetAccounts,
+  getRecurringExpensesForAccount,
   getHouseholdName,
   getFamilyMembers,
   getPrimaryIncomeForecast,
@@ -30,16 +38,20 @@ import {
   formatMonthYearDA,
   formatLongDateDA,
   currentYearMonth,
+  effectiveAmount,
+  monthlyEquivalent,
 } from '@/lib/format';
+import { categoryGroupFor, type CategoryGroup } from '@/lib/categories';
 import { FambudMark } from '@/app/_components/FambudMark';
 import { PrintButton } from './_components/PrintButton';
 
 export default async function RapportPage() {
-  const [plan, graph, expenseGroups, householdName, familyMembers] =
+  const [plan, graph, accounts, budgetAccounts, householdName, familyMembers] =
     await Promise.all([
       getEconomyPlanData(),
       getCashflowGraph(),
-      getMonthlyExpensesByGroup(),
+      getAccounts(),
+      getBudgetAccounts(),
       getHouseholdName(),
       getFamilyMembers(),
     ]);
@@ -48,24 +60,63 @@ export default async function RapportPage() {
   let householdIncome = 0;
   for (const d of graph.perAccount.values()) householdIncome += d.income;
 
-  // Låneydelserne er bogført som "Bolig & lån"-udgifter, men skal vises som
-  // en SELVSTÆNDIG post - ikke i de faste udgifter. Vi trækker derfor
-  // låneandelen ud af Bolig & lån-gruppen. De faste udgifter er så kun de
-  // ikke-lånebaserede forpligtelser (forsyning, børn, osv.).
   const loanPaymentTotal = plan.loans.reduce((s, l) => s + l.monthlyPayment, 0);
-  const fasteUdgifterGroups = expenseGroups.shared
-    .map((g) =>
-      g.group === 'Bolig & lån'
-        ? { ...g, monthly: Math.max(0, g.monthly - loanPaymentTotal) }
-        : g
-    )
-    .filter((g) => g.monthly > 0);
-  const fixedExpensesExclLoans = fasteUdgifterGroups.reduce(
-    (s, g) => s + g.monthly,
-    0
-  );
 
-  const raadighed = householdIncome - fixedExpensesExclLoans - loanPaymentTotal;
+  // Faste udgifter (fælles) fra SAMME kilde som /budget: kun budget-konti.
+  // Grupperet pr. kategori-gruppe; låneandelen trækkes ud af Bolig & lån.
+  const faellesBudgetExpenses = await Promise.all(
+    budgetAccounts
+      .filter((a) => a.owner_name === 'Fælles')
+      .map((a) => getRecurringExpensesForAccount(a.id))
+  );
+  const faellesGroupMap = new Map<CategoryGroup, number>();
+  for (const list of faellesBudgetExpenses) {
+    for (const e of list) {
+      const eff = effectiveAmount(e.amount, e.components, e.components_mode);
+      const group = categoryGroupFor(e.category?.name ?? '');
+      faellesGroupMap.set(
+        group,
+        (faellesGroupMap.get(group) ?? 0) + monthlyEquivalent(eff, e.recurrence)
+      );
+    }
+  }
+  const fasteGroups = Array.from(faellesGroupMap.entries())
+    .map(([group, monthly]) =>
+      group === 'Bolig & lån'
+        ? { group, monthly: Math.max(0, monthly - loanPaymentTotal) }
+        : { group, monthly }
+    )
+    .filter((g) => g.monthly > 0)
+    .sort((a, b) => b.monthly - a.monthly);
+  const fixedExpensesExclLoans = fasteGroups.reduce((s, g) => s + g.monthly, 0);
+
+  // Husholdning (fælles dagligt forbrug) + opsparing (faste overførsler ind
+  // på opsparings-/investeringskonti) fra cashflow-grafen.
+  let householdSpend = 0;
+  const savingsAccounts: { id: string; name: string; monthly: number }[] = [];
+  for (const a of accounts) {
+    if (a.archived) continue;
+    const d = graph.perAccount.get(a.id);
+    if (!d) continue;
+    if (a.kind === 'savings' || a.kind === 'investment') {
+      if (d.transfersIn > 0)
+        savingsAccounts.push({ id: a.id, name: a.name, monthly: d.transfersIn });
+    } else if (
+      a.owner_name === 'Fælles' &&
+      (a.kind === 'household' || a.kind === 'cash')
+    ) {
+      householdSpend += d.expense;
+    }
+  }
+  savingsAccounts.sort((a, b) => b.monthly - a.monthly);
+  const savingsContrib = savingsAccounts.reduce((s, a) => s + a.monthly, 0);
+
+  const raadighed =
+    householdIncome -
+    fixedExpensesExclLoans -
+    loanPaymentTotal -
+    householdSpend -
+    savingsContrib;
 
   const gaeldTotal = plan.loans.reduce((s, l) => s + l.balance, 0);
   const annualNetIncome = householdIncome * 12;
@@ -74,10 +125,9 @@ export default async function RapportPage() {
     householdIncome > 0 ? Math.round((raadighed * 100) / householdIncome) : null;
 
   // Bruttoindkomst til den OFFICIELLE gældsfaktor (gæld ÷ bruttoårsindkomst).
-  // Brutto kommer fra lønsedlernes gross_amount via forecastet, og findes kun
-  // hvis brutto er udfyldt. Vi viser KUN brutto-faktoren hvis brutto dækker
-  // ~hele husstandsindkomsten - ellers ville vi dele gælden med en delvis
-  // bruttoindkomst og få et misvisende højt tal.
+  // Brutto kommer fra lønsedlernes gross_amount via forecastet, og vises kun
+  // hvis brutto dækker ~hele husstandsindkomsten - ellers ville vi dele
+  // gælden med en delvis bruttoindkomst og få et misvisende højt tal.
   const incomeForecasts = await Promise.all(
     plan.members.map(async (m) => ({
       net: m.monthlyIncome,
@@ -144,17 +194,10 @@ export default async function RapportPage() {
           </div>
         </header>
 
-        {/* Nøgletal */}
+        {/* Nøgletal: de tal man kigger på først */}
         <section className="mt-6 break-inside-avoid">
           <SectionTitle>Nøgletal</SectionTitle>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <StatTile label="Månedlig indkomst" value={formatAmount(householdIncome)} unit="kr/md" />
-            <StatTile label="Faste udgifter" value={formatAmount(fixedExpensesExclLoans)} unit="kr/md" />
-            <StatTile
-              label="Låneydelser"
-              value={formatAmount(loanPaymentTotal)}
-              unit="kr/md"
-            />
             <StatTile
               label="Rådighedsbeløb"
               value={formatAmount(raadighed)}
@@ -188,21 +231,14 @@ export default async function RapportPage() {
               )}
             </div>
           </div>
-          {friAndelPct != null && (
-            <p className="mt-4 text-xs text-neutral-500">
-              Rådighedsbeløbet svarer til {friAndelPct}% af den månedlige
-              indkomst - det er hvad der er tilbage til dagligt forbrug og
-              opsparing efter faste udgifter og låneydelser.
-            </p>
-          )}
           {gaeldRatioGross != null ? (
-            <p className="mt-1.5 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-neutral-500">
               Gældsfaktor = samlet gæld ÷ årsindkomst. Vi viser den både på
               bruttoindkomst (den officielle definition, banken bruger) og på
               nettoindkomst.
             </p>
           ) : gaeldRatioNet != null ? (
-            <p className="mt-1.5 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-neutral-500">
               Gældsfaktoren her er beregnet på nettoindkomst. Den officielle
               bruger bruttoindkomst (lavere tal). Udfyld bruttoløn på indkomst-
               siden for at få brutto-tallet med.
@@ -210,10 +246,33 @@ export default async function RapportPage() {
           ) : null}
         </section>
 
+        {/* Månedligt regnskab: hele pengestrømmen, krone for krone */}
+        <section className="mt-8 break-inside-avoid">
+          <SectionTitle>Månedligt regnskab</SectionTitle>
+          <ul className="text-sm">
+            <FlowRow label="Indkomst" amount={householdIncome} sign="+" />
+            <FlowRow label="Faste udgifter" amount={fixedExpensesExclLoans} sign="−" />
+            <FlowRow label="Låneydelser" amount={loanPaymentTotal} sign="−" />
+            {householdSpend > 0 && (
+              <FlowRow label="Husholdning" amount={householdSpend} sign="−" />
+            )}
+            {savingsContrib > 0 && (
+              <FlowRow label="Opsparing" amount={savingsContrib} sign="−" />
+            )}
+            <FlowRow label="Rådighedsbeløb" amount={raadighed} sign="=" total />
+          </ul>
+          {friAndelPct != null && (
+            <p className="mt-2 text-xs text-neutral-500">
+              Rådighedsbeløbet er det reelt frie hver måned ({friAndelPct}% af
+              indkomsten) - efter faste udgifter, lån, husholdning og opsparing.
+            </p>
+          )}
+        </section>
+
         {/* Indkomst */}
         <section className="mt-8 break-inside-avoid">
           <SectionTitle>Indkomst</SectionTitle>
-          <ReportTable>
+          <ul className="text-sm">
             {plan.members.map((m) => (
               <ReportRow
                 key={m.id}
@@ -223,7 +282,7 @@ export default async function RapportPage() {
               />
             ))}
             <ReportRow label="Husstandens indkomst i alt" value={formatAmount(householdIncome)} total />
-          </ReportTable>
+          </ul>
           {householdIncome > memberIncomeSum + 100 && (
             <p className="mt-2 text-xs text-neutral-500">
               Totalen inkluderer understøttelse, biindkomst og øvrige
@@ -232,18 +291,19 @@ export default async function RapportPage() {
           )}
         </section>
 
-        {/* Faste udgifter - kun husstandens fælles (private udelades for banken) */}
+        {/* Faste udgifter - fælles budget-konti, ekskl. lån */}
         <section className="mt-8 break-inside-avoid">
           <SectionTitle>Faste udgifter</SectionTitle>
           <p className="mb-2 text-xs text-neutral-500">
-            Husstandens fælles faste udgifter pr. måned, ekskl. låneydelser
-            (vist som egen post ovenfor). Gælden er specificeret nedenfor.
+            Husstandens fælles faste regninger pr. måned (samme som Budget),
+            ekskl. låneydelser. Husholdning og opsparing står som egne poster i
+            regnskabet ovenfor.
           </p>
-          {fasteUdgifterGroups.length === 0 ? (
+          {fasteGroups.length === 0 ? (
             <p className="text-sm text-neutral-400">Ingen faste udgifter registreret.</p>
           ) : (
-            <ReportTable>
-              {fasteUdgifterGroups.map((g) => (
+            <ul className="text-sm">
+              {fasteGroups.map((g) => (
                 <ReportRow key={g.group} label={g.group} value={formatAmount(g.monthly)} />
               ))}
               <ReportRow
@@ -251,17 +311,39 @@ export default async function RapportPage() {
                 value={formatAmount(fixedExpensesExclLoans)}
                 total
               />
-            </ReportTable>
+            </ul>
           )}
         </section>
 
-        {/* Lån */}
+        {/* Opsparing - faste overførsler til opsparings-/investeringskonti */}
+        <section className="mt-8 break-inside-avoid">
+          <SectionTitle>Opsparing</SectionTitle>
+          {savingsAccounts.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              Ingen faste opsparings-overførsler registreret.
+            </p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-neutral-500">
+                Faste månedlige overførsler til opsparings- og investeringskonti.
+              </p>
+              <ul className="text-sm">
+                {savingsAccounts.map((s) => (
+                  <ReportRow key={s.id} label={s.name} value={formatAmount(s.monthly)} />
+                ))}
+                <ReportRow label="Opsparing i alt" value={formatAmount(savingsContrib)} total />
+              </ul>
+            </>
+          )}
+        </section>
+
+        {/* Lån - gældsoversigt */}
         <section className="mt-8 break-inside-avoid">
           <SectionTitle>Lån</SectionTitle>
           {plan.loans.length === 0 ? (
             <p className="text-sm text-neutral-400">Ingen lån registreret.</p>
           ) : (
-            <ReportTable>
+            <ul className="text-sm">
               <li className="flex items-center gap-3 px-1 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
                 <span className="flex-1">Lån</span>
                 <span className="w-16 text-right">Rente</span>
@@ -295,22 +377,21 @@ export default async function RapportPage() {
                   {formatAmount(gaeldTotal)}
                 </span>
               </li>
-            </ReportTable>
+            </ul>
           )}
           {plan.loans.length > 0 && (
             <p className="mt-2 text-xs text-neutral-500">
-              De samlede ydelser ({formatAmount(loanPaymentTotal)} kr/md) er
-              vist som en egen post under nøgletallene og indgår dermed ikke i
-              de faste udgifter. Restgælden ovenfor indgår i gæld i alt.
+              Ydelserne ({formatAmount(loanPaymentTotal)} kr/md) er vist som egen
+              post i regnskabet ovenfor. Restgælden indgår i gæld i alt.
             </p>
           )}
         </section>
 
         <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
-          Genereret {formatLongDateDA(new Date())} via FamBud. Tallene dækker
-          husstandens fælles økonomi: samlet indkomst, fælles faste udgifter
-          (ekskl. låneydelser, som er vist separat) og lån. Private udgifter er
-          udeladt. Beløb er månedlige gennemsnit af tilbagevendende poster.
+          Genereret {formatLongDateDA(new Date())} via FamBud. Et komplet
+          månedligt regnskab for husstandens fælles økonomi: indkomst, faste
+          udgifter, lån, husholdning og opsparing. Private udgifter er udeladt.
+          Beløb er månedlige gennemsnit af tilbagevendende poster.
         </footer>
       </div>
     </div>
@@ -361,8 +442,34 @@ function StatTile({
   );
 }
 
-function ReportTable({ children }: { children: React.ReactNode }) {
-  return <ul className="text-sm">{children}</ul>;
+// Række i det månedlige regnskab. sign styrer fortegnet foran beløbet:
+// '+' indtægt, '−' fradrag, '=' resultat (rådighedsbeløb, fremhævet).
+function FlowRow({
+  label,
+  amount,
+  sign,
+  total = false,
+}: {
+  label: string;
+  amount: number;
+  sign: '+' | '−' | '=';
+  total?: boolean;
+}) {
+  return (
+    <li
+      className={`flex items-baseline justify-between gap-3 px-1 py-1.5 ${
+        total
+          ? 'mt-1 border-t-2 border-neutral-300 pt-2 font-semibold text-neutral-900'
+          : 'text-neutral-700'
+      }`}
+    >
+      <span>{label}</span>
+      <span className="tabnum font-mono">
+        {sign === '=' ? '' : `${sign} `}
+        {formatAmount(amount)} kr
+      </span>
+    </li>
+  );
 }
 
 function ReportRow({

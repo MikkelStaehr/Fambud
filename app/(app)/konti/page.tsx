@@ -16,6 +16,7 @@ import {
   formatAmount,
 } from '@/lib/format';
 import { archiveAccount, restoreAccount } from './actions';
+import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import type { Account, AccountKind } from '@/lib/database.types';
 
 // /konti følger appens gennemgående røde tråd: konti deles i to spor,
@@ -93,8 +94,16 @@ export default async function KontiPage({
       <KontiTour autoStart={autoStartTour} />
       <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
         <div>
-          <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+          <h1 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
             Konti
+            <InfoTooltip>
+              <span className="font-semibold text-neutral-900">Privat</span> er
+              dine egne konti - kun du ser dem og deres forbrug.{' '}
+              <span className="font-semibold text-neutral-900">Fælles</span> er
+              husstandens delte konti (budget, husholdning, buffer) som I begge
+              ser og bidrager til. Jeres indkomst er synlig for hinanden, men
+              privat forbrug bliver mellem jer hver især.
+            </InfoTooltip>
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
             {shownCount} {shownCount === 1 ? 'konto' : 'konti'}

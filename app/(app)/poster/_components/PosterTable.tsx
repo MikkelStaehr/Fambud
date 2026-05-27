@@ -303,8 +303,29 @@ export function PosterTable({ rows }: Props) {
             {grouped.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-neutral-500">
-                    Ingen poster matcher filteret.
+                  <td colSpan={5} className="px-4 py-12 text-center">
+                    {hasActiveFilters ? (
+                      <p className="text-sm text-neutral-500">
+                        Ingen poster matcher filteret.
+                      </p>
+                    ) : (
+                      <div className="mx-auto max-w-md">
+                        <p className="text-sm font-medium text-neutral-700">
+                          Ingen poster denne måned endnu
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+                          Poster er de faktiske ind- og udbetalinger for måneden.
+                          Faste udgifter og overførsler dukker op automatisk;
+                          enkeltstående køb og betalinger kan du tilføje manuelt.
+                        </p>
+                        <Link
+                          href="/poster/ny"
+                          className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700"
+                        >
+                          Tilføj en post
+                        </Link>
+                      </div>
+                    )}
                   </td>
                 </tr>
               </tbody>

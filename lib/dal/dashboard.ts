@@ -60,19 +60,21 @@ export async function getDashboardData(): Promise<DashboardData> {
 }
 
 // ----------------------------------------------------------------------------
-// Husstandens samlede økonomiske billede - bruges til at beregne anbefalede
-// målbeløb (fx "buffer = 3 mdr af faste udgifter", "forudsigelige uforudsete
-// = 15% af nettoindkomst")
+// Husstandens samlede faste udgifter - bruges til at beregne anbefalede
+// målbeløb (fx "buffer = 3 mdr af faste udgifter").
 // ----------------------------------------------------------------------------
 export type HouseholdFinancialSummary = {
-  // Sum af monthlyEquivalent for alle recurring income-transactions i husstanden.
-  // Det er hvad faktisk lander på konti - nettoløn, ikke bruttoløn.
-  monthlyNetIncome: number;
   // Sum af monthlyEquivalent for alle recurring expense-transactions, inkl.
   // effective amount (additive components stack på top af parent).
   monthlyFixedExpenses: number;
 };
 
+// BEMÆRK: Vi udstiller bevidst IKKE en "monthlyNetIncome" her. En sum af
+// recurring income ville SPRINGE løn over (lønsedler er recurrence='once'
+// primary-paychecks), så tallet ville undertælle indkomsten groft. Skal du
+// bruge husstandens indkomst: brug getCashflowGraph() og summér
+// perAccount.income - den inkluderer løn-forecastet (se /rapport og
+// getDashboardData).
 export async function getHouseholdFinancialSummary(): Promise<HouseholdFinancialSummary> {
   const { supabase, householdId } = await getHouseholdContext();
 
@@ -93,14 +95,12 @@ export async function getHouseholdFinancialSummary(): Promise<HouseholdFinancial
 
   if (error) throw error;
 
-  let monthlyNetIncome = 0;
   let monthlyFixedExpenses = 0;
   for (const t of data ?? []) {
+    if (t.category?.kind !== 'expense') continue;
     const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
-    const monthly = monthlyEquivalent(eff, t.recurrence);
-    if (t.category?.kind === 'income') monthlyNetIncome += monthly;
-    else if (t.category?.kind === 'expense') monthlyFixedExpenses += monthly;
+    monthlyFixedExpenses += monthlyEquivalent(eff, t.recurrence);
   }
 
-  return { monthlyNetIncome, monthlyFixedExpenses };
+  return { monthlyFixedExpenses };
 }

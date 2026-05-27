@@ -82,7 +82,7 @@ export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> 
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      'amount, recurrence, components_mode, account:accounts(owner_name), category:categories(name, kind), components:transaction_components(amount)'
+      'amount, recurrence, components_mode, account:accounts(owner_name, kind), category:categories(name, kind), components:transaction_components(amount)'
     )
     .eq('household_id', householdId)
     .neq('recurrence', 'once')
@@ -90,7 +90,7 @@ export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> 
       amount: number;
       recurrence: RecurrenceFreq;
       components_mode: 'additive' | 'breakdown';
-      account: { owner_name: string | null } | null;
+      account: { owner_name: string | null; kind: string } | null;
       category: { name: string; kind: 'income' | 'expense' } | null;
       components: { amount: number }[];
     }[]>();
@@ -102,7 +102,14 @@ export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> 
     if (!t.category || t.category.kind !== 'expense') continue;
     const eff = effectiveAmount(t.amount, t.components ?? [], t.components_mode);
     const monthly = monthlyEquivalent(eff, t.recurrence);
-    const group = categoryGroupFor(t.category.name);
+    // Forbrug på en husholdnings-konto er dagligt husholdningsforbrug, ikke
+    // en fast regning - vi giver det sin egen gruppe uanset kategori, så det
+    // ikke lander i "Andet". Det matcher hvordan /budget og finansrapporten
+    // holder husholdning adskilt fra de faste udgifter.
+    const group: CategoryGroup =
+      t.account?.kind === 'household'
+        ? 'Husholdning'
+        : categoryGroupFor(t.category.name);
     const isShared = t.account?.owner_name === 'Fælles';
     const bucket = isShared ? sharedTotals : privateTotals;
     bucket.set(group, (bucket.get(group) ?? 0) + monthly);

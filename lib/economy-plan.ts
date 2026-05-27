@@ -183,6 +183,7 @@ export const GROUP_BUCKET: Record<CategoryGroup, 'needs' | 'wants'> = {
   'A-kasse': 'needs',
   Underholdning: 'wants',
   Personligt: 'wants',
+  Husholdning: 'needs',
   Andet: 'wants',
 };
 

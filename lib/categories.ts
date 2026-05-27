@@ -64,6 +64,7 @@ export type CategoryGroup =
   | 'Underholdning'
   | 'A-kasse'
   | 'Personligt'
+  | 'Husholdning'
   | 'Andet';
 
 export const CATEGORY_GROUP_COLOR: Record<CategoryGroup, string> = {
@@ -75,6 +76,7 @@ export const CATEGORY_GROUP_COLOR: Record<CategoryGroup, string> = {
   'Underholdning':          '#9333ea', // violet
   'A-kasse':                '#0ea5e9', // light blue
   'Personligt':             '#be185d', // pink
+  'Husholdning':            '#0d9488', // teal
   'Andet':                  '#64748b', // gray
 };
 
@@ -97,6 +99,7 @@ const CATEGORY_TO_GROUP_RAW: Record<string, CategoryGroup> = {
   'Tøj':                    'Personligt',
   'Hobby':                  'Personligt',
   'Personlig pleje':        'Personligt',
+  'Husholdning':            'Husholdning',
   'Andet':                  'Andet',
 };
 

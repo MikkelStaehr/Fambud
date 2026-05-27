@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
@@ -32,7 +32,26 @@ type Props = {
   submitLabel: string;
   cancelHref: string;
   error?: string;
+  // 'salary' (default) viser hele lønseddel-fieldset'et med brutto, pension,
+  // trækprocent osv. 'benefit' er til understøttelse (SU, dagpenge, pension,
+  // kontanthjælp) - faste ydelser uden lønseddel-fradrag, så vi skjuler hele
+  // den sektion og tilbyder i stedet hurtige type-chips til beskrivelsen.
+  variant?: 'salary' | 'benefit';
 };
+
+// Almindelige danske ydelser - chips der udfylder beskrivelsen med ét klik.
+// Ikke udtømmende, men dækker de mest udbredte. Brugeren kan stadig skrive frit.
+const BENEFIT_PRESETS = [
+  'SU',
+  'Dagpenge',
+  'Kontanthjælp',
+  'Pension',
+  'Sygedagpenge',
+  'Barselsdagpenge',
+  'Boligstøtte',
+  'Børne- og ungeydelse',
+  'Efterløn',
+] as const;
 
 const fieldClass =
   'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
@@ -67,11 +86,18 @@ export function IncomeForm({
   submitLabel,
   cancelHref,
   error,
+  variant = 'salary',
 }: Props) {
   const dv = defaultValues;
+  const isBenefit = variant === 'benefit';
   const visibleAccounts = accounts.filter(
     (a) => !a.archived || a.id === dv.account_id
   );
+
+  // Beskrivelses-feltet er uncontrolled (defaultValue) - chips skriver bare
+  // direkte i input-elementet via ref, så vi undgår at gøre feltet controlled
+  // og dermed røre lønseddel-varianten.
+  const descRef = useRef<HTMLInputElement>(null);
 
   // We mirror every numeric field's current text into state so the live
   // lønseddel-summary can recompute on every keystroke. AmountInput is
@@ -208,7 +234,8 @@ export function IncomeForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="amount" className={labelClass}>
-            Nettoløn <span className="text-neutral-400">(kr.)</span>
+            {isBenefit ? 'Beløb' : 'Nettoløn'}{' '}
+            <span className="text-neutral-400">(kr.)</span>
           </label>
           <AmountInput
             id="amount"
@@ -232,16 +259,40 @@ export function IncomeForm({
 
       <div>
         <label htmlFor="description" className={labelClass}>
-          Beskrivelse <span className="text-neutral-400">(valgfrit)</span>
+          Beskrivelse{' '}
+          <span className="text-neutral-400">
+            {isBenefit ? '(hvilken ydelse?)' : '(valgfrit)'}
+          </span>
         </label>
         <input
+          ref={descRef}
           id="description"
           name="description"
           type="text"
           defaultValue={dv.description ?? ''}
-          placeholder="F.eks. Månedsløn, freelance, side-hustle"
+          placeholder={
+            isBenefit
+              ? 'F.eks. SU, dagpenge, pension'
+              : 'F.eks. Månedsløn, freelance, side-hustle'
+          }
           className={fieldClass}
         />
+        {isBenefit && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {BENEFIT_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  if (descRef.current) descRef.current.value = preset;
+                }}
+                className="rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs text-neutral-600 transition hover:border-neutral-900 hover:text-neutral-900"
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <RecurrenceField
@@ -249,6 +300,10 @@ export function IncomeForm({
         defaultUntil={dv.recurrence_until}
       />
 
+      {/* Lønseddel-fieldset: kun relevant for løn. Understøttelse (SU,
+          dagpenge, pension) har ingen bruttoløn/pension/trækprocent, så vi
+          skjuler hele sektionen i benefit-varianten. */}
+      {!isBenefit && (
       <fieldset className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
         <legend className="px-2 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Lønseddel <span className="lowercase text-neutral-400">(valgfrit - udfyld for fuldt billede)</span>
@@ -437,6 +492,7 @@ export function IncomeForm({
           </div>
         )}
       </fieldset>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

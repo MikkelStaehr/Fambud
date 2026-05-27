@@ -41,6 +41,7 @@ export default async function NyIndkomstPage({
     recurrence?: string;
     member?: string;
     duplicate?: string;
+    kind?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -66,11 +67,18 @@ export default async function NyIndkomstPage({
   const isPaycheckFlow =
     role === 'primary' &&
     (duplicateSource ? duplicateSource.recurrence === 'once' : sp.recurrence === 'once');
+  // Understøttelses-flow: faste ydelser (SU, dagpenge, pension) registreres
+  // som tilbagevendende hovedindkomst (income_role='primary', recurrence=
+  // 'monthly'). Ingen forecast - beløbet er kendt og fast, modsat løn der
+  // varierer fra måned til måned.
+  const isBenefitFlow = !duplicateSource && sp.kind === 'benefit';
   const recurrenceDefault: RecurrenceFreq | undefined = duplicateSource
     ? duplicateSource.recurrence
     : sp.recurrence === 'once'
       ? 'once'
-      : undefined;
+      : isBenefitFlow
+        ? 'monthly'
+        : undefined;
   const memberId = duplicateSource?.family_member_id ?? sp.member;
 
   // I paycheck-flow forsøger vi at hente medlemmets seneste lønudbetaling
@@ -92,7 +100,7 @@ export default async function NyIndkomstPage({
   const defaultAccountId =
     duplicateSource?.account_id ??
     recentDefaults?.account_id ??
-    (isPaycheckFlow
+    (isPaycheckFlow || isBenefitFlow
       ? (
           // 1. konto oprettet af medlemmet selv
           accounts.find(
@@ -111,14 +119,18 @@ export default async function NyIndkomstPage({
 
   const heading = duplicateSource
     ? 'Duplikér lønudbetaling'
-    : isPaycheckFlow
-      ? 'Registrer lønudbetaling'
-      : 'Ny indkomst';
+    : isBenefitFlow
+      ? 'Registrér understøttelse'
+      : isPaycheckFlow
+        ? 'Registrer lønudbetaling'
+        : 'Ny indkomst';
   const subline = duplicateSource
     ? 'Alle felter er pre-fyldt fra den valgte post. Tjek datoen - vi har foreslået én måned bagud - og registrér.'
-    : isPaycheckFlow
-      ? 'Indtast én faktisk udbetaling med dato og beløb. Når der er 3+ udbetalinger registreret, beregner vi forecast for resten af året.'
-      : null;
+    : isBenefitFlow
+      ? 'Indtast den ydelse du modtager og hvor ofte. Beløbet er fast, så vi behøver ikke et forecast - det tæller med fra måned ét.'
+      : isPaycheckFlow
+        ? 'Indtast én faktisk udbetaling med dato og beløb. Når der er 3+ udbetalinger registreret, beregner vi forecast for resten af året.'
+        : null;
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -153,6 +165,7 @@ export default async function NyIndkomstPage({
             action={createIncome}
             accounts={accounts}
             familyMembers={familyMembers}
+            variant={isBenefitFlow ? 'benefit' : 'salary'}
             defaultValues={{
               family_member_id: memberId ?? undefined,
               account_id: defaultAccountId,
@@ -187,9 +200,11 @@ export default async function NyIndkomstPage({
             submitLabel={
               duplicateSource
                 ? 'Registrer kopi'
-                : isPaycheckFlow
-                  ? 'Registrer lønudbetaling'
-                  : 'Opret indkomst'
+                : isBenefitFlow
+                  ? 'Registrér understøttelse'
+                  : isPaycheckFlow
+                    ? 'Registrer lønudbetaling'
+                    : 'Opret indkomst'
             }
             cancelHref="/indkomst"
             error={sp.error}

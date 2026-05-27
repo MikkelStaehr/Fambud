@@ -59,11 +59,12 @@ export default async function IndkomstPage({
     (m) => m.user_id != null || m.email != null
   );
 
-  // For hver person der har primary_income_source sat, forudbeg vi forecastet
-  // i parallel så page-render ikke serialiserer N opslag.
+  // Forecast er kun relevant for løn (varierer fra måned til måned, så vi
+  // gennemsnitter de 3 seneste). Understøttelse er fast og kræver ikke
+  // forecast, så vi springer den DB-tur over for benefits-medlemmer.
   const forecasts = await Promise.all(
     incomeContributors
-      .filter((m) => m.primary_income_source)
+      .filter((m) => m.primary_income_source === 'salary')
       .map(async (m) => ({ memberId: m.id, forecast: await getPrimaryIncomeForecast(m.id) }))
   );
   const forecastByMember = new Map(forecasts.map((f) => [f.memberId, f.forecast]));
@@ -73,17 +74,25 @@ export default async function IndkomstPage({
   const secondaryIncomes = incomes.filter((i) => i.income_role === 'secondary');
   const unclassifiedIncomes = incomes.filter((i) => i.income_role == null);
 
-  // Sum til header. Primary-paychecks bruger recurrence='once' så
-  // monthlyEquivalent giver 0 - vi falder tilbage til forecast-summen
-  // for dem og monthlyEquivalent for resten (sekundære recurrencer + biindkomst).
+  // Sum til header, sammensat af tre dele fordi income-poster tælles
+  // forskelligt:
+  //   1. Løn: primary-paychecks med recurrence='once'. monthlyEquivalent
+  //      giver 0 for dem, så vi bruger forecast-summen (gennemsnit af de
+  //      3 seneste) i stedet.
+  //   2. Understøttelse: primary-poster med recurrence != 'once' (faste
+  //      ydelser). monthlyEquivalent giver det rigtige månedsbeløb direkte.
+  //   3. Biindkomst + uklassificeret: alt non-primary via monthlyEquivalent.
   const forecastSum = forecasts.reduce(
     (sum, f) => sum + (f.forecast.status === 'ready' ? f.forecast.monthlyNet : 0),
     0
   );
+  const recurringPrimarySum = incomes
+    .filter((i) => i.income_role === 'primary' && i.recurrence !== 'once')
+    .reduce((sum, i) => sum + monthlyEquivalent(i.amount, i.recurrence), 0);
   const nonPrimaryMonthlySum = incomes
     .filter((i) => i.income_role !== 'primary')
     .reduce((sum, i) => sum + monthlyEquivalent(i.amount, i.recurrence), 0);
-  const monthlyTotal = forecastSum + nonPrimaryMonthlySum;
+  const monthlyTotal = forecastSum + recurringPrimarySum + nonPrimaryMonthlySum;
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -275,13 +284,13 @@ function HovedindkomstCard({
         </p>
       )}
 
-      {/* Tilstand 2: understøttelse - kommer senere */}
+      {/* Tilstand 2: understøttelse - faste ydelser, ingen forecast */}
       {member.primary_income_source === 'benefits' && (
-        <div className="mt-3 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2.5 text-xs text-neutral-500">
-          Understøttelses-flow er endnu ikke bygget. Indtil videre kan du
-          registrere ydelser som biindkomst eller bruge "Tilføj indkomst" med
-          tilpasset frekvens.
-        </div>
+        <BenefitsView
+          memberId={member.id}
+          memberName={member.name}
+          benefits={paychecks}
+        />
       )}
 
       {/* Tilstand 3: løn - vis forecast + samples */}
@@ -365,6 +374,73 @@ function SalaryForecastView({
       >
         <Plus className="h-3.5 w-3.5" />
         Registrer lønudbetaling for {memberName}
+      </Link>
+    </div>
+  );
+}
+
+// Understøttelse: faste ydelser (SU, dagpenge, pension, kontanthjælp osv.)
+// gemmes som tilbagevendende hovedindkomst (income_role='primary',
+// recurrence='monthly'/'weekly'/...). Modsat løn har de intet forecast -
+// beløbet er kendt, så vi summerer bare monthlyEquivalent direkte. De er
+// allerede med i dashboard-cashflowet via recurring-income-stien.
+function BenefitsView({
+  memberId,
+  memberName,
+  benefits,
+}: {
+  memberId: string;
+  memberName: string;
+  benefits: IncomeRow[];
+}) {
+  const newBenefitHref = `/indkomst/ny?role=primary&kind=benefit&member=${encodeURIComponent(memberId)}`;
+  const monthlyTotal = benefits.reduce(
+    (sum, b) => sum + monthlyEquivalent(b.amount, b.recurrence),
+    0
+  );
+
+  return (
+    <div className="mt-4">
+      {benefits.length > 0 ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-medium text-emerald-900">
+              Understøttelse: {formatAmount(monthlyTotal)} kr/md
+            </div>
+            <span className="text-[11px] text-emerald-700">
+              {benefits.length} {benefits.length === 1 ? 'ydelse' : 'ydelser'} registreret
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2.5 text-xs text-neutral-500">
+          Ingen ydelser registreret endnu. Tilføj SU, dagpenge, pension eller
+          anden fast understøttelse nedenfor - så tæller den med i din
+          månedlige indkomst.
+        </div>
+      )}
+
+      {benefits.length > 0 && (
+        <div className="mt-3">
+          <h3 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+            Ydelser
+          </h3>
+          <ul className="divide-y divide-neutral-100 rounded-md border border-neutral-200 bg-white">
+            {benefits.map((b) => (
+              <li key={b.id}>
+                <IncomeRowDisplay income={b} compact />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <Link
+        href={newBenefitHref}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Registrér understøttelse for {memberName}
       </Link>
     </div>
   );

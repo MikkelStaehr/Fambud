@@ -197,27 +197,6 @@ export async function registerSharedIncome(formData: FormData) {
 
   const { supabase, householdId, user } = await getHouseholdContext();
 
-  // Find den fælles lønkonto. Hvis den mangler, er der noget i opsætningen
-  // der er gået galt - vi sender brugeren tilbage med en klar fejl.
-  const { data: shared } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('household_id', householdId)
-    .eq('kind', 'checking')
-    .eq('owner_name', 'Fælles')
-    .eq('archived', false)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!shared) {
-    redirect(
-      '/wizard/lonkonto?error=' +
-        encodeURIComponent(
-          'Kunne ikke finde fælles lønkonto - bed ejeren tjekke opsætningen'
-        )
-    );
-  }
-
   const { data: fm } = await supabase
     .from('family_members')
     .select('id')
@@ -230,11 +209,55 @@ export async function registerSharedIncome(formData: FormData) {
     );
   }
 
+  // Find den fælles lønkonto. Hvis den mangler (ufuldstændig shared-opsætning
+  // - fx hvis ejeren ikke nåede at konvertere sin lønkonto), opretter vi den
+  // frem for at dead-ende partneren. Så kan de altid komme videre, og
+  // husstandens shared-invariant (én fælles lønkonto) genoprettes.
+  const { data: shared } = await supabase
+    .from('accounts')
+    .select('id')
+    .eq('household_id', householdId)
+    .eq('kind', 'checking')
+    .eq('owner_name', 'Fælles')
+    .eq('archived', false)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let sharedAccountId: string;
+  let createdAccountId: string | null = null;
+  if (shared) {
+    sharedAccountId = shared.id;
+  } else {
+    const { data: created, error: createErr } = await supabase
+      .from('accounts')
+      .insert({
+        household_id: householdId,
+        name: 'Fælles Lønkonto',
+        owner_name: 'Fælles',
+        kind: 'checking',
+        editable_by_all: true,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
+    if (createErr || !created) {
+      if (createErr)
+        console.error('registerSharedIncome create shared failed:', createErr.message);
+      redirect(
+        '/wizard/lonkonto?error=' +
+          encodeURIComponent('Kunne ikke oprette fælles lønkonto')
+      );
+    }
+    sharedAccountId = created.id;
+    createdAccountId = created.id;
+  }
+
   const categoryId = await ensureLonCategory(supabase, householdId);
 
   const rows = parsed.paychecks.map((p) => ({
     household_id: householdId,
-    account_id: shared.id,
+    account_id: sharedAccountId,
     category_id: categoryId,
     family_member_id: fm.id,
     amount: p.amount,
@@ -246,6 +269,15 @@ export async function registerSharedIncome(formData: FormData) {
   const { error: txErr } = await supabase.from('transactions').insert(rows);
   if (txErr) {
     console.error('wizard/lonkonto txErr:', txErr.message);
+    // Ryd kontoen op hvis vi netop selv oprettede den (samme mønster som
+    // den personlige lønkonto-oprettelse).
+    if (createdAccountId) {
+      await supabase
+        .from('accounts')
+        .delete()
+        .eq('id', createdAccountId)
+        .eq('household_id', householdId);
+    }
     redirect('/wizard/lonkonto?error=' + encodeURIComponent('Kunne ikke gemme lønudbetalingen'));
   }
 

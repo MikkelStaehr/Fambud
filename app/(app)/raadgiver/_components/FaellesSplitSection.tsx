@@ -96,7 +96,7 @@ export function FaellesSplitSection({
               : 'text-neutral-600 hover:text-neutral-900'
           }`}
         >
-          Lige rådighed
+          Udlignet rådighed
         </button>
       </div>
 

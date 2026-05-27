@@ -9,12 +9,12 @@ import { getHouseholdContext } from './auth';
 import { getCashflowGraph } from './cashflow';
 import { getAdvisorContext } from './advisor';
 import { getAccounts } from './accounts';
-import { getFamilyMembers } from './family';
+import { getFamilyMembers, getOtherMembersOnboardingStatus } from './family';
 import { getPrimaryIncomeForecast } from './income';
 import { getHouseholdFinancialSummary } from './dashboard';
 import { getLoans } from './loans';
 import { getMonthlyExpensesByGroup } from './expenses-by-category';
-import type { PlanMember } from '@/lib/economy-plan';
+import type { PlanMember, MemberSetupStatus } from '@/lib/economy-plan';
 import type { CategoryGroup } from '@/lib/categories';
 
 export type EconomyPlanData = {
@@ -58,6 +58,13 @@ export type EconomyPlanData = {
   // 50/30/20-modellen. (Partnerens private udgifter er skjult via RLS, så
   // dette er kun brugerens egne grupper.)
   privateExpenseGroups: { group: CategoryGroup; monthly: number }[];
+  // Den indloggede brugers egen opsætnings-status - til "manglende opsætning".
+  myHasLonkonto: boolean;
+  myHasAnyIncome: boolean;
+  myIncomeComplete: boolean;
+  // Øvrige husstandsmedlemmers status (samme kilde som dashboardets
+  // FamilyStatus, så rådgiveren er konsistent med den).
+  memberStatuses: MemberSetupStatus[];
   // Brugerens lønkonto - kilde til de Opret-overførsler rådgiveren foreslår.
   suggestedSourceId: string | null;
   suggestedSourceName: string | null;
@@ -69,16 +76,25 @@ export type EconomyPlanData = {
 export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   const { user } = await getHouseholdContext();
 
-  const [familyMembers, graph, ctx, accounts, financial, loans, expenseGroups] =
-    await Promise.all([
-      getFamilyMembers(),
-      getCashflowGraph(),
-      getAdvisorContext(),
-      getAccounts(),
-      getHouseholdFinancialSummary(),
-      getLoans(),
-      getMonthlyExpensesByGroup(),
-    ]);
+  const [
+    familyMembers,
+    graph,
+    ctx,
+    accounts,
+    financial,
+    loans,
+    expenseGroups,
+    memberStatuses,
+  ] = await Promise.all([
+    getFamilyMembers(),
+    getCashflowGraph(),
+    getAdvisorContext(),
+    getAccounts(),
+    getHouseholdFinancialSummary(),
+    getLoans(),
+    getMonthlyExpensesByGroup(),
+    getOtherMembersOnboardingStatus(),
+  ]);
 
   // Bidragydere = voksne der enten er logget ind eller pre-godkendt via
   // email. Børn (begge null) bidrager ikke økonomisk og udelades.
@@ -145,6 +161,9 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   const myLonkonto = accounts.find(
     (a) => a.kind === 'checking' && a.created_by === user.id && !a.archived
   );
+
+  // Den indloggede brugers egen status (til "manglende opsætning").
+  const meMember = members.find((m) => m.userId === user.id);
 
   // Buffer-konto: foretræk savings_purposes='buffer', ellers navn der
   // indeholder "buffer". Nuværende månedlige indskud = transfersIn (flow).
@@ -225,6 +244,15 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     privateExpenseGroups: expenseGroups.private.map((g) => ({
       group: g.group,
       monthly: g.monthly,
+    })),
+    myHasLonkonto: myLonkonto != null,
+    myHasAnyIncome: (meMember?.monthlyIncome ?? 0) > 0,
+    myIncomeComplete: meMember?.incomeComplete ?? false,
+    memberStatuses: memberStatuses.map((s) => ({
+      name: s.name,
+      hasLogin: s.hasLogin,
+      hasOwnCheckingAccount: s.hasOwnCheckingAccount,
+      paycheckCount: s.paycheckCount,
     })),
     suggestedSourceId: myLonkonto?.id ?? null,
     suggestedSourceName: myLonkonto?.name ?? null,

@@ -236,6 +236,102 @@ export function computeFiftyThirtyTwenty(opts: {
   };
 }
 
+// ----------------------------------------------------------------------------
+// Manglende opsætning
+// ----------------------------------------------------------------------------
+// Strukturelle huller i husstandens opsætning. For den indloggede brugers
+// EGNE huller giver vi en konkret handling (link); for partneres huller en
+// forklaring (de skal selv gøre det). Detektionen er bevidst tilbageholdende:
+// vi viser kun ting vi er sikre på, så rådgiveren ikke nagger om falske huller.
+export type SetupGap = {
+  tone: 'action' | 'info';
+  title: string;
+  body: string;
+  action?: { label: string; href: string };
+};
+
+export type MemberSetupStatus = {
+  name: string;
+  hasLogin: boolean;
+  hasOwnCheckingAccount: boolean;
+  paycheckCount: number;
+};
+
+export function detectSetupGaps(opts: {
+  myHasLonkonto: boolean;
+  myHasAnyIncome: boolean;
+  myIncomeComplete: boolean;
+  members: MemberSetupStatus[];
+  paychecksRequired?: number;
+}): SetupGap[] {
+  const required = opts.paychecksRequired ?? 3;
+  const gaps: SetupGap[] = [];
+
+  // Egne huller - med handling.
+  if (!opts.myHasLonkonto) {
+    gaps.push({
+      tone: 'action',
+      title: 'Du mangler en lønkonto',
+      body: 'Opret din lønkonto, så din indtægt og dine overførsler har et hjem.',
+      action: { label: 'Opret konto', href: '/konti/ny' },
+    });
+  } else if (!opts.myHasAnyIncome) {
+    gaps.push({
+      tone: 'action',
+      title: 'Du mangler at registrere din løn',
+      body: 'Registrér dine seneste lønudbetalinger, så forecastet kan regne med din indkomst.',
+      action: { label: 'Registrér løn', href: '/indkomst' },
+    });
+  } else if (!opts.myIncomeComplete) {
+    gaps.push({
+      tone: 'action',
+      title: 'Registrér flere lønudbetalinger',
+      body: `Forecastet bliver præcist når du har registreret ${required} lønudbetalinger.`,
+      action: { label: 'Registrér løn', href: '/indkomst' },
+    });
+  }
+
+  // Partneres huller - som forklaring (de skal selv gøre det).
+  //
+  // VIGTIGT om lønkonto-detektion: en partners private lønkonto er skjult for
+  // os via RLS, så hasOwnCheckingAccount kan være false selvom kontoen findes.
+  // Men hvis partneren HAR registreret lønudbetalinger, eksisterer kontoen
+  // (lønnen skal jo ligge et sted) - vi kan bare ikke se den. Derfor fyrer
+  // "mangler lønkonto" KUN når der hverken er konto ELLER løn, så vi undgår
+  // en falsk advarsel om en privat konto vi ikke har adgang til.
+  for (const m of opts.members) {
+    if (!m.hasLogin) {
+      gaps.push({
+        tone: 'info',
+        title: `${m.name} har ikke oprettet sin bruger`,
+        body: `${m.name} er pre-godkendt men mangler at gennemføre sin egen wizard. Indtil da viser tjekket kun din andel af de fælles konti.`,
+      });
+    } else if (m.paycheckCount === 0) {
+      if (!m.hasOwnCheckingAccount) {
+        gaps.push({
+          tone: 'info',
+          title: `${m.name} mangler at sætte sin økonomi op`,
+          body: `${m.name} har hverken en lønkonto eller registreret løn endnu. De sætter det op i deres egen wizard, så jeres husstands-overblik bliver komplet.`,
+        });
+      } else {
+        gaps.push({
+          tone: 'info',
+          title: `${m.name} mangler at registrere løn`,
+          body: `${m.name} har endnu ikke registreret lønudbetalinger - så deres del af husstandens indkomst mangler i overblikket.`,
+        });
+      }
+    } else if (m.paycheckCount < required) {
+      gaps.push({
+        tone: 'info',
+        title: `${m.name}: ${m.paycheckCount}/${required} lønudbetalinger`,
+        body: `${m.name}s indkomst-forecast bliver præcist når der er registreret ${required} lønudbetalinger.`,
+      });
+    }
+  }
+
+  return gaps;
+}
+
 export function bufferRecommendation(
   monthlyFixedExpenses: number,
   currentMonthly: number,

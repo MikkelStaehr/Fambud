@@ -4,6 +4,7 @@ import {
   splitFaellesExpenses,
   bufferRecommendation,
   computeFiftyThirtyTwenty,
+  detectSetupGaps,
 } from '@/lib/economy-plan';
 import { InfoTooltip } from '@/app/_components/InfoTooltip';
 import { FaellesSplitSection } from './_components/FaellesSplitSection';
@@ -11,6 +12,7 @@ import { BufferSection } from './_components/BufferSection';
 import { AllokerSection } from './_components/AllokerSection';
 import { FiftyThirtyTwentySection } from './_components/FiftyThirtyTwentySection';
 import { LaaneoptimeringSection } from './_components/LaaneoptimeringSection';
+import { ManglerSection } from './_components/ManglerSection';
 
 // Økonomi-rådgiveren: analyserer det husstanden har indtastet og foreslår en
 // konkret opsætning. Bygges i faser - denne første dækker fordelingen af de
@@ -38,6 +40,13 @@ export default async function RaadgiverPage() {
       })
     : null;
 
+  const setupGaps = detectSetupGaps({
+    myHasLonkonto: plan.myHasLonkonto,
+    myHasAnyIncome: plan.myHasAnyIncome,
+    myIncomeComplete: plan.myIncomeComplete,
+    members: plan.memberStatuses,
+  });
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <header className="border-b border-neutral-200 pb-6">
@@ -51,6 +60,21 @@ export default async function RaadgiverPage() {
           indkomst, udgifter og overførsler.
         </p>
       </header>
+
+      {/* Sektion: Manglende opsætning (først - huller her påvirker alt nedenfor) */}
+      <section className="mt-8">
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-sm font-medium text-neutral-900">
+            Manglende opsætning
+          </h2>
+          <InfoTooltip>
+            Strukturelle huller i jeres opsætning der påvirker hvor præcis
+            rådgivningen er. Dine egne huller får en knap; partnerens skal de
+            selv udfylde i deres egen wizard.
+          </InfoTooltip>
+        </div>
+        <ManglerSection gaps={setupGaps} />
+      </section>
 
       {/* Sektion: Fordeling af fælles udgifter */}
       <section className="mt-8">

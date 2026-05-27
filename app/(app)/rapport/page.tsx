@@ -90,29 +90,14 @@ export default async function RapportPage() {
     : null;
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8 print:p-0">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
-        {/* Print: brevhoved + overskrift gentaget på HVER side. position:fixed
-            printes øverst på alle sider, og @page margin-top reserverer
-            pladsen så indholdet ikke lapper ind over den. Skjult på skærm
-            (skærmen bruger den fulde header nedenfor). */}
-        <style>{`@media print { @page { margin: 22mm 16mm 16mm 16mm; } }`}</style>
-        <div className="hidden print:flex fixed inset-x-0 top-0 items-center gap-2 border-b border-neutral-300 bg-white px-4 py-2.5">
-          <FambudMark size="sm" />
-          <span className="text-sm font-semibold text-neutral-900">
-            Finans Rapport
-          </span>
-          <span className="text-xs text-neutral-500">
-            · {householdName ?? 'Husstanden'} · {monthCap}
-          </span>
-        </div>
-
-        {/* Skærm-brevhoved: logo + dokument-titel + husstandens identitet.
-            Skjult i print (running-header'en ovenfor overtager der). */}
-        <header className="border-b border-neutral-200 pb-6 print:hidden">
+        {/* Brevhoved: logo + dokument-titel + husstandens identitet. Gem-som-
+            PDF-knappen sidder øverst til højre og skjules i selve print'et. */}
+        <header className="border-b border-neutral-200 pb-6">
           <div className="flex items-start justify-between gap-3">
             <FambudMark size="lg" />
-            <div>
+            <div className="print:hidden">
               <PrintButton />
             </div>
           </div>
@@ -133,19 +118,6 @@ export default async function RapportPage() {
             )}
           </div>
         </header>
-
-        {/* Print, side 1: husstandens adresse + medlemmer (vises én gang
-            under running-header'en). */}
-        {(addressLine || plan.members.length > 0) && (
-          <div className="hidden print:block pt-1 pb-2 text-xs text-neutral-500">
-            {addressLine && <p>{addressLine}</p>}
-            {plan.members.length > 0 && (
-              <p className="text-neutral-400">
-                {plan.members.map((m) => m.name).join(', ')}
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Nøgletal */}
         <section className="mt-6 break-inside-avoid">
@@ -172,17 +144,6 @@ export default async function RapportPage() {
               unit={gaeldRatio != null ? 'årsindkomster' : ''}
             />
           </div>
-          {householdIncome > 0 && (
-            <div className="mt-4">
-              <IncomeAllocationBar
-                income={householdIncome}
-                loans={loanPaymentTotal}
-                faste={fixedExpensesExclLoans}
-                raadighed={Math.max(0, raadighed)}
-              />
-            </div>
-          )}
-
           {friAndelPct != null && (
             <p className="mt-4 text-xs text-neutral-500">
               Rådighedsbeløbet svarer til {friAndelPct}% af den månedlige
@@ -192,9 +153,9 @@ export default async function RapportPage() {
           )}
           {gaeldRatio != null && (
             <p className="mt-1.5 text-xs text-neutral-500">
-              Gæld ift. årsindkomst (gældsfaktor) sammenholder den samlede gæld
-              med årsindkomsten. Banker ser typisk skærpet på gældsfaktorer over
-              ca. 4 ved boligfinansiering.
+              Gæld ift. årsindkomst er beregnet som samlet gæld ÷ årlig
+              nettoindkomst. Den officielle gældsfaktor bruger bruttoindkomst
+              (før skat), så jeres reelle gældsfaktor er lavere end tallet her.
             </p>
           )}
         </section>
@@ -297,9 +258,9 @@ export default async function RapportPage() {
 
         <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
           Genereret {formatLongDateDA(new Date())} via FamBud. Tallene dækker
-          husstandens fælles økonomi: samlet indkomst og fælles faste udgifter
-          (inkl. låneydelser). Private udgifter er udeladt. Beløb er månedlige
-          gennemsnit af tilbagevendende poster.
+          husstandens fælles økonomi: samlet indkomst, fælles faste udgifter
+          (ekskl. låneydelser, som er vist separat) og lån. Private udgifter er
+          udeladt. Beløb er månedlige gennemsnit af tilbagevendende poster.
         </footer>
       </div>
     </div>
@@ -383,65 +344,5 @@ function ReportRow({
       </span>
       <span className="tabnum font-mono">{value} kr</span>
     </li>
-  );
-}
-
-// Vandret søjle der viser hvordan månedsindkomsten deler sig: låneydelser +
-// øvrige faste udgifter + rådighedsbeløb = 100%. Olivengrønne nuancer, mørk
-// til lys. print-color-adjust:exact tvinger browseren til at printe farverne
-// (ellers stripper print-dialogen baggrunde og søjlen bliver tom).
-function IncomeAllocationBar({
-  income,
-  loans,
-  faste,
-  raadighed,
-}: {
-  income: number;
-  loans: number;
-  faste: number;
-  raadighed: number;
-}) {
-  const pct = (v: number) => (income > 0 ? Math.max(0, (v / income) * 100) : 0);
-  const segments = [
-    { label: 'Låneydelser', value: loans, color: '#4B4D39' },
-    { label: 'Faste udgifter', value: faste, color: '#7d805f' },
-    { label: 'Rådighedsbeløb', value: raadighed, color: '#b9bca0' },
-  ];
-  const printColor = {
-    printColorAdjust: 'exact',
-    WebkitPrintColorAdjust: 'exact',
-  } as const;
-
-  return (
-    <div>
-      <div
-        className="flex h-4 w-full overflow-hidden rounded-full bg-neutral-100"
-        style={printColor}
-      >
-        {segments.map((s) =>
-          s.value > 0 ? (
-            <div
-              key={s.label}
-              style={{ width: `${pct(s.value)}%`, backgroundColor: s.color, ...printColor }}
-              title={`${s.label}: ${formatAmount(s.value)} kr`}
-            />
-          ) : null
-        )}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {segments.map((s) => (
-          <span key={s.label} className="inline-flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: s.color, ...printColor }}
-            />
-            <span className="text-neutral-600">{s.label}</span>
-            <span className="tabnum font-mono text-neutral-900">
-              {formatAmount(s.value)} kr · {Math.round(pct(s.value))}%
-            </span>
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }

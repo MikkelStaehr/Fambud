@@ -42,10 +42,13 @@ export default async function AppLayout({
     // - md+ (tablet/desktop): klassisk side-by-side med fast sidebar
     //   til venstre. Sidebar holder samme størrelse uanset hvor langt
     //   indholdet er - det er kun <main> der scroller.
-    <div className="flex h-screen flex-col md:flex-row">
+    // print:block + print:h-auto: app-shell'en er et h-screen flex-layout
+    // til skærm, men ved print skal indholdet flyde frit over flere sider
+    // (ellers klippes alt under første viewport væk).
+    <div className="flex h-screen flex-col md:flex-row print:block print:h-auto">
       <MobileNav userEmail={user.email ?? ''} />
 
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4 md:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4 md:flex print:hidden">
         <div className="px-2 pb-6">
           <FambudMark size="lg" />
         </div>
@@ -74,7 +77,7 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">{children}</main>
 
       {/* Toast hænger på URL search-params; Suspense er påkrævet fordi
           useSearchParams ellers vil bailout client-side for hele route'en. */}
@@ -82,7 +85,9 @@ export default async function AppLayout({
         <Toast />
       </Suspense>
 
-      <BetaNotice />
+      <div className="print:hidden">
+        <BetaNotice />
+      </div>
     </div>
   );
 }

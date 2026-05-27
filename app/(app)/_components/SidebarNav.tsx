@@ -18,6 +18,7 @@ import {
   Goal,
   CalendarPlus,
   Sparkles,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -39,6 +40,8 @@ const NAV_MAIN: NavItem[] = [
   { href: '/budget', label: 'Budget', icon: Table2 },
   { href: '/poster', label: 'Poster', icon: Receipt },
   { href: '/overforsler', label: 'Overførsler', icon: ArrowLeftRight },
+  // Samlet finansrapport (print/PDF til banken + personligt overblik).
+  { href: '/rapport', label: 'Rapport', icon: FileText },
 ];
 
 // Værktøjer - sider hvor brugeren beriger systemet med data (oprette faste

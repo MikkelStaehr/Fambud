@@ -90,6 +90,19 @@ export async function getFamilyMembers(): Promise<FamilyMemberRow[]> {
   return data ?? [];
 }
 
+// Husstandens navn. Bruges fx som titel på finansrapporten ("Husstanden X").
+// Returnerer null hvis navnet ikke er sat.
+export async function getHouseholdName(): Promise<string | null> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('households')
+    .select('name')
+    .eq('id', householdId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.name ?? null;
+}
+
 // Læser husstandens economy_type. Bruges af wizard-forgreningen for at
 // vide om vi er i særskilt- eller fælles-økonomi-mode. Default 'separate'
 // for husstande oprettet før migration 0035.

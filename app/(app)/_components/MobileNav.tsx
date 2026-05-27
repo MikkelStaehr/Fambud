@@ -49,7 +49,7 @@ export function MobileNav({ userEmail }: Props) {
   return (
     <>
       {/* Top-bar - sticky øverst, kun synlig på mobile */}
-      <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-3 md:hidden">
+      <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-3 md:hidden print:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}

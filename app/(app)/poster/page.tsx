@@ -8,7 +8,7 @@
 // udgifter og netto), og udgifter går i selve tabellen.
 
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Plus, Download } from 'lucide-react';
 import { getTransactionsForMonth, shouldShowTour } from '@/lib/dal';
 import { PosterTour } from './_components/PosterTour';
 import {
@@ -95,6 +95,17 @@ export default async function PosterPage({
         </div>
         <div className="flex items-center gap-3">
           <MonthFilter yearMonth={month} basePath="/poster" />
+          {/* Plain anchor (ikke next/link): API-routen svarer med en fil-
+              download via Content-Disposition, og en client-side navigation
+              ville ikke trigge download'en. */}
+          <a
+            href={`/api/export/poster?month=${month}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-900 hover:text-neutral-900"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Eksportér CSV</span>
+            <span className="sm:hidden">CSV</span>
+          </a>
           <Link
             href="/poster/ny"
             data-tour="poster-add"

@@ -23,6 +23,7 @@ import {
   getMonthlyExpensesByGroup,
   getHouseholdName,
   getFamilyMembers,
+  getPrimaryIncomeForecast,
 } from '@/lib/dal';
 import {
   formatAmount,
@@ -67,10 +68,34 @@ export default async function RapportPage() {
   const raadighed = householdIncome - fixedExpensesExclLoans - loanPaymentTotal;
 
   const gaeldTotal = plan.loans.reduce((s, l) => s + l.balance, 0);
-  const annualIncome = householdIncome * 12;
-  const gaeldRatio = annualIncome > 0 ? gaeldTotal / annualIncome : null;
+  const annualNetIncome = householdIncome * 12;
+  const gaeldRatioNet = annualNetIncome > 0 ? gaeldTotal / annualNetIncome : null;
   const friAndelPct =
     householdIncome > 0 ? Math.round((raadighed * 100) / householdIncome) : null;
+
+  // Bruttoindkomst til den OFFICIELLE gældsfaktor (gæld ÷ bruttoårsindkomst).
+  // Brutto kommer fra lønsedlernes gross_amount via forecastet, og findes kun
+  // hvis brutto er udfyldt. Vi viser KUN brutto-faktoren hvis brutto dækker
+  // ~hele husstandsindkomsten - ellers ville vi dele gælden med en delvis
+  // bruttoindkomst og få et misvisende højt tal.
+  const incomeForecasts = await Promise.all(
+    plan.members.map(async (m) => ({
+      net: m.monthlyIncome,
+      forecast: await getPrimaryIncomeForecast(m.id),
+    }))
+  );
+  let grossMonthly = 0;
+  let netCoveredByGross = 0;
+  for (const { net, forecast } of incomeForecasts) {
+    if (forecast.status === 'ready' && forecast.monthlyGross != null) {
+      grossMonthly += forecast.monthlyGross;
+      netCoveredByGross += net;
+    }
+  }
+  const grossComplete =
+    grossMonthly > 0 && netCoveredByGross >= householdIncome * 0.9;
+  const gaeldRatioGross = grossComplete ? gaeldTotal / (grossMonthly * 12) : null;
+  const fmtRatio = (r: number) => `${r.toFixed(1).replace('.', ',')}×`;
 
   const monthLabel = formatMonthYearDA(currentYearMonth());
   const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
@@ -138,11 +163,30 @@ export default async function RapportPage() {
               emphasis
             />
             <StatTile label="Gæld i alt" value={formatAmount(gaeldTotal)} unit="kr" />
-            <StatTile
-              label="Gæld ift. årsindkomst"
-              value={gaeldRatio != null ? `${gaeldRatio.toFixed(1).replace('.', ',')}×` : '–'}
-              unit={gaeldRatio != null ? 'årsindkomster' : ''}
-            />
+            <div className="rounded-md border border-neutral-200 bg-white px-3 py-2.5">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+                Gældsfaktor
+              </div>
+              {gaeldRatioGross != null ? (
+                <>
+                  <div className="mt-1 tabnum font-mono text-lg font-semibold text-neutral-900">
+                    {fmtRatio(gaeldRatioGross)}{' '}
+                    <span className="text-xs font-normal text-neutral-400">brutto</span>
+                  </div>
+                  <div className="tabnum font-mono text-sm text-neutral-500">
+                    {gaeldRatioNet != null ? fmtRatio(gaeldRatioNet) : '–'}{' '}
+                    <span className="text-[10px] font-normal text-neutral-400">netto</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-1 tabnum font-mono text-lg font-semibold text-neutral-900">
+                    {gaeldRatioNet != null ? fmtRatio(gaeldRatioNet) : '–'}
+                  </div>
+                  <div className="text-[10px] text-neutral-400">netto-årsindkomst</div>
+                </>
+              )}
+            </div>
           </div>
           {friAndelPct != null && (
             <p className="mt-4 text-xs text-neutral-500">
@@ -151,13 +195,19 @@ export default async function RapportPage() {
               opsparing efter faste udgifter og låneydelser.
             </p>
           )}
-          {gaeldRatio != null && (
+          {gaeldRatioGross != null ? (
             <p className="mt-1.5 text-xs text-neutral-500">
-              Gæld ift. årsindkomst er beregnet som samlet gæld ÷ årlig
-              nettoindkomst. Den officielle gældsfaktor bruger bruttoindkomst
-              (før skat), så jeres reelle gældsfaktor er lavere end tallet her.
+              Gældsfaktor = samlet gæld ÷ årsindkomst. Vi viser den både på
+              bruttoindkomst (den officielle definition, banken bruger) og på
+              nettoindkomst.
             </p>
-          )}
+          ) : gaeldRatioNet != null ? (
+            <p className="mt-1.5 text-xs text-neutral-500">
+              Gældsfaktoren her er beregnet på nettoindkomst. Den officielle
+              bruger bruttoindkomst (lavere tal). Udfyld bruttoløn på indkomst-
+              siden for at få brutto-tallet med.
+            </p>
+          ) : null}
         </section>
 
         {/* Indkomst */}

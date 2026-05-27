@@ -41,7 +41,9 @@ export type AuditAction =
   | 'account.deleted'
   // Periodic emails / cron jobs
   | 'monthly_summary.sent'
-  | 'monthly_summary.failed';
+  | 'monthly_summary.failed'
+  | 'payment_reminder.sent'
+  | 'payment_reminder.failed';
 
 export type AuditResult = 'success' | 'failure' | 'denied';
 

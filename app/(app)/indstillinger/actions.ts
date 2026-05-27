@@ -529,6 +529,27 @@ export async function setMonthlySummaryEmail(formData: FormData) {
   redirect('/indstillinger');
 }
 
+// Toggle på de ugentlige betalings-påmindelser. Samme checkbox-mønster som
+// setMonthlySummaryEmail.
+export async function setPaymentReminderEmail(formData: FormData) {
+  const { supabase, user } = await getHouseholdContext();
+  const enabled = formData.get('payment_reminder_email_enabled') === 'on';
+
+  const { error } = await supabase
+    .from('family_members')
+    .update({ payment_reminder_email_enabled: enabled })
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('setPaymentReminderEmail failed:', error.message);
+    redirect(
+      '/indstillinger?error=' +
+        encodeURIComponent('Indstillingen kunne ikke gemmes - prøv igen.')
+    );
+  }
+  revalidatePath('/indstillinger');
+  redirect('/indstillinger');
+}
+
 // Sender en test-mail til den indloggede bruger med deres egen aktuelle
 // månedsoversigt. Til validering af email-template + Resend-deliverability
 // før den rigtige månedlige cron fyrer af.

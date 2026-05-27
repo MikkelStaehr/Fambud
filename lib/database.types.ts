@@ -440,6 +440,8 @@ export type Database = {
           tours_completed: Record<string, string>;
           monthly_summary_email_enabled: boolean;
           last_monthly_summary_sent_at: string | null;
+          payment_reminder_email_enabled: boolean;
+          last_payment_reminder_sent_at: string | null;
         };
         Insert: {
           id?: string;
@@ -463,6 +465,8 @@ export type Database = {
           tours_completed?: Record<string, string>;
           monthly_summary_email_enabled?: boolean;
           last_monthly_summary_sent_at?: string | null;
+          payment_reminder_email_enabled?: boolean;
+          last_payment_reminder_sent_at?: string | null;
         };
         Update: {
           id?: string;
@@ -486,6 +490,8 @@ export type Database = {
           tours_completed?: Record<string, string>;
           monthly_summary_email_enabled?: boolean;
           last_monthly_summary_sent_at?: string | null;
+          payment_reminder_email_enabled?: boolean;
+          last_payment_reminder_sent_at?: string | null;
         };
         Relationships: [];
       };

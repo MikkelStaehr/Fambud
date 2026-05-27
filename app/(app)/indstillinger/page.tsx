@@ -16,6 +16,7 @@ import {
   deleteMyAccount,
   setMonthlySummaryEmail,
   sendMyMonthlySummaryTest,
+  setPaymentReminderEmail,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
 
@@ -195,6 +196,41 @@ export default async function IndstillingerPage({
               Bruger din nuværende månedsdata. Subject præfikses med
               [TEST] så du kan kende den fra den rigtige.
             </p>
+          </form>
+
+          <form
+            action={setPaymentReminderEmail}
+            className="mt-3 rounded-md border border-neutral-200 bg-white p-4"
+          >
+            <label
+              htmlFor="payment_reminder_email_enabled"
+              className="flex cursor-pointer items-start gap-3"
+            >
+              <input
+                id="payment_reminder_email_enabled"
+                name="payment_reminder_email_enabled"
+                type="checkbox"
+                defaultChecked={me.payment_reminder_email_enabled}
+                className="mt-0.5 h-4 w-4 cursor-pointer accent-emerald-700"
+              />
+              <span className="flex-1">
+                <span className="block text-sm font-medium text-neutral-900">
+                  Ugentlig betalings-påmindelse
+                </span>
+                <span className="mt-0.5 block text-xs text-neutral-500">
+                  Hver mandag sender vi en mail med de regninger og
+                  overførsler der forfalder den kommende uge på dine egne
+                  og fælles konti. Du får kun mailen når der faktisk er
+                  noget på vej.
+                </span>
+              </span>
+            </label>
+            <button
+              type="submit"
+              className="mt-3 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
+            >
+              Gem
+            </button>
           </form>
         </section>
       )}

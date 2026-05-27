@@ -33,6 +33,7 @@ import {
 } from '@/lib/format';
 import { EventForm } from '../_components/EventForm';
 import { EventOverview } from '../_components/EventOverview';
+import { EventProgressChart } from '../_components/EventProgressChart';
 import { ItemList } from '../_components/ItemList';
 import {
   addLifeEventItem,
@@ -150,6 +151,19 @@ export default async function EventDetailPage({
         alert={alert}
         setupTransferHref={setupTransferHref}
       />
+
+      {/* Fremdriftsgraf: projektion mod målet ved nuværende opsparingsrate.
+          Skjules for terminale events (gennemført/aflyst) - så er fremdrift
+          ikke længere relevant. */}
+      {!isTerminal && (
+        <div className="mt-6">
+          <EventProgressChart
+            budget={totalBudget}
+            monthsRemaining={monthsRemaining}
+            monthlyRate={event.monthlyTotal}
+          />
+        </div>
+      )}
 
       {/* Status-actions: terminale skift (Aflys / Markér gennemført) +
           Genåbn fra terminal state. Live status (planning vs active)

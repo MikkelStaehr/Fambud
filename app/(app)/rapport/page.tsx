@@ -96,6 +96,11 @@ export default async function RapportPage() {
             <StatTile label="Månedlig indkomst" value={formatAmount(householdIncome)} unit="kr/md" />
             <StatTile label="Faste udgifter" value={formatAmount(fixedExpensesTotal)} unit="kr/md" />
             <StatTile
+              label="Låneydelser"
+              value={formatAmount(loanPaymentTotal)}
+              unit="kr/md · i faste udg."
+            />
+            <StatTile
               label="Rådighedsbeløb"
               value={formatAmount(raadighed)}
               unit="kr/md"

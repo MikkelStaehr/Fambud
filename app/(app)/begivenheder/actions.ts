@@ -218,7 +218,27 @@ export async function updateLifeEvent(id: string, formData: FormData) {
 export async function deleteLifeEvent(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!id) return;
+  // Når brugeren sletter en begivenhed spørger UI'et om de også vil stoppe
+  // de tilknyttede overførsler. Default er at BEHOLDE dem (FK er on delete
+  // set null, så de kører videre som "anden opsparing") - kun hvis
+  // stop_transfers='1' sletter vi dem aktivt.
+  const stopTransfers = String(formData.get('stop_transfers') ?? '') === '1';
   const { supabase, householdId } = await getHouseholdContext();
+
+  if (stopTransfers) {
+    // Slet de tilknyttede recurring overførsler FØR event'et, ellers mister
+    // de bare linket (on delete set null) og fortsætter med at køre.
+    const { error: trErr } = await supabase
+      .from('transfers')
+      .delete()
+      .eq('life_event_id', id)
+      .eq('household_id', householdId);
+    if (trErr) {
+      console.error('deleteLifeEvent (stop transfers) failed:', trErr.message);
+      throw new Error('Internal error');
+    }
+  }
+
   const { error } = await supabase
     .from('life_events')
     .delete()
@@ -229,7 +249,36 @@ export async function deleteLifeEvent(formData: FormData) {
     throw new Error('Internal error');
   }
   revalidatePath('/begivenheder');
-  await setFlashCookie('Begivenhed slettet');
+  revalidatePath('/overforsler');
+  revalidatePath('/dashboard');
+  await setFlashCookie(
+    stopTransfers ? 'Begivenhed og overførsel slettet' : 'Begivenhed slettet'
+  );
+  redirect('/begivenheder');
+}
+
+// "Stop overførsel" fra en begivenheds kort: sletter alle recurring
+// overførsler tied til event'et (= stopper den månedlige opsparing) men
+// beholder selve begivenheden. Redirecter tilbage til /begivenheder.
+export async function stopEventTransfer(formData: FormData) {
+  const eventId = String(formData.get('event_id') ?? '');
+  if (!eventId) return;
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .from('transfers')
+    .delete()
+    .eq('life_event_id', eventId)
+    .eq('household_id', householdId)
+    .neq('recurrence', 'once');
+  if (error) {
+    console.error('stopEventTransfer failed:', error.message);
+    throw new Error('Internal error');
+  }
+  revalidatePath('/begivenheder');
+  revalidatePath(`/begivenheder/${eventId}`);
+  revalidatePath('/overforsler');
+  revalidatePath('/dashboard');
+  await setFlashCookie('Overførsel stoppet');
   redirect('/begivenheder');
 }
 

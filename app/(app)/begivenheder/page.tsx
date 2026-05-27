@@ -11,9 +11,10 @@
 
 import Link from 'next/link';
 import { Plus, Pencil, Calendar, AlertTriangle, Clock } from 'lucide-react';
-import { getLifeEvents } from '@/lib/dal';
+import { getLifeEvents, getAdvisorContext } from '@/lib/dal';
 import {
   formatAmount,
+  formatOereForInput,
   formatShortDateDA,
   lifeEventAlert,
   lifeEventLiveStatus,
@@ -25,6 +26,28 @@ import {
   LIFE_EVENT_TYPE_LABEL_DA,
 } from '@/lib/format';
 import type { LifeEventStatus } from '@/lib/database.types';
+import { EventCardActions } from './_components/EventCardActions';
+
+// Prefill-href til /overforsler/ny for "Opret overførsel"-knappen. Matcher
+// detalje-sidens buildSetupTransferHref: foreslår den enkelte bidragyders
+// andel af det månedlige mål.
+function buildCreateTransferHref(
+  eventId: string,
+  monthlyTarget: number | null,
+  numContributors: number,
+  eventName: string
+): string {
+  const params = new URLSearchParams({
+    life_event_id: eventId,
+    recurrence: 'monthly',
+    description: eventName,
+  });
+  if (monthlyTarget != null) {
+    const share = Math.ceil(monthlyTarget / Math.max(1, numContributors));
+    params.set('amount', formatOereForInput(share));
+  }
+  return `/overforsler/ny?${params.toString()}`;
+}
 
 const STATUS_BADGE_CLASS: Record<LifeEventStatus, string> = {
   planning: 'bg-neutral-100 text-neutral-700',
@@ -34,7 +57,10 @@ const STATUS_BADGE_CLASS: Record<LifeEventStatus, string> = {
 };
 
 export default async function BegivenhederPage() {
-  const events = await getLifeEvents();
+  const [events, advisorCtx] = await Promise.all([
+    getLifeEvents(),
+    getAdvisorContext(),
+  ]);
 
   // Total budget på tværs af aktive (ikke-aflyste, ikke-gennemførte) for
   // header-tælleren. Bruger live status så terminale events ekskluderes.
@@ -207,6 +233,20 @@ export default async function BegivenhederPage() {
                     </span>
                   </div>
                 )}
+
+                <EventCardActions
+                  eventId={event.id}
+                  eventName={event.name}
+                  transferCount={event.transfers.length}
+                  firstTransferId={event.transfers[0]?.id ?? null}
+                  monthlyTotal={event.monthlyTotal}
+                  createTransferHref={buildCreateTransferHref(
+                    event.id,
+                    monthlyTarget,
+                    advisorCtx.numContributors,
+                    event.name
+                  )}
+                />
               </div>
             );
           })}

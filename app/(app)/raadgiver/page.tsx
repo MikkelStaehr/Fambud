@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { getEconomyPlanData } from '@/lib/dal';
+import { getEconomyPlanData, shouldShowTour } from '@/lib/dal';
 import {
   splitFaellesExpenses,
   bufferRecommendation,
@@ -13,6 +13,7 @@ import { AllokerSection } from './_components/AllokerSection';
 import { FiftyThirtyTwentySection } from './_components/FiftyThirtyTwentySection';
 import { LaaneoptimeringSection } from './_components/LaaneoptimeringSection';
 import { ManglerSection } from './_components/ManglerSection';
+import { RaadgiverTour } from './_components/RaadgiverTour';
 
 // Økonomi-rådgiveren: analyserer det husstanden har indtastet og foreslår en
 // konkret opsætning. Bygges i faser - denne første dækker fordelingen af de
@@ -20,7 +21,10 @@ import { ManglerSection } from './_components/ManglerSection';
 // mål, manglende opsætning og Opret-handlinger følger.
 
 export default async function RaadgiverPage() {
-  const plan = await getEconomyPlanData();
+  const [plan, autoStartTour] = await Promise.all([
+    getEconomyPlanData(),
+    shouldShowTour('raadgiver'),
+  ]);
   const split = splitFaellesExpenses(plan.members, plan.faellesMonthlyExpense);
   const buffer = bufferRecommendation(
     plan.monthlyFixedExpenses,
@@ -49,6 +53,7 @@ export default async function RaadgiverPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <RaadgiverTour autoStart={autoStartTour} />
       <header className="border-b border-neutral-200 pb-6">
         <h1 className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
           <Sparkles className="h-6 w-6 text-emerald-700" />
@@ -62,7 +67,7 @@ export default async function RaadgiverPage() {
       </header>
 
       {/* Sektion: Manglende opsætning (først - huller her påvirker alt nedenfor) */}
-      <section className="mt-8">
+      <section className="mt-8" data-tour="raadgiver-mangler">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-sm font-medium text-neutral-900">
             Manglende opsætning
@@ -77,7 +82,7 @@ export default async function RaadgiverPage() {
       </section>
 
       {/* Sektion: Fordeling af fælles udgifter */}
-      <section className="mt-8">
+      <section className="mt-8" data-tour="raadgiver-fordeling">
         <div className="mb-1 flex items-center gap-2">
           <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Fælles
@@ -125,7 +130,7 @@ export default async function RaadgiverPage() {
       </section>
 
       {/* Sektion: Allokér dit overskud */}
-      <section className="mt-8">
+      <section className="mt-8" data-tour="raadgiver-optimering">
         <div className="mb-2 flex items-center gap-2">
           <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Privat

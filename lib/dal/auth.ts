@@ -107,6 +107,7 @@ export const KNOWN_TOUR_KEYS = [
   'faste-udgifter',
   'husholdning',
   'opsparinger',
+  'raadgiver',
 ] as const;
 type TourKey = (typeof KNOWN_TOUR_KEYS)[number];
 

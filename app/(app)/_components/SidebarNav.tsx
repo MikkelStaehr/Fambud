@@ -12,13 +12,13 @@ import {
   Landmark,
   ShoppingBasket,
   PiggyBank,
-  Settings,
   Table2,
   Wrench,
   Goal,
   CalendarPlus,
   Sparkles,
   FileText,
+  Lightbulb,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -40,19 +40,12 @@ const NAV_MAIN: NavItem[] = [
   { href: '/budget', label: 'Budget', icon: Table2 },
   { href: '/poster', label: 'Poster', icon: Receipt },
   { href: '/overforsler', label: 'Overførsler', icon: ArrowLeftRight },
-  // Samlet finansrapport (print/PDF til banken + personligt overblik).
-  { href: '/rapport', label: 'Rapport', icon: FileText },
 ];
 
 // Værktøjer - sider hvor brugeren beriger systemet med data (oprette faste
 // udgifter, registrere husholdningskøb, sætte opsparingsmål). Adskilt fra
 // hovedflow'et så sidebaren ikke blander "se" og "vedligehold".
 const NAV_TOOLS: NavItem[] = [
-  // Rådgiveren analyserer det indtastede og anbefaler en konkret opsætning
-  // (fordeling af fælles udgifter, buffer-mål, manglende opsætning). Øverst
-  // i værktøjerne fordi det er det naturlige startpunkt når man vil have
-  // hjælp til at strukturere økonomien.
-  { href: '/raadgiver', label: 'Rådgiver', icon: Sparkles },
   { href: '/faste-udgifter', label: 'Faste udgifter', icon: ClipboardList },
   { href: '/husholdning', label: 'Husholdning', icon: ShoppingBasket },
   { href: '/opsparinger', label: 'Opsparinger & buffer', icon: PiggyBank },
@@ -61,8 +54,13 @@ const NAV_TOOLS: NavItem[] = [
   { href: '/begivenheder/ny', label: 'Planlæg begivenhed', icon: CalendarPlus },
 ];
 
-const NAV_BOTTOM: NavItem[] = [
-  { href: '/indstillinger', label: 'Indstillinger', icon: Settings },
+// Indsigt - analyse-/output-siderne. Rådgiveren tolker det indtastede og
+// anbefaler en opsætning; Rapporten samler hele økonomien til print/PDF.
+// Holdt adskilt fra Værktøjer (data-indtastning) fordi de FORTOLKER data
+// frem for at vedligeholde dem.
+const NAV_INSIGHT: NavItem[] = [
+  { href: '/raadgiver', label: 'Rådgiver', icon: Sparkles },
+  { href: '/rapport', label: 'Rapport', icon: FileText },
 ];
 
 export function SidebarNav() {
@@ -75,23 +73,30 @@ export function SidebarNav() {
       ))}
 
       <div data-tour="sidebar-tools">
-        <div className="mt-4 mb-1 flex items-center gap-1.5 px-2.5">
-          <Wrench className="h-3 w-3 text-neutral-400" />
-          <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
-            Værktøjer
-          </span>
-        </div>
+        <SectionHeading icon={Wrench} label="Værktøjer" />
         {NAV_TOOLS.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
       </div>
 
-      <div className="mt-4">
-        {NAV_BOTTOM.map((item) => (
+      <div>
+        <SectionHeading icon={Lightbulb} label="Indsigt" />
+        {NAV_INSIGHT.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
       </div>
     </nav>
+  );
+}
+
+function SectionHeading({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <div className="mt-4 mb-1 flex items-center gap-1.5 px-2.5">
+      <Icon className="h-3 w-3 text-neutral-400" />
+      <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+        {label}
+      </span>
+    </div>
   );
 }
 

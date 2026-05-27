@@ -7,6 +7,7 @@ import { FambudMark } from '@/app/_components/FambudMark';
 import { FeedbackModal } from './_components/FeedbackModal';
 import { MobileNav } from './_components/MobileNav';
 import { SidebarNav } from './_components/SidebarNav';
+import { SettingsLink } from './_components/SettingsLink';
 import { Toast } from './_components/Toast';
 import { signOut } from './actions';
 
@@ -61,6 +62,7 @@ export default async function AppLayout({
         </div>
 
         <div className="mt-auto px-1 pt-4">
+          <SettingsLink />
           <FeedbackModal />
           <form action={signOut}>
             <button

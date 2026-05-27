@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { LogOut, Menu, X } from 'lucide-react';
 import { FambudMark } from '@/app/_components/FambudMark';
 import { SidebarNav } from './SidebarNav';
+import { SettingsLink } from './SettingsLink';
 import { FeedbackModal } from './FeedbackModal';
 import { signOut } from '../actions';
 
@@ -97,6 +98,7 @@ export function MobileNav({ userEmail }: Props) {
             </div>
 
             <div className="border-t border-neutral-100 px-4 pt-3 pb-4">
+              <SettingsLink />
               <FeedbackModal />
               <form action={signOut}>
                 <button

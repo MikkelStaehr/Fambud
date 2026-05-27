@@ -28,15 +28,19 @@ export type PlanMember = {
 
 export type MemberShare = {
   member: PlanMember;
-  proportional: number;  // anbefalet andel - indkomst-proportional
-  equal: number;         // anbefalet andel - 50/50
-  current: number;       // nuværende bidrag
+  proportional: number;    // anbefalet andel - indkomst-proportional
+  equal: number;           // anbefalet andel - 50/50
+  equalRemaining: number;  // anbefalet andel - så alle ender med samme rådighed
+  current: number;         // nuværende bidrag
 };
 
 export type FaellesSplit = {
   total: number;          // samlede fælles udgifter/md
   totalIncome: number;    // sum af bidragydernes indkomst
   members: MemberShare[];
+  // Rådighedsbeløbet hver ender med under "lige rådighed"-modellen:
+  // (samlet indkomst - fælles udgifter) / antal bidragydere.
+  equalRemainingTarget: number;
   // True hvis mindst én bidragyders indkomst er ufuldstændig - så den
   // proportionale fordeling er et foreløbigt skøn.
   hasIncompleteIncome: boolean;
@@ -50,9 +54,16 @@ export function splitFaellesExpenses(
   const n = Math.max(1, members.length);
   const equalShare = Math.round(total / n);
 
+  // "Lige rådighed": hver beholder samme beløb R = (indkomst - udgifter)/n,
+  // og bidrager dermed (egen indkomst - R). Den der tjener mest betaler mest,
+  // så begge står lige bagefter. Vi gulver andelen ved 0 i det sjældne
+  // tilfælde hvor en indkomst er lavere end R (meget skæve indkomster).
+  const equalRemainingTarget = Math.round((totalIncome - total) / n);
+
   return {
     total,
     totalIncome,
+    equalRemainingTarget,
     hasIncompleteIncome: members.some((m) => !m.incomeComplete),
     members: members.map((m) => ({
       member: m,
@@ -63,6 +74,10 @@ export function splitFaellesExpenses(
           ? Math.round(total * (m.monthlyIncome / totalIncome))
           : equalShare,
       equal: equalShare,
+      equalRemaining:
+        totalIncome > 0
+          ? Math.max(0, m.monthlyIncome - equalRemainingTarget)
+          : equalShare,
       current: m.currentContribution,
     })),
   };

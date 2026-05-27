@@ -63,8 +63,9 @@ export default async function RaadgiverPage() {
           </h2>
           <InfoTooltip>
             Jeres samlede fælles udgifter delt mellem bidragyderne. Skift mellem
-            proportional (efter indkomst) og 50/50, og se hvad hver har tilbage
-            til sig selv bagefter. Begge modeller dækker det samme samlede beløb.
+            tre modeller: proportional (efter indkomst), 50/50, og lige rådighed
+            (begge ender med samme beløb til sig selv). Se hvad hver har tilbage
+            bagefter - alle tre dækker det samme samlede beløb.
           </InfoTooltip>
         </div>
 

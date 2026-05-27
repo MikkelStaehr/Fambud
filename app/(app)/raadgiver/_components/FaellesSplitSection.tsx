@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { formatAmount } from '@/lib/format';
 import type { FaellesSplit } from '@/lib/economy-plan';
 
-type Model = 'proportional' | 'equal';
+type Model = 'proportional' | 'equal' | 'equalRemaining';
 
 type Props = {
   split: FaellesSplit;
@@ -31,7 +31,11 @@ export function FaellesSplitSection({
   const [model, setModel] = useState<Model>('proportional');
 
   const shareOf = (m: FaellesSplit['members'][number]) =>
-    model === 'proportional' ? m.proportional : m.equal;
+    model === 'proportional'
+      ? m.proportional
+      : model === 'equal'
+        ? m.equal
+        : m.equalRemaining;
 
   const totalShare = split.members.reduce((s, m) => s + shareOf(m), 0);
   const totalIncome = split.totalIncome;
@@ -83,7 +87,29 @@ export function FaellesSplitSection({
         >
           50/50
         </button>
+        <button
+          type="button"
+          onClick={() => setModel('equalRemaining')}
+          className={`rounded px-3 py-1.5 font-medium transition ${
+            model === 'equalRemaining'
+              ? 'bg-neutral-900 text-white'
+              : 'text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          Lige rådighed
+        </button>
       </div>
+
+      {model === 'equalRemaining' && (
+        <p className="mb-3 max-w-2xl text-xs leading-relaxed text-neutral-500">
+          Den der tjener mest betaler tilsvarende mere, så I begge ender med
+          præcis det samme rådighedsbeløb -{' '}
+          <span className="tabnum font-mono">
+            {formatAmount(split.equalRemainingTarget)} kr
+          </span>{' '}
+          hver - efter de fælles udgifter er dækket.
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
         <table className="w-full text-sm">

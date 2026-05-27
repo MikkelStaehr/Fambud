@@ -160,6 +160,17 @@ export async function createPersonalAccountWithIncome(formData: FormData) {
   const { error: txErr } = await supabase.from('transactions').insert(rows);
   if (txErr) {
     console.error('wizard/lonkonto txErr:', txErr.message);
+    // Supabase-JS har ingen multi-statement-transaktion, så vi rydder den
+    // netop oprettede konto op manuelt - ellers efterlader et fejlet
+    // lønseddel-insert en tom dangling lønkonto. (Et hårdt server-crash
+    // mellem de to inserts er stadig muligt, men dér genbruger
+    // idempotens-tjekket ved næste forsøg den samme konto, så der opstår
+    // ikke dubletter.)
+    await supabase
+      .from('accounts')
+      .delete()
+      .eq('id', account.id)
+      .eq('household_id', householdId);
     redirect('/wizard/lonkonto?error=' + encodeURIComponent('Kunne ikke gemme lønudbetalingen'));
   }
 

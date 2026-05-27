@@ -1,19 +1,21 @@
-// /rapport - samlet finansrapport. Ét overblik over husstandens økonomi
-// (indkomst, faste udgifter, lån, rådighedsbeløb, 50/30/20) som både duer
-// som personligt statusbillede og som dokument til bankmødet.
+// /rapport - samlet finansrapport til bankmødet (og som personligt
+// statusbillede). Ét overblik over husstandens FÆLLES økonomi: samlet
+// indkomst, fælles faste udgifter, gæld og rådighedsbeløb.
 //
 // Print-optimeret: "Gem som PDF"-knappen åbner browserens print-dialog
 // (window.print). App-chrome (sidebar, top-bar, beta-notice) er skjult i
 // print via print:hidden i layout'et, så kun selve rapporten kommer med.
 //
-// Tallene er bevidst de SAMME som dashboardet og Rådgiveren viser:
+// To ting der er nemme at få galt i halsen:
 //   - Husstandens indkomst = Σ income pr. konto fra cashflow-grafen (det
 //     inkluderer løn-forecast, modsat getHouseholdFinancialSummary der kun
 //     tæller tilbagevendende income).
-//   - Faste udgifter = summen af kategori-grupperne (Privat + Fælles), så
-//     opdelingen længere nede stemmer med totalen.
-//   - Låneydelser holdes adskilt fra faste udgifter (de er konto-metadata,
-//     ikke expense-transaktioner), så rådighedsbeløbet ikke dobbelt-tæller.
+//   - Låneydelser er bogført som udgifter (under "Bolig & lån"), så de er
+//     ALLEREDE en del af de faste udgifter. Vi trækker dem derfor IKKE fra
+//     en ekstra gang - lån vises kun som en gældsoversigt. Det var den fejl
+//     der tidligere gjorde rådighedsbeløbet kunstigt negativt.
+//   - Private udgifter udelades: en bank vurderer husstandens fælles
+//     forpligtelser, ikke den enkeltes private forbrug.
 
 import {
   getEconomyPlanData,
@@ -21,14 +23,12 @@ import {
   getMonthlyExpensesByGroup,
   getHouseholdName,
 } from '@/lib/dal';
-import { computeFiftyThirtyTwenty } from '@/lib/economy-plan';
 import {
   formatAmount,
   formatMonthYearDA,
   formatLongDateDA,
   currentYearMonth,
 } from '@/lib/format';
-import type { CategoryGroup } from '@/lib/categories';
 import { PrintButton } from './_components/PrintButton';
 
 export default async function RapportPage() {
@@ -43,39 +43,23 @@ export default async function RapportPage() {
   let householdIncome = 0;
   for (const d of graph.perAccount.values()) householdIncome += d.income;
 
+  // Faste udgifter = husstandens FÆLLES faste udgifter. Bolig & lån-gruppen
+  // indeholder allerede låneydelserne (bogført som udgifter), så de er med
+  // her - og må derfor ikke trækkes fra igen som en separat post.
   const faelles = expenseGroups.shared;
-  const privat = expenseGroups.private;
-  const faellesTotal = faelles.reduce((s, g) => s + g.monthly, 0);
-  const privatTotal = privat.reduce((s, g) => s + g.monthly, 0);
-  const fixedExpensesTotal = faellesTotal + privatTotal;
+  const fixedExpensesTotal = faelles.reduce((s, g) => s + g.monthly, 0);
 
-  const loanPayments = plan.monthlyLoanPayments;
-  const raadighed = householdIncome - fixedExpensesTotal - loanPayments;
+  // Samlet låneydelse - kun til gældsoversigten + en note. IKKE et separat
+  // fradrag i rådighedsbeløbet (det ville dobbelt-tælle, jf. ovenfor).
+  const loanPaymentTotal = plan.loans.reduce((s, l) => s + l.monthlyPayment, 0);
+
+  const raadighed = householdIncome - fixedExpensesTotal;
 
   const gaeldTotal = plan.loans.reduce((s, l) => s + l.balance, 0);
   const annualIncome = householdIncome * 12;
   const gaeldRatio = annualIncome > 0 ? gaeldTotal / annualIncome : null;
   const friAndelPct =
     householdIncome > 0 ? Math.round((raadighed * 100) / householdIncome) : null;
-
-  // 50/30/20 på husstands-niveau: kombinér private + fælles udgiftsgrupper
-  // og lad computeFiftyThirtyTwenty bucket'e dem til behov/forbrug/opsparing.
-  const combinedMap = new Map<CategoryGroup, number>();
-  for (const g of [...privat, ...faelles]) {
-    combinedMap.set(g.group, (combinedMap.get(g.group) ?? 0) + g.monthly);
-  }
-  const combinedGroups = Array.from(combinedMap, ([group, monthly]) => ({
-    group,
-    monthly,
-  }));
-  const fiftyThirtyTwenty =
-    householdIncome > 0
-      ? computeFiftyThirtyTwenty({
-          income: householdIncome,
-          faellesContribution: 0,
-          privateGroups: combinedGroups,
-        })
-      : null;
 
   const monthLabel = formatMonthYearDA(currentYearMonth());
   const monthCap = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
@@ -111,7 +95,6 @@ export default async function RapportPage() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatTile label="Månedlig indkomst" value={formatAmount(householdIncome)} unit="kr/md" />
             <StatTile label="Faste udgifter" value={formatAmount(fixedExpensesTotal)} unit="kr/md" />
-            <StatTile label="Låneydelser" value={formatAmount(loanPayments)} unit="kr/md" />
             <StatTile
               label="Rådighedsbeløb"
               value={formatAmount(raadighed)}
@@ -130,7 +113,7 @@ export default async function RapportPage() {
             <p className="mt-2 text-xs text-neutral-500">
               Rådighedsbeløbet svarer til {friAndelPct}% af den månedlige
               indkomst - det er hvad der er tilbage til dagligt forbrug og
-              opsparing efter faste udgifter og låneydelser.
+              opsparing efter de faste udgifter (som inkluderer låneydelserne).
             </p>
           )}
         </section>
@@ -157,41 +140,27 @@ export default async function RapportPage() {
           )}
         </section>
 
-        {/* Faste udgifter - Privat/Fælles */}
+        {/* Faste udgifter - kun husstandens fælles (private udelades for banken) */}
         <section className="mt-8 break-inside-avoid">
           <SectionTitle>Faste udgifter</SectionTitle>
-
-          <h3 className="mb-1.5 mt-2 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
-            Fælles
-          </h3>
+          <p className="mb-2 text-xs text-neutral-500">
+            Husstandens fælles faste udgifter pr. måned. Beløbene inkluderer
+            låneydelserne (under Bolig & lån); selve gælden er specificeret nedenfor.
+          </p>
           {faelles.length === 0 ? (
-            <p className="text-sm text-neutral-400">Ingen fælles faste udgifter.</p>
+            <p className="text-sm text-neutral-400">Ingen faste udgifter registreret.</p>
           ) : (
             <ReportTable>
               {faelles.map((g) => (
                 <ReportRow key={g.group} label={g.group} value={formatAmount(g.monthly)} />
               ))}
-              <ReportRow label="Fælles i alt" value={formatAmount(faellesTotal)} total />
+              <ReportRow
+                label="Faste udgifter i alt"
+                value={formatAmount(fixedExpensesTotal)}
+                total
+              />
             </ReportTable>
           )}
-
-          <h3 className="mb-1.5 mt-4 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
-            Privat
-          </h3>
-          {privat.length === 0 ? (
-            <p className="text-sm text-neutral-400">Ingen private faste udgifter.</p>
-          ) : (
-            <ReportTable>
-              {privat.map((g) => (
-                <ReportRow key={g.group} label={g.group} value={formatAmount(g.monthly)} />
-              ))}
-              <ReportRow label="Privat i alt" value={formatAmount(privatTotal)} total />
-            </ReportTable>
-          )}
-
-          <div className="mt-3 border-t border-neutral-200 pt-2">
-            <ReportRow label="Faste udgifter i alt" value={formatAmount(fixedExpensesTotal)} total />
-          </div>
         </section>
 
         {/* Lån */}
@@ -228,7 +197,7 @@ export default async function RapportPage() {
                 <span className="flex-1 text-neutral-900">I alt</span>
                 <span className="w-16" />
                 <span className="w-24 text-right tabnum font-mono text-neutral-900">
-                  {formatAmount(plan.loans.reduce((s, l) => s + l.monthlyPayment, 0))}
+                  {formatAmount(loanPaymentTotal)}
                 </span>
                 <span className="w-28 text-right tabnum font-mono text-neutral-900">
                   {formatAmount(gaeldTotal)}
@@ -236,43 +205,21 @@ export default async function RapportPage() {
               </li>
             </ReportTable>
           )}
+          {plan.loans.length > 0 && (
+            <p className="mt-2 text-xs text-neutral-500">
+              Ydelserne ({formatAmount(loanPaymentTotal)} kr/md) er allerede
+              indregnet i de faste udgifter ovenfor (Bolig & lån) - de lægges
+              ikke oveni rådighedsbeløbet. Tabellen viser gælden, ikke en
+              ekstra udgift.
+            </p>
+          )}
         </section>
 
-        {/* 50/30/20 */}
-        {fiftyThirtyTwenty && (
-          <section className="mt-8 break-inside-avoid">
-            <SectionTitle>Fordeling (50/30/20)</SectionTitle>
-            <p className="mb-3 text-xs text-neutral-500">
-              Tommelfingerreglen: ca. 50% til behov (bolig, transport, mad,
-              forsikring), 30% til forbrug og lyst, 20% til opsparing.
-            </p>
-            <div className="space-y-2.5">
-              <BudgetBar
-                label="Behov"
-                amount={fiftyThirtyTwenty.needs}
-                pct={fiftyThirtyTwenty.needsPct}
-                target={50}
-              />
-              <BudgetBar
-                label="Forbrug"
-                amount={fiftyThirtyTwenty.wants}
-                pct={fiftyThirtyTwenty.wantsPct}
-                target={30}
-              />
-              <BudgetBar
-                label="Opsparing"
-                amount={fiftyThirtyTwenty.savings}
-                pct={fiftyThirtyTwenty.savingsPct}
-                target={20}
-              />
-            </div>
-          </section>
-        )}
-
         <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
-          Genereret {formatLongDateDA(new Date())} via FamBud. Tallene er
-          baseret på de konti du har adgang til (dine egne og husstandens
-          fælles) og månedlige gennemsnit af tilbagevendende poster.
+          Genereret {formatLongDateDA(new Date())} via FamBud. Tallene dækker
+          husstandens fælles økonomi: samlet indkomst og fælles faste udgifter
+          (inkl. låneydelser). Private udgifter er udeladt. Beløb er månedlige
+          gennemsnit af tilbagevendende poster.
         </footer>
       </div>
     </div>
@@ -356,39 +303,5 @@ function ReportRow({
       </span>
       <span className="tabnum font-mono">{value} kr</span>
     </li>
-  );
-}
-
-function BudgetBar({
-  label,
-  amount,
-  pct,
-  target,
-}: {
-  label: string;
-  amount: number;
-  pct: number;
-  target: number;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between text-sm">
-        <span className="font-medium text-neutral-900">
-          {label}{' '}
-          <span className="text-xs font-normal text-neutral-400">
-            (mål ca. {target}%)
-          </span>
-        </span>
-        <span className="tabnum font-mono text-neutral-700">
-          {formatAmount(amount)} kr · {pct}%
-        </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
-        <div
-          className="h-full rounded-full bg-[#4B4D39]"
-          style={{ width: `${Math.min(100, pct)}%` }}
-        />
-      </div>
-    </div>
   );
 }

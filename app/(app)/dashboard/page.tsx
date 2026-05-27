@@ -33,6 +33,7 @@ import { PrivatFaellesOverview } from './_components/PrivatFaellesOverview';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { LifeEventsWidget } from './_components/LifeEventsWidget';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
+import { NextStepsCard } from './_components/NextStepsCard';
 import { UpcomingEvents } from './_components/UpcomingEvents';
 
 // Tidsbestemt hilsen - dansk, fire buckets der dækker normale vågne timer.
@@ -124,6 +125,20 @@ export default async function DashboardPage() {
   const greeting = greetingFor(today);
   const personalGreeting = firstName ? `${greeting}, ${firstName}` : greeting;
 
+  // "Næste skridt"-kortet vises når onboarding-checklisten er fuldt færdig,
+  // men der stadig er et konkret næste skridt (ingen begivenheder endnu eller
+  // en partner der mangler at signe op). Så falder brugeren ikke af kanten
+  // når checklisten forsvinder, og kortet skjuler sig selv når der er taget
+  // fat på det.
+  const onboardingComplete =
+    onboardingProgress.hasIncome &&
+    onboardingProgress.hasRecurringExpenses &&
+    onboardingProgress.hasRecurringTransfers &&
+    onboardingProgress.hasBufferAccount;
+  const showNextSteps =
+    onboardingComplete &&
+    (lifeEvents.length === 0 || ctx.pendingMembers.length > 0);
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <DashboardTour
@@ -142,6 +157,13 @@ export default async function DashboardPage() {
           tidligere enkelt-CTA "Lad os fylde budgettet op" så brugeren ser
           hele post-wizard rejsen, ikke bare det første trin. */}
       <OnboardingChecklist progress={onboardingProgress} />
+
+      {showNextSteps && (
+        <NextStepsCard
+          hasEvents={lifeEvents.length > 0}
+          pendingMemberNames={ctx.pendingMembers.map((m) => m.name)}
+        />
+      )}
 
       <FamilyStatus members={otherMembersStatus} />
 

@@ -28,6 +28,14 @@ type Props = {
 export function OnboardingChecklist({ progress }: Props) {
   const steps: Step[] = [
     {
+      done: progress.hasIncome,
+      label: 'Registrér din indkomst',
+      description:
+        'Indtast dine seneste lønudbetalinger. Med 3 registrerede beregner vi et præcist forecast af din månedlige indtægt.',
+      cta: progress.hasIncome ? 'Se indkomst' : 'Registrér løn',
+      href: '/indkomst',
+    },
+    {
       done: progress.hasRecurringExpenses,
       label: 'Tilføj jeres faste udgifter',
       description:

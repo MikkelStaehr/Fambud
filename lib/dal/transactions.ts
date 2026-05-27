@@ -130,41 +130,67 @@ export async function getDistinctExpenseGroups(): Promise<string[]> {
 // wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
 // er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.
 export type OnboardingProgress = {
+  // Har den INDLOGGEDE bruger registreret mindst én lønudbetaling? Indkomst
+  // er fundamentet - uden den er hele dashboardet 0, og forecastet (som
+  // kræver 3 lønsedler) kan ikke beregnes. Derfor er det checklistens
+  // første trin.
+  hasIncome: boolean;
   hasRecurringExpenses: boolean;
   hasRecurringTransfers: boolean;
   hasBufferAccount: boolean;
 };
 
 export async function getOnboardingProgress(): Promise<OnboardingProgress> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const { supabase, householdId, user } = await getHouseholdContext();
 
-  const [txnRes, transferRes, accountRes] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('id, recurrence, category:categories(kind)')
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once')
-      .returns<
-        { id: string; recurrence: string; category: { kind: string } | null }[]
-      >(),
-    supabase
-      .from('transfers')
-      .select('id', { count: 'exact', head: true })
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once'),
-    supabase
-      .from('accounts')
-      .select('id, savings_purposes')
-      .eq('household_id', householdId)
-      .eq('archived', false)
-      .returns<{ id: string; savings_purposes: string[] | null }[]>(),
-  ]);
+  const [txnRes, transferRes, accountRes, myMemberRes, paychecksRes] =
+    await Promise.all([
+      supabase
+        .from('transactions')
+        .select('id, recurrence, category:categories(kind)')
+        .eq('household_id', householdId)
+        .neq('recurrence', 'once')
+        .returns<
+          { id: string; recurrence: string; category: { kind: string } | null }[]
+        >(),
+      supabase
+        .from('transfers')
+        .select('id', { count: 'exact', head: true })
+        .eq('household_id', householdId)
+        .neq('recurrence', 'once'),
+      supabase
+        .from('accounts')
+        .select('id, savings_purposes')
+        .eq('household_id', householdId)
+        .eq('archived', false)
+        .returns<{ id: string; savings_purposes: string[] | null }[]>(),
+      supabase
+        .from('family_members')
+        .select('id')
+        .eq('household_id', householdId)
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('transactions')
+        .select('family_member_id')
+        .eq('household_id', householdId)
+        .eq('income_role', 'primary')
+        .eq('recurrence', 'once')
+        .returns<{ family_member_id: string | null }[]>(),
+    ]);
 
   if (txnRes.error) throw txnRes.error;
   if (transferRes.error) throw transferRes.error;
   if (accountRes.error) throw accountRes.error;
+  if (myMemberRes.error) throw myMemberRes.error;
+  if (paychecksRes.error) throw paychecksRes.error;
+
+  const myMemberId = myMemberRes.data?.id ?? null;
 
   return {
+    hasIncome:
+      myMemberId != null &&
+      (paychecksRes.data ?? []).some((p) => p.family_member_id === myMemberId),
     hasRecurringExpenses: (txnRes.data ?? []).some(
       (t) => t.category?.kind === 'expense'
     ),

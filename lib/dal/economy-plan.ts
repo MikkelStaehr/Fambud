@@ -47,7 +47,11 @@ export type EconomyPlanData = {
     id: string;
     name: string;
     balance: number;
+    // rate = den effektive omkostning (ÅOP foretrukket) til at RANGERE lån
+    // efter, hvad der er dyrest. interestRate = den nominelle rente til
+    // VISNING (fx i finansrapporten), så vi ikke kalder ÅOP for "rente".
     rate: number | null;
+    interestRate: number | null;
     monthlyPayment: number;
   }[];
   // Den indloggede brugers uallokerede overskud/md (= dashboardets "tilbage
@@ -236,6 +240,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       name: l.name,
       balance: Math.abs(l.opening_balance),
       rate: l.apr ?? l.interest_rate,
+      interestRate: l.interest_rate,
       monthlyPayment: l.payment_amount
         ? monthlyEquivalent(l.payment_amount, l.payment_interval)
         : 0,

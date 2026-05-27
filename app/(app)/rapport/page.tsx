@@ -357,7 +357,9 @@ export default async function RapportPage() {
                 >
                   <span className="flex-1 text-neutral-900">{l.name}</span>
                   <span className="w-16 text-right tabnum font-mono text-neutral-600">
-                    {l.rate != null ? `${l.rate.toFixed(2).replace('.', ',')}%` : '–'}
+                    {l.interestRate != null
+                      ? `${l.interestRate.toFixed(2).replace('.', ',')}%`
+                      : '–'}
                   </span>
                   <span className="w-24 text-right tabnum font-mono text-neutral-700">
                     {formatAmount(l.monthlyPayment)}

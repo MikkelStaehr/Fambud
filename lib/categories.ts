@@ -106,3 +106,25 @@ const CATEGORY_TO_GROUP_RAW: Record<string, CategoryGroup> = {
 export function categoryGroupFor(categoryName: string): CategoryGroup {
   return CATEGORY_TO_GROUP_RAW[categoryName] ?? 'Andet';
 }
+
+// Husholdnings-underkategorier: hvad pengene på husholdningskontoen
+// faktisk går til. /husholdning bruger disse til en fordelings-graf, så
+// "hvor går de 9.000 hen?" ikke længere er en sort boks. 'Husholdning'
+// beholdes som catch-all (= "andet") og er kategori for alle ældre poster.
+//
+// Vi auto-opretter dem ved første brug (samme mønster som 'Husholdning' og
+// 'Lån') så ingen migration er nødvendig.
+export const HOUSEHOLD_SUBCATEGORIES = [
+  { name: 'Dagligvarer', color: '#16a34a' }, // grøn - mest brugte
+  { name: 'Restaurant',  color: '#dc2626' }, // rød - ude at spise
+  { name: 'Takeaway',    color: '#ea580c' }, // orange - hjem-leveret
+  { name: 'Pleje',       color: '#0d9488' }, // teal - apotek, personlig pleje
+  { name: 'Husholdning', color: '#64748b' }, // grå - catch-all / "andet"
+] as const;
+
+export type HouseholdSubcategoryName =
+  (typeof HOUSEHOLD_SUBCATEGORIES)[number]['name'];
+
+export const HOUSEHOLD_SUBCATEGORY_NAMES: ReadonlySet<string> = new Set(
+  HOUSEHOLD_SUBCATEGORIES.map((s) => s.name)
+);

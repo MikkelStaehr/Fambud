@@ -28,6 +28,7 @@ import {
   formatShortDateDA,
   monthBounds,
 } from '@/lib/format';
+import { HOUSEHOLD_SUBCATEGORIES } from '@/lib/categories';
 import { EmptyState } from '../_components/EmptyState';
 import { MonthFilter } from '../_components/MonthFilter';
 import { AmountInput } from '../_components/AmountInput';
@@ -53,6 +54,9 @@ type Purchase = {
   amount: number;
   description: string | null;
   occurs_on: string;
+  // Underkategori (Dagligvarer, Restaurant, Takeaway, Pleje, Husholdning).
+  // Kan være null for ekstremt gamle poster der mangler kategori-ID.
+  category: { name: string; color: string } | null;
 };
 
 type HouseholdAccountData = {
@@ -178,6 +182,26 @@ function HouseholdAccountCard({
   const remaining = budget - spent;
   const overBudget = budget > 0 && remaining < 0;
 
+  // Fordelings-graf: gruppér månedens køb pr. underkategori og beregn andel.
+  // Sorteres med største bucket først så det største spend springer i øjnene.
+  // Ukendt/manglende kategori falder under 'Husholdning' (catch-all).
+  const breakdownMap = new Map<string, { amount: number; color: string }>();
+  for (const p of purchases) {
+    const name = p.category?.name ?? 'Husholdning';
+    const color = p.category?.color ?? '#64748b';
+    const cur = breakdownMap.get(name);
+    if (cur) cur.amount += p.amount;
+    else breakdownMap.set(name, { amount: p.amount, color });
+  }
+  const breakdown = Array.from(breakdownMap.entries())
+    .map(([name, v]) => ({
+      name,
+      amount: v.amount,
+      color: v.color,
+      pct: spent > 0 ? Math.round((v.amount * 100) / spent) : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
   // Subtilt værdineutralt: emerald indtil 80% (fri kapital), amber 80-100%
   // (tæt på), rød over (cap brudt). Bevidst ikke "rød fra dag 1" - det
   // skal være OK at bruge.
@@ -267,12 +291,71 @@ function HouseholdAccountCard({
         )}
       </div>
 
+      {/* Fordelings-graf: hvor månedens forbrug gik hen, pr. underkategori.
+          Skjules når der ikke er noget at vise endnu. */}
+      {breakdown.length > 0 && (
+        <div className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+          <h3 className="mb-3 text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+            Hvor pengene gik hen
+          </h3>
+          <div className="space-y-2">
+            {breakdown.map((b) => (
+              <div key={b.name}>
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-xs">
+                  <span className="inline-flex items-center gap-1.5 text-neutral-700">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: b.color }}
+                      aria-hidden
+                    />
+                    {b.name}
+                  </span>
+                  <span className="tabnum font-mono text-neutral-900">
+                    {formatAmount(b.amount)} kr · {b.pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${b.pct}%`, backgroundColor: b.color }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tilføj-køb-formen */}
       <form
         action={handleAdd}
         data-tour="husholdning-add"
         className="border-b border-neutral-100 bg-neutral-50/50 p-4 sm:p-5"
       >
+        {/* Underkategori-vælger: native radios styled som chips. Default
+            Dagligvarer (mest brugte). Ingen JS - submitter via standard form. */}
+        <fieldset className="mb-2.5 flex flex-wrap gap-1.5">
+          <legend className="sr-only">Underkategori</legend>
+          {HOUSEHOLD_SUBCATEGORIES.map((s, i) => (
+            <label key={s.name} className="cursor-pointer">
+              <input
+                type="radio"
+                name="subcategory"
+                value={s.name}
+                defaultChecked={i === 0}
+                className="peer sr-only"
+              />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 transition peer-checked:border-neutral-900 peer-checked:bg-neutral-900 peer-checked:text-white">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: s.color }}
+                  aria-hidden
+                />
+                {s.name}
+              </span>
+            </label>
+          ))}
+        </fieldset>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_auto_auto]">
           <input
             id={`occurs_on-${account.id}`}
@@ -324,6 +407,12 @@ function HouseholdAccountCard({
                 <span className="w-16 shrink-0 text-xs text-neutral-500">
                   {formatShortDateDA(p.occurs_on)}
                 </span>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: p.category?.color ?? '#64748b' }}
+                  aria-label={p.category?.name ?? 'Husholdning'}
+                  title={p.category?.name ?? 'Husholdning'}
+                />
                 <span className="truncate text-sm text-neutral-900">
                   {p.description ?? '-'}
                 </span>
@@ -367,7 +456,9 @@ async function loadPurchases(
 
   const { data: purchasesRes, error } = await supabase
     .from('transactions')
-    .select('id, account_id, amount, description, occurs_on, recurrence')
+    .select(
+      'id, account_id, amount, description, occurs_on, recurrence, category:categories(name, color)'
+    )
     .eq('household_id', householdId)
     .in('account_id', accountIds)
     .eq('recurrence', 'once')
@@ -381,6 +472,7 @@ async function loadPurchases(
       description: string | null;
       occurs_on: string;
       recurrence: RecurrenceFreq;
+      category: { name: string; color: string } | null;
     }[]>();
 
   if (error) throw error;
@@ -393,6 +485,7 @@ async function loadPurchases(
       amount: p.amount,
       description: p.description,
       occurs_on: p.occurs_on,
+      category: p.category,
     });
     purchasesByAccount.set(p.account_id, list);
   }

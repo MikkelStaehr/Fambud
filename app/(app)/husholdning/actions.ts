@@ -5,22 +5,31 @@ import { revalidatePath } from 'next/cache';
 import { getHouseholdContext } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, HOUSEHOLD_PURCHASE_KINDS } from '@/lib/actions/account-validation';
+import {
+  HOUSEHOLD_SUBCATEGORIES,
+  HOUSEHOLD_SUBCATEGORY_NAMES,
+} from '@/lib/categories';
 
 // /husholdning er et forbrugsspor pr. husholdningskonto. Hvert "køb" er en
 // almindelig transaction med recurrence='once' på den valgte dato. Vi
-// kategoriserer dem under 'Husholdning' (auto-oprettet på første brug,
-// samme pattern som 'Lån' for loans og 'Løn' for indkomst) - så filtrering
-// "vis mig al mad-spend" er let senere.
+// kategoriserer dem under én af HOUSEHOLD_SUBCATEGORIES (Dagligvarer,
+// Restaurant, Takeaway, Pleje, Husholdning) så fordelings-grafen kan vise
+// hvor pengene faktisk går hen. 'Husholdning' er catch-all/default.
+//
+// Kategorierne auto-oprettes ved første brug, samme mønster som 'Lån' for
+// loans og 'Løn' for indkomst - ingen migration nødvendig.
 
-async function getOrCreateHouseholdCategoryId(
+async function getOrCreateHouseholdSubcategoryId(
   supabase: Awaited<ReturnType<typeof getHouseholdContext>>['supabase'],
-  householdId: string
+  householdId: string,
+  name: string,
+  color: string
 ): Promise<string> {
   const { data: existing } = await supabase
     .from('categories')
     .select('id')
     .eq('household_id', householdId)
-    .eq('name', 'Husholdning')
+    .eq('name', name)
     .eq('kind', 'expense')
     .maybeSingle();
   if (existing?.id) return existing.id;
@@ -29,11 +38,9 @@ async function getOrCreateHouseholdCategoryId(
     .from('categories')
     .insert({
       household_id: householdId,
-      name: 'Husholdning',
+      name,
       kind: 'expense',
-      // Samme grøn-tone som 'Mad' - visuelt aligneret men distinkt fra de
-      // restaurant-spend brugeren måske kategoriserer som 'Mad' separat.
-      color: '#16a34a',
+      color,
     })
     .select('id')
     .single();
@@ -82,7 +89,20 @@ export async function addHouseholdPurchase(
     redirect('/husholdning?error=' + encodeURIComponent(accCheck.error));
   }
 
-  const categoryId = await getOrCreateHouseholdCategoryId(supabase, householdId);
+  // SECURITY: subcategory skal være ÉN af de kendte navne. Whitelist-tjek
+  // sikrer at en angriber ikke kan POSTe arbitrary kategori-navne og spamme
+  // categories-tabellen med opfindelser. Falder tilbage til 'Husholdning'
+  // (catch-all) hvis feltet er tomt eller ukendt - bevarer bagudkompatibilitet
+  // med tidligere formularer der ikke sendte feltet.
+  const rawSub = String(formData.get('subcategory') ?? '').trim();
+  const subName = HOUSEHOLD_SUBCATEGORY_NAMES.has(rawSub) ? rawSub : 'Husholdning';
+  const subMeta = HOUSEHOLD_SUBCATEGORIES.find((s) => s.name === subName)!;
+  const categoryId = await getOrCreateHouseholdSubcategoryId(
+    supabase,
+    householdId,
+    subMeta.name,
+    subMeta.color
+  );
 
   const { error } = await supabase.from('transactions').insert({
     household_id: householdId,

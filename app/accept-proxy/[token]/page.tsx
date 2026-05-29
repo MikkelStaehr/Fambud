@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { hashProxyToken } from '@/lib/proxy';
 import {
   acceptSetupProxy,
@@ -28,11 +29,15 @@ export default async function AcceptProxyPage({
   }
 
   const tokenHash = hashProxyToken(token);
-  const supabase = await createClient();
 
-  // Slå grant op anonymt (kun til at vise public info: hvem anmoder,
-  // hvad er scope, hvornår udløber). Selve accept-actionen kræver login.
-  const { data: grant } = await supabase
+  // VIGTIGT: token er selv credential'en på den her side. Vi skal kunne
+  // se grant-info SELVOM brugeren ikke er logget ind endnu - så vi kan
+  // vise samtykke-siden eller bede dem logge ind. Anon-client + RLS
+  // ville blokere SELECT for ikke-authentificerede, så vi bruger
+  // service-role admin-client for selve lookup'et. Selve accept-action'en
+  // bruger normal user-client + RLS som beskyttelse.
+  const adminSupabase = createAdminClient();
+  const { data: grant } = await adminSupabase
     .from('setup_proxy_grants')
     .select(
       'id, grantor_user_id, grantee_user_id, expires_at, accepted_at, revoked_at, household_id, scope'
@@ -44,30 +49,32 @@ export default async function AcceptProxyPage({
   if (grant.revoked_at) return <Revoked />;
   if (new Date(grant.expires_at) <= new Date()) return <Expired />;
 
-  // Hent grantor og grantee navne via family_members (RLS er åben for
-  // SELECT på family_members for husstandsmedlemmer, og denne side
-  // bruger anon-context - så vi laver en lille service-side helper:
-  // Vi har ikke admin-client her, så vi accepterer at vi måske ikke
-  // kan vise navne hvis caller ikke er authenticated. Vi prøver alligevel)
+  // Hent grantor og grantee navne + husstandsnavn til samtykke-siden.
+  // Disse skal også fungere pre-auth (vi vil vise siden til Louise
+  // selvom hun ikke har logget ind endnu), så vi bruger samme
+  // admin-client som grant-lookup'et.
   const [{ data: grantorMember }, { data: granteeMember }, { data: household }] =
     await Promise.all([
-      supabase
+      adminSupabase
         .from('family_members')
         .select('name')
         .eq('user_id', grant.grantor_user_id)
         .maybeSingle(),
-      supabase
+      adminSupabase
         .from('family_members')
         .select('name')
         .eq('user_id', grant.grantee_user_id)
         .maybeSingle(),
-      supabase.from('households').select('name').eq('id', grant.household_id).maybeSingle(),
+      adminSupabase.from('households').select('name').eq('id', grant.household_id).maybeSingle(),
     ]);
 
   const grantorName = grantorMember?.name ?? 'Du';
   const granteeName = granteeMember?.name ?? 'et familiemedlem';
   const householdName = household?.name ?? 'jeres husstand';
 
+  // Auth-check kører via almindelig user-client - vi vil vide om DEN
+  // pågældende bruger der ser siden er logget ind, ikke service-role.
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

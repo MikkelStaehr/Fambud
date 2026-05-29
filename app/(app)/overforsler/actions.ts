@@ -6,6 +6,7 @@ import { getHouseholdContext } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
+import { resolveEffectiveUser } from '@/lib/proxy';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -123,18 +124,26 @@ export async function createTransfer(formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  // Proxy-mode (migration 0065): transfers er husstands-scoped og har ingen
+  // per-bruger-kolonne, så data lander korrekt uanset hvem der opretter.
+  // Vi tilføjer kun en "for Louise"-note til bekræftelsen så Mikkel ved at
+  // overførslen blev oprettet som del af hendes opsætning.
+  const proxy = await resolveEffectiveUser('setup');
+  const noticeSuffix = proxy.isProxyActive
+    ? ` for ${proxy.grantorName ?? 'familiemedlem'}`
+    : '';
   // Hvis transferen blev linket til en begivenhed, invalider også den
   // begivenheds detalje- og listesider så live status (planning →
   // active) opdateres straks.
   if (parsed.data.life_event_id) {
     revalidatePath('/begivenheder');
     revalidatePath(`/begivenheder/${parsed.data.life_event_id}`);
-    await setFlashCookie('Overførsel oprettet og koblet til begivenhed');
+    await setFlashCookie(`Overførsel oprettet og koblet til begivenhed${noticeSuffix}`);
     redirect(
       `/begivenheder/${encodeURIComponent(parsed.data.life_event_id)}`
     );
   }
-  await setFlashCookie('Overførsel oprettet');
+  await setFlashCookie(`Overførsel oprettet${noticeSuffix}`);
   redirect('/overforsler');
 }
 

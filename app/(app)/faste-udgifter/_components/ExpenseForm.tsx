@@ -137,15 +137,20 @@ export function ExpenseForm({
         </div>
         <div>
           <label htmlFor="exp_family" className={labelClass}>
-            Tilhører <span className="text-neutral-400">(valgfrit)</span>
+            Tilhører
           </label>
+          {/* Tvunget valg: ingen tavs default. Brugeren skal aktivt vælge hvem
+              udgiften tilhører. 'all' = hele familien (null i DB), tom = intet
+              valgt og blokeres serverside. */}
           <select
             id="exp_family"
             name="family_member_id"
+            required
             defaultValue=""
             className={fieldClass}
           >
-            <option value="">Hele familien</option>
+            <option value="" disabled>Vælg hvem udgiften tilhører</option>
+            <option value="all">Hele familien</option>
             {familyMembers.map((fm) => (
               <option key={fm.id} value={fm.id}>{fm.name}</option>
             ))}

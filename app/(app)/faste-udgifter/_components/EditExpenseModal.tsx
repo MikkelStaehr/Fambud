@@ -206,15 +206,19 @@ export function EditExpenseModal({
 
           <div>
             <label htmlFor={`edit_family_${expense.id}`} className={labelClass}>
-              Tilhører <span className="text-neutral-400">(valgfrit)</span>
+              Tilhører
             </label>
+            {/* Samme tvungne valg som add-formularen. Eksisterende udgift uden
+                person (null) for-vælges som 'all' = hele familien. */}
             <select
               id={`edit_family_${expense.id}`}
               name="family_member_id"
-              defaultValue={expense.family_member_id ?? ''}
+              required
+              defaultValue={expense.family_member_id ?? 'all'}
               className={fieldClass}
             >
-              <option value="">Hele familien</option>
+              <option value="" disabled>Vælg hvem udgiften tilhører</option>
+              <option value="all">Hele familien</option>
               {familyMembers.map((fm) => (
                 <option key={fm.id} value={fm.id}>{fm.name}</option>
               ))}

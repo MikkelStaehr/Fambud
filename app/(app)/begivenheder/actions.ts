@@ -23,6 +23,7 @@ import {
 } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
+import { resolveEffectiveUser } from '@/lib/proxy';
 import type {
   LifeEventItemStatus,
   LifeEventStatus,
@@ -171,7 +172,15 @@ export async function createLifeEvent(formData: FormData) {
   }
 
   revalidatePath('/begivenheder');
-  await setFlashCookie(`${parsed.data.name} oprettet`);
+  // Proxy-mode (migration 0065): life_events er husstands-scoped uden
+  // per-bruger-kolonne, så begivenheden lander korrekt uanset opretter.
+  // "for Louise"-noten bekræfter blot at den blev lavet som del af hendes
+  // opsætning.
+  const proxy = await resolveEffectiveUser('setup');
+  const noticeSuffix = proxy.isProxyActive
+    ? ` for ${proxy.grantorName ?? 'familiemedlem'}`
+    : '';
+  await setFlashCookie(`${parsed.data.name} oprettet${noticeSuffix}`);
   redirect(`/begivenheder/${encodeURIComponent(data.id)}`);
 }
 

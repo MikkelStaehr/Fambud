@@ -86,9 +86,12 @@ export async function addExpense(formData: FormData) {
   const components_mode: 'additive' | 'breakdown' =
     formData.get('components_mode_breakdown') === 'on' ? 'breakdown' : 'additive';
 
-  // Optional family-member tag. Empty string ("hele familien") → null.
+  // Familiemedlem er et tvunget valg: brugeren SKAL aktivt vælge hvem
+  // udgiften tilhører (ingen tavs default). Sentinel 'all' = hele familien
+  // (null i DB); tom værdi betyder intet valgt og blokeres her.
   const familyRaw = String(formData.get('family_member_id') ?? '').trim();
-  const family_member_id = familyRaw || null;
+  if (!familyRaw) bounceWithError(accountId, 'Vælg hvem udgiften tilhører');
+  const family_member_id = familyRaw === 'all' ? null : familyRaw;
 
   const { supabase, householdId } = await getHouseholdContext();
 
@@ -299,8 +302,10 @@ export async function updateBudgetExpense(
   const components_mode: 'additive' | 'breakdown' =
     formData.get('components_mode_breakdown') === 'on' ? 'breakdown' : 'additive';
 
+  // Samme tvungne valg som addExpense - sentinel 'all' = hele familien (null).
   const familyRaw = String(formData.get('family_member_id') ?? '').trim();
-  const family_member_id = familyRaw || null;
+  if (!familyRaw) return { ok: false, error: 'Vælg hvem udgiften tilhører' };
+  const family_member_id = familyRaw === 'all' ? null : familyRaw;
 
   const { supabase, householdId } = await getHouseholdContext();
   const { error } = await supabase

@@ -138,6 +138,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      setup_proxy_grants: {
+        Row: {
+          id: string;
+          household_id: string;
+          grantor_user_id: string;
+          grantee_user_id: string;
+          scope: string[];
+          request_token_hash: string;
+          created_at: string;
+          expires_at: string;
+          accepted_at: string | null;
+          revoked_at: string | null;
+          revoked_by_user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          grantor_user_id: string;
+          grantee_user_id: string;
+          scope?: string[];
+          request_token_hash: string;
+          created_at?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by_user_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          grantor_user_id?: string;
+          grantee_user_id?: string;
+          scope?: string[];
+          request_token_hash?: string;
+          created_at?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by_user_id?: string | null;
+        };
+        Relationships: [];
+      };
       accounts: {
         Row: {
           id: string;

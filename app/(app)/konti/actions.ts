@@ -6,6 +6,7 @@ import { getHouseholdContext } from '@/lib/dal';
 import { parseAmountToOere, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
+import { resolveEffectiveUser } from '@/lib/proxy';
 import type {
   AccountKind,
   InvestmentType,
@@ -115,17 +116,33 @@ export async function createAccount(formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // Proxy-mode (migration 0065): hvis Mikkel hjælper Louise med at sætte
+  // hendes økonomi op, skal kontoen tilskrives hende - ikke Mikkel.
+  // - created_by = Louise.id (audit-spor)
+  // - owner_name = Louises navn (medmindre brugeren eksplicit har valgt
+  //   "Fælles" eller andet i form'en)
+  const proxy = await resolveEffectiveUser('setup');
+  const ownerNameOverride =
+    proxy.isProxyActive && !parsed.data.owner_name && proxy.grantorName
+      ? proxy.grantorName
+      : parsed.data.owner_name;
+
   const { error } = await supabase.from('accounts').insert({
     household_id: householdId,
     ...parsed.data,
+    owner_name: ownerNameOverride,
+    created_by: proxy.effectiveUserId,
   });
   if (error) {
+    console.error('createAccount failed:', error.message);
     redirect('/konti/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
-  await setFlashCookie(`${parsed.data.name} oprettet`);
+  const noticeSuffix = proxy.isProxyActive ? ` for ${proxy.grantorName ?? 'familiemedlem'}` : '';
+  await setFlashCookie(`${parsed.data.name} oprettet${noticeSuffix}`);
   redirect('/konti');
 }
 

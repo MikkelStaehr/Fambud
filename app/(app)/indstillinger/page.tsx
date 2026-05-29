@@ -19,6 +19,7 @@ import {
   setPaymentReminderEmail,
 } from './actions';
 import { CopyInviteButton } from './_components/CopyInviteButton';
+import { ProxySection } from './_components/ProxySection';
 
 const ROLE_LABEL_DA: Record<string, string> = {
   owner: 'Ejer',
@@ -383,6 +384,9 @@ export default async function IndstillingerPage({
           )}
         </div>
       </section>
+
+      {/* Hjælper-adgang (setup proxy) */}
+      <ProxySection />
 
       {/* Inviter en person */}
       <section className="mt-8">

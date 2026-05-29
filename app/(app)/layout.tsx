@@ -2,10 +2,12 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveProxyContext } from '@/lib/proxy';
 import { BetaNotice } from './_components/BetaNotice';
 import { FambudMark } from '@/app/_components/FambudMark';
 import { FeedbackModal } from './_components/FeedbackModal';
 import { MobileNav } from './_components/MobileNav';
+import { ProxyBanner } from './_components/ProxyBanner';
 import { SidebarNav } from './_components/SidebarNav';
 import { SettingsLink } from './_components/SettingsLink';
 import { Toast } from './_components/Toast';
@@ -34,6 +36,11 @@ export default async function AppLayout({
     .eq('user_id', user.id)
     .maybeSingle();
   if (!membership?.setup_completed_at) redirect('/wizard');
+
+  // Hvis brugeren har en aktiv proxy-session, vises banneret over al
+  // navigation som tydelig påmindelse om at handlinger gemmes på en
+  // anden brugers vegne.
+  const proxyCtx = await getActiveProxyContext();
 
   return (
     // App-shell:
@@ -79,7 +86,15 @@ export default async function AppLayout({
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">
+        {proxyCtx && (
+          <ProxyBanner
+            grantorName={proxyCtx.grantorName}
+            expiresAt={proxyCtx.expiresAt}
+          />
+        )}
+        {children}
+      </main>
 
       {/* Toast hænger på URL search-params; Suspense er påkrævet fordi
           useSearchParams ellers vil bailout client-side for hele route'en. */}

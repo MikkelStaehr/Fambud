@@ -7,6 +7,7 @@ import { parseOptionalAmount, parseRequiredAmount, capLength, isValidOccursOn, T
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import { mapDbError } from '@/lib/actions/error-map';
+import { resolveEffectiveUser } from '@/lib/proxy';
 import type {
   IncomeRole,
   PrimaryIncomeSource,
@@ -211,10 +212,27 @@ export async function createIncome(formData: FormData) {
 
   const categoryId = await getOrCreateIncomeCategoryId(supabase, householdId);
 
+  // Proxy-mode (migration 0065): hvis caller hjælper en anden bruger med
+  // at opsætte deres indkomst, skal lønudbetalingen tilskrives DEN bruger
+  // - ikke caller. Hvis form'en ikke har et eksplicit family_member_id,
+  // sætter vi det automatisk til grantor's family_member.
+  const proxy = await resolveEffectiveUser('setup');
+  let familyMemberOverride = parsed.data.family_member_id;
+  if (proxy.isProxyActive && !familyMemberOverride) {
+    const { data: grantorMember } = await supabase
+      .from('family_members')
+      .select('id')
+      .eq('user_id', proxy.effectiveUserId!)
+      .eq('household_id', householdId)
+      .maybeSingle();
+    if (grantorMember) familyMemberOverride = grantorMember.id;
+  }
+
   const { error } = await supabase.from('transactions').insert({
     household_id: householdId,
     category_id: categoryId,
     ...parsed.data,
+    family_member_id: familyMemberOverride,
   });
   if (error) {
     console.error('createIncome failed:', error.message);
@@ -224,7 +242,8 @@ export async function createIncome(formData: FormData) {
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
   revalidatePath('/poster');
-  await setFlashCookie('Indkomst registreret');
+  const noticeSuffix = proxy.isProxyActive ? ` for ${proxy.grantorName ?? 'familiemedlem'}` : '';
+  await setFlashCookie(`Indkomst registreret${noticeSuffix}`);
   redirect('/indkomst');
 }
 

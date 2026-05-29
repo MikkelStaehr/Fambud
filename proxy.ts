@@ -58,7 +58,11 @@ export async function proxy(request: NextRequest) {
     pathname === '/nyt-kodeord' ||
     pathname === '/privatliv' ||
     pathname.startsWith('/join') ||
-    pathname.startsWith('/auth/');
+    pathname.startsWith('/auth/') ||
+    // /accept-proxy/[token] selv håndterer auth-flow: hvis ikke logget
+    // ind redirecter den til /login med callbackUrl tilbage. Selve siden
+    // skal være public så email-modtagere kan se den.
+    pathname.startsWith('/accept-proxy');
 
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url));

@@ -4673,3 +4673,310 @@ nye deps).
   felter til frikort + sats, men selve fradragsberegningen (i CashflowAdvisor
   / forecast) ignorerer det stadig. Næste iteration: faktisk forecast med
   fradragsbeløb.
+
+---
+
+# Devlog — 29. maj 2026 (setup proxy: hjælper-adgang via email-godkendelse)
+
+En ny feature og et par hurtige sikkerhedsfixes. Feature: brugere kan
+anmode om midlertidig "add-only"-adgang til at hjælpe et familiemedlem
+med at sætte deres økonomi op - bekræftet via email-godkendelse. Plus
+to RLS-bugs jeg byggede ind, fundet ved første live-test, og en
+Next.js patch-bump der lukker fem high-severity CVEs.
+
+Migrations: 0065 (setup_proxy_grants) + 0066 (RLS-fix). 4 commits på
+main fra `fa280a3` → `295d745` + sikkerheds-bump `18afd12`.
+
+---
+
+## 1. Feature: setup proxy v1
+
+**Migration:** [0065_setup_proxy_grants.sql](supabase/migrations/0065_setup_proxy_grants.sql)
+**Commit:** `fa280a3`
+
+Use case: Mikkel vil hjælpe Louise med at opsætte hendes konti,
+lønudbetalinger og faste udgifter, men Louise er den eneste der må
+beslutte at give ham den adgang. Modellen matcher "delegated power of
+attorney" som banker bruger.
+
+### Privacy-model
+
+Tre konstanter der gør featuren sikker selv uden bunden af tillid:
+
+1. **Add-only:** Mikkel kan KUN INSERTE nye rækker som Louise. Han
+   kan IKKE se hendes eksisterende private data, redigere det hun
+   allerede har, eller slette noget. Det forhindrer at proxy bliver
+   en bagdør til at læse partner's private historik.
+2. **Tidsbegrænset:** default 7 dages auto-expiry baked ind i grant'en
+   (`expires_at default now() + interval '7 days'`).
+3. **Email-bekræftet samtykke:** 256-bit random token genereres ved
+   anmodning, plain-text sendes i email til grantor, kun sha256-hash
+   gemmes i DB. Louise skal klikke linket og eksplicit sige "Ja".
+
+### Datamodel
+
+```sql
+create table setup_proxy_grants (
+  id, household_id,
+  grantor_user_id,        -- giver adgang (Louise)
+  grantee_user_id,        -- modtager adgang (Mikkel)
+  scope text[],           -- v1: kun {'setup'}
+  request_token_hash,     -- sha256(plain)
+  created_at, expires_at,
+  accepted_at,            -- NULL = pending
+  revoked_at, revoked_by_user_id
+)
+```
+
+Plus en `has_active_proxy(grantor, grantee, scope)` SECURITY DEFINER
+RPC der returnerer true hvis grant er aktiv. Forberedt til fremtidig
+DB-niveau-RLS-integration; v1 håndhæver kun på app-niveau.
+
+### Komponent-arkitektur
+
+| Lag | Fil | Ansvar |
+| --- | --- | --- |
+| Token | `lib/proxy/index.ts` | `generateProxyToken`/`hashProxyToken` (256-bit base64url + sha256) |
+| Cookie | `lib/proxy/index.ts` | `setActiveProxyCookie`/`clearActiveProxyCookie` HttpOnly secure |
+| Context | `lib/proxy/index.ts` | `getActiveProxyContext` validerer grant + returnerer effective user |
+| Scope check | `lib/proxy/index.ts` | `resolveEffectiveUser('setup')` til server actions |
+| Email | `lib/email/proxy-request.ts` | Fambud-styled template med eksplicit add-only-note |
+| Actions | `app/(app)/indstillinger/proxy-actions.ts` | request/accept/reject/revoke/activate/deactivate |
+| Accept-side | `app/accept-proxy/[token]/page.tsx` | Public samtykke-side |
+| Indstillinger UI | `app/(app)/indstillinger/_components/ProxySection.tsx` | List + anmod-form |
+| Banner | `app/(app)/_components/ProxyBanner.tsx` | Sticky amber top-banner |
+
+### Proxy-aware actions
+
+V1 dækker to entry-points: `createAccount` og `createIncome`. Begge
+kalder `resolveEffectiveUser('setup')` ved start. Hvis proxy er aktiv:
+
+- `created_by = effectiveUserId` (Louises auth-id, ikke Mikkels)
+- `owner_name = grantorName` (hvis bruger ikke har valgt andet)
+- `family_member_id = grantor's family_member` (for income)
+- Flash-besked: "X oprettet **for Louise**" så han ved data landede
+  korrekt
+
+V2-omfang dokumenteret som åben tråd: `createTransfer`, `addExpense`,
+`addHouseholdPurchase`, `createSavingsGoal` skal have samme pattern.
+
+### proxy.ts middleware
+
+`/accept-proxy/*` tilføjet til public routes. Siden er public fordi
+modtageren ikke nødvendigvis er logget ind når hun klikker email-
+linket - men selve siden håndterer auth-flow via redirect til
+`/login?next=...` hvis ikke logget ind.
+
+---
+
+## 2. Bugs fundet ved live-test (begge fikset samme session)
+
+Featuren blev bygget og pushed. Mikkel sendte sin første anmodning
+til Louise og ramte med det samme to bugs jeg ikke havde fanget i
+build-test.
+
+### 2.1 RLS direction inverted (`469872e` / migration 0066)
+
+**Symptom:** "Kunne ikke oprette anmodningen" da Mikkel klikkede
+"Send anmodning".
+
+**Årsag:** Min INSERT-policy på `setup_proxy_grants` sagde:
+
+```sql
+create policy "grantor creates"
+  for insert with check (auth.uid() = grantor_user_id);
+```
+
+Men i flowet er det grantee (Mikkel) der opretter den pending
+grant. Louise (grantor) bare accepter den senere via UPDATE. RLS
+afviste insert fordi `auth.uid() = Mikkel ≠ grantor_user_id =
+Louise`.
+
+**Fix:** Migration 0066 droppede policy'en og oprettede:
+
+```sql
+create policy "grantee creates request"
+  for insert with check (auth.uid() = grantee_user_id);
+```
+
+Mental model: "den der ASKER (grantee) opretter request'en, den der
+GIVER (grantor) accepter den senere". Jeg havde forvirret rollerne
+ved at navngive policy'en efter den klassiske
+"grantor = den der signer"-konvention, men i UI-flowet er det
+omvendt - det er anmoderen der opretter det inkomplette grant.
+
+### 2.2 Token-credential-page kræver pre-auth lookup (`295d745`)
+
+**Symptom:** Louise klikkede linket fra emailen og fik "Ugyldigt
+link. Linket er enten forkert, allerede brugt eller er udløbet."
+
+**Årsag:** Min `accept-proxy/[token]/page.tsx` brugte user-client +
+RLS til at slå grant'en op. Da Louise IKKE var logget ind når hun
+klikkede linket (browser-session udløbet eller hun var aldrig logget
+ind på den enhed), blev SELECT blokeret af RLS, `grant` var null,
+og koden returnerede `<InvalidLink />` FØR den nåede til
+auth-check'et der ville have redirected hende til
+`/login?next=...`.
+
+**Fix:** Selve grant-lookup'et bruger nu `createAdminClient()` der
+bypasser RLS. Det er sikkerhedsmæssigt korrekt fordi:
+
+1. Token er selv credential'en på den her side (256 bits entropi -
+   infeasible at gætte)
+2. Hele pointen med email-linket er "hvis du har det, må du se
+   grant-info" - det er en explicit access-token-pattern
+3. Auth-tjekket sker BAGEFTER og bruger normal user-client til at
+   validere at den aktuelle bruger er den grantor der må sige ja
+4. Selve `acceptSetupProxy`-action'en er uberørt og bruger stadig
+   user-client + RLS-tjek på `auth.uid() = grantor_user_id`
+
+**Læringspunkt:** Token-bearing public pages skal bruge admin-client
+til selve lookup'et, ikke user-client. Token er allerede den
+credential der gives - RLS giver ingen ekstra beskyttelse her, kun
+falske negativer.
+
+---
+
+## 3. Sikkerhed: Next.js 16.2.3 → 16.2.6
+
+**Commit:** `18afd12`
+
+`npm audit --audit-level=high` fangede 5 high-severity CVEs i
+Next.js 16.2.3. Heraf ramt vores stack reelt:
+
+| CVE | Vores stack |
+| --- | --- |
+| GHSA-8h8q-6873-q5fj DoS via Server Components | **Ja** - bruges overalt |
+| GHSA-vfv6-92ff-j949 Cache poisoning via RSC | **Ja** - default rendering |
+| GHSA-ffhc-5mcf-pf4q XSS via CSP nonces | Nej - vi bruger `unsafe-inline` |
+| GHSA-mg66-mrh9-m8jx DoS Cache Components | Nej - feature ikke i brug |
+| GHSA-c4j6-fc7j-m34r SSRF WebSocket upgrades | Nej - vi bruger ikke WS |
+
+To af fem ramte os direkte. Patch-bump indenfor 16.x betød ingen
+API-ændringer; tsc + build clean efter første forsøg. Plus
+`npm audit fix` lukkede to moderate vulns i transitive deps
+(brace-expansion DoS, ws memory disclosure).
+
+**`npm audit` efter bump: 0 vulnerabilities** (var 5 high + 2
+moderate).
+
+---
+
+## 4. Læringspunkter
+
+### 4.1 RLS-policy-direction kræver flow-tegning før implementation
+
+Jeg byggede `setup_proxy_grants` ud fra et abstrakt mental-model
+("grantor = privilegeret, grantee = modtager") uden at tegne det
+konkrete UI-flow først. Resultat: policy'en var omvendt for INSERT
+fordi i vores flow er det den modtagende der INDLEDER processen
+ved at oprette en pending row.
+
+Pattern: før jeg skriver RLS-policies, vil jeg tegne et
+flowchart med "hvem KLIKKER hvilken knap der gør hvilken DB-write".
+Det forhindrer at jeg overfører naming-convention'er uden at tjekke
+om de matcher det faktiske flow.
+
+### 4.2 Token-bearing public pages er en kendt pattern men nem at glemme
+
+`accept-proxy/[token]` er den klassiske "magic link"-pattern:
+unauthenticated bruger lander på en side med en credential i URL'en.
+Sikkerhedsmodellen er **"token-as-credential"** - selve token er
+det der beviser at brugeren har retten til at se siden, ikke
+session-cookie.
+
+Det betyder lookup'et MÅ bruge service-role (eller en SECURITY
+DEFINER RPC). RLS-baseret lookup ville give falske negativer
+("Ugyldigt link" når token faktisk er gyldig). Vi har samme pattern
+i `/auth/callback` (Supabase magic links) og `/glemt-kodeord/[token]`
+- og begge bruger samme admin-client-pattern.
+
+Pattern: hver gang jeg laver en `/[token]/page.tsx` skal første spørgsmål
+være: "kan en uautentificeret bruger se denne side?" Hvis ja, brug
+admin-client til lookup, ikke user-client.
+
+### 4.3 Patch-bumps med high-severity CVEs er ikke "vi tager det senere"
+
+Vores eksisterende dependabot-PR-håndtering går efter "vent på minor-
+patch-bundle og merge i samples". Det er fint for moderate CVEs.
+For high og critical bør vi merge straks - cost er minutter, value
+er at vi ikke skipper en weekend hvor en angriber kunne ramme
+production.
+
+Pattern: opdele audit-tjekket i CI så **high+critical fejler PR-
+check, moderate kun warner**. Vi har allerede `--audit-level=high`
+som det rigtige loft - men jeg burde have lavet bump'et samme dag
+da CVE'erne dukkede op, ikke 3-4 dage senere.
+
+### 4.4 "Live-test" er ikke valgfrit
+
+Jeg testede build og tsc før push, men byggede ikke et test-flow
+end-to-end. Begge bugs (RLS direction, lookup pre-auth) ville være
+fanget af 30 sekunders test: opret grant, klik link, se hvad der
+sker.
+
+For features med async user-handoff (email-trigger, magic-link,
+webhook) er manual end-to-end-test ikke "nice to have" - det er
+**en del af bygge-tidens budget**. Næste gang skal jeg lægge 10-15
+min ind for at simulere det fra begge brugers perspektiv før jeg
+kalder feature'en done.
+
+---
+
+## 5. Status
+
+**Commits:** 4 på main:
+- `fa280a3` Setup proxy v1 foundation
+- `18afd12` Next.js 16.2.6 sikkerheds-bump
+- `469872e` RLS-policy fix (grantor → grantee creates)
+- `295d745` Admin-client for accept-page lookup
+
+**Migrations på prod-DB:**
+- 0065 setup_proxy_grants
+- 0066 fix_proxy_grant_insert_policy
+
+**Build:** tsc + build clean efter alle fixes.
+**npm audit:** 0 vulnerabilities (var 5 high + 2 moderate).
+**Security-workflow:** grøn.
+
+**Env-vars som er forudsætning** (alle allerede sat - ingen nye
+nødvendige for proxy):
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+- `SITE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (bruges af accept-page lookup nu)
+
+---
+
+## 6. Åbne tråde fra denne session
+
+- **Udvid proxy-mode til 4 resterende actions:** `createTransfer`,
+  `addExpense`, `addHouseholdPurchase`, `createSavingsGoal`.
+  Mekanisk udrulning af samme `resolveEffectiveUser('setup')`-pattern
+  som createAccount + createIncome. Estimat ~30 min hver. Værd at
+  prioritere når Mikkel første gang tester featuren med Louise -
+  hvis han prøver at oprette en overførsel under proxy-mode, vil
+  den skrive som ham selv, ikke som Louise. Subtle bug.
+- **Audit-log integration for proxy-actions:** hver INSERT under
+  aktiv proxy-session bør skrive til `audit_log` med BÅDE
+  `user_id = Louise.id` (den ramte) og `acting_user_id = Mikkel.id`
+  (den agerende). Migration 0055's audit_log er klar til det -
+  bare et `actingUserId`-parameter til logging-helperen.
+- **Daglig digest til Louise:** "Mikkel oprettede 3 konti for dig
+  igår" - retention-mail der giver hende overblik uden at logge
+  ind. Kan bruge samme cron-pattern som monthly-summary +
+  payment-reminders.
+- **DB-niveau RLS-handhævelse:** vores `has_active_proxy()`-RPC er
+  forberedt til at lade RLS-policies på `accounts`/`transactions`
+  tillade INSERT med `created_by = grantor` HVIS proxy er aktiv.
+  Det ville være defense-in-depth - i øjeblikket håndhæver vi kun
+  på app-niveau via `resolveEffectiveUser()`. Hvis nogen finder en
+  vej forbi `createAdminClient()`-misbrug eller en typo i en
+  proxy-aware action, kunne RLS fange det.
+- **Notifikation til Mikkel når Louise accepterer:** lige nu skal
+  Mikkel selv refreshe `/indstillinger` for at se at grant er
+  accepteret. En "Louise har sagt ja - klik for at skifte til
+  perspektiv"-toast eller email ville gøre flowet mere
+  selv-forklarende.
+- **eslint 10 ventes stadig på upstream:** Next.js 16.2.6 har ikke
+  bumpet deres eslint-config-next dep endnu. Vi blokerer ikke noget
+  ved at vente.

@@ -4980,3 +4980,160 @@ nødvendige for proxy):
 - **eslint 10 ventes stadig på upstream:** Next.js 16.2.6 har ikke
   bumpet deres eslint-config-next dep endnu. Vi blokerer ikke noget
   ved at vente.
+
+---
+
+# Devlog — 29. maj 2026 (fortsat): proxy-tråde, tvunget familiemedlem-valg + audit-log
+
+Opfølgning på de åbne tråde fra setup-proxy-sessionen tidligere samme dag.
+Tre ting: et tvunget familiemedlem-valg på faste udgifter, proxy-mode
+udbredt til de resterende setup-actions, og audit-log-integration så
+delegerede handlinger efterlader et spor.
+
+Commits: `4b3b8fe` (tvunget valg + proxy-flash) og audit-log-arbejdet
+(migration 0067 + denne entry).
+
+---
+
+## 1. Faste udgifter: familiemedlem er nu et tvunget valg
+
+**Commit:** `4b3b8fe`
+
+"Tilhører"-feltet på faste udgifter var tidligere forvalgt som "Hele
+familien" (tom værdi = null i DB). Det betød at man kunne oprette eller
+redigere en udgift uden bevidst at tage stilling til hvem den tilhører.
+Efter projektleder-beslutning: der må ikke være et tavst default, brugeren
+skal aktivt vælge.
+
+**Implementation (sentinel-pattern):**
+
+- Select'en har nu en disabled placeholder ("Vælg hvem udgiften tilhører")
+  som default, plus "Hele familien" som et eksplicit valg med sentinel-
+  værdi `all`.
+- `all` mappes til `null` i DB; tom værdi betyder "intet valgt" og blokeres
+  serverside i både `addExpense` og `updateBudgetExpense`.
+- `required` på select'en fanger det client-side; server-tjekket er
+  backstop.
+- DB-semantik er uændret: `null` betyder stadig "hele familien". Vi ændrede
+  kun UI'et til at tvinge et bevidst valg.
+- Gælder både add-formularen ([ExpenseForm.tsx](app/(app)/faste-udgifter/_components/ExpenseForm.tsx))
+  og edit-modalen ([EditExpenseModal.tsx](app/(app)/faste-udgifter/_components/EditExpenseModal.tsx)).
+  Edit for-vælger eksisterende person, eller `all` hvis den er null.
+
+**Bevidst ude af scope:** underpost-feltet (`addComponent`) er stadig
+valgfrit. En underpost er split-metadata på en breakdown, ikke "hvis
+udgift er det her", så det tvungne valg gælder kun selve udgiften.
+
+---
+
+## 2. Proxy-mode udbredt til de resterende setup-actions
+
+**Commit:** `4b3b8fe`
+
+DEVLOG'en fra første session listede `createTransfer`, `addExpense`,
+`addHouseholdPurchase` og `createSavingsGoal` som manglende proxy-support,
+med bekymringen "overførsel skriver som ham selv, ikke Louise".
+
+**Datamodellen viste at bekymringen var upræcis.** En gennemgang af
+skemaet:
+
+| Action | Tabel | Bruger-attribution |
+| --- | --- | --- |
+| `createTransfer` | `transfers` | ingen (kun husstand) |
+| `addExpense` | `transactions` | `family_member_id` (nu tvunget valg, se §1) |
+| `addHouseholdPurchase` | `transactions` | `family_member_id` (form sætter den ikke) |
+| `createSavingsGoal` = `createLifeEvent` | `life_events` | ingen (kun husstand) |
+
+`transfers` og `life_events` har INGEN per-bruger-kolonne. De er rene
+husstands-ressourcer, så data lander korrekt uanset hvem der opretter
+(grantor og grantee deler husstand). Der mis-attribueres altså ikke noget
+på DB-niveau. Den reelle gevinst er en "oprettet for \<grantor\>"-note på
+bekræftelsen så grantee ved at posten landede som del af den andens
+opsætning.
+
+- `createTransfer` og `createLifeEvent` får nu noten via
+  `resolveEffectiveUser('setup')`.
+- `addHouseholdPurchase` rørt ikke: husstandskøb er delt, har intet
+  person-felt og hverken flash eller redirect (inline form), så proxy
+  ville være død kode.
+
+**Læringspunkt:** "createSavingsGoal" eksisterede aldrig under det navn.
+Det var et idealiseret navn i den første devlog for det der reelt er
+`createLifeEvent`. Tjek de faktiske funktionsnavne før du lover dem i en
+roadmap.
+
+---
+
+## 3. Audit-log-integration for proxy
+
+**Migration:** [0067_audit_log_acting_user.sql](supabase/migrations/0067_audit_log_acting_user.sql)
+
+Første devlog antog at "migration 0055's audit_log er klar til" at fange
+acting_user_id. **Det passede ikke** - 0055 har kun et enkelt `user_id`
+plus et `metadata jsonb`-felt, ingen acting-kolonne.
+
+### 3.1 Migration 0067: acting_user_id
+
+Tilføjer en dedikeret `acting_user_id uuid`-kolonne (FK til auth.users,
+on delete set null) plus et partial index. Modellen:
+
+```
+user_id        = den RAMTE bruger (ressourcen tilskrives, fx Louise)
+acting_user_id = den der FAKTISK handlede (fx Mikkel under proxy)
+```
+
+For ikke-delegerede events er `acting_user_id` null (aktør = user_id).
+Vi valgte en dedikeret kolonne frem for metadata-jsonb fordi acting-user
+er en førsteklasses audit-dimension på en sikkerhedstabel: den skal
+kunne indekseres og forespørges ("hvad har Mikkel gjort på andres vegne?").
+
+### 3.2 Helper-udvidelse
+
+[lib/audit-log.ts](lib/audit-log.ts): `acting_user_id` tilføjet til
+`AuditLogRow` + `LogParams` + insert-payload. Nye `AuditAction`-typer:
+`proxy.requested`, `proxy.accepted`, `proxy.rejected`, `proxy.revoked`,
+`proxy.activated`, `proxy.resource_created`.
+
+### 3.3 Hvor der logges
+
+**Grant-lifecycle** ([proxy-actions.ts](app/(app)/indstillinger/proxy-actions.ts)):
+- `proxy.requested` - grantee anmoder (acting=grantee, user=grantor)
+- `proxy.accepted` / `proxy.rejected` - grantor svarer (aktør = grantor selv)
+- `proxy.revoked` - begge parter kan; rollen noteres i metadata
+- `proxy.activated` - grantee skifter ind i grantors perspektiv
+
+**Resource-creation under aktiv proxy** (`proxy.resource_created`):
+`createAccount`, `createIncome`, `createTransfer`, `createLifeEvent`.
+Hver logger kun når `proxy.isProxyActive`, med user_id=grantor,
+acting_user_id=grantee, og resource-type i metadata.
+
+Audit-log er best-effort (fejl swallowes og logges til console), så koden
+kan deploye FØR migration 0067 køres uden at knække user-flow - inserts
+med den nye kolonne fejler bare stille indtil migrationen er kørt.
+
+---
+
+## 4. Status
+
+**Commits:** `4b3b8fe` + audit-log-commit.
+**Migration på prod-DB:** 0067 **SKAL køres** før acting_user_id-logging
+virker (degraderer pænt indtil da).
+**Build:** tsc + next build clean.
+**Em-dash-tjek:** rene (CLAUDE.md regel #1).
+
+---
+
+## 5. Åbne tråde
+
+Stadig udestående fra setup-proxy:
+
+- **DB-niveau RLS-håndhævelse** via `has_active_proxy()`-RPC'en
+  (defense-in-depth oven på app-niveau `resolveEffectiveUser()`).
+- **Notifikation til grantee når grantor accepterer** (toast/email i
+  stedet for manuel refresh af `/indstillinger`).
+- **Daglig digest til grantor** ("Mikkel oprettede 3 konti for dig igår").
+- **`addHouseholdPurchase`/`addExpense` audit under proxy:** disse logger
+  ikke `proxy.resource_created` endnu. addExpense har et tvunget person-
+  valg (ingen auto-attribution) og addHouseholdPurchase er delt, så de er
+  lavere prioritet, men for et komplet spor kunne de tilføjes.
+- **eslint 10:** venter stadig på upstream.

@@ -24,6 +24,7 @@ import {
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import { resolveEffectiveUser } from '@/lib/proxy';
+import { logAuditEvent } from '@/lib/audit-log';
 import type {
   LifeEventItemStatus,
   LifeEventStatus,
@@ -180,6 +181,18 @@ export async function createLifeEvent(formData: FormData) {
   const noticeSuffix = proxy.isProxyActive
     ? ` for ${proxy.grantorName ?? 'familiemedlem'}`
     : '';
+  // Audit (migration 0067): begivenhed oprettet under aktiv proxy.
+  if (proxy.isProxyActive) {
+    await logAuditEvent({
+      action: 'proxy.resource_created',
+      result: 'success',
+      user_id: proxy.effectiveUserId,
+      acting_user_id: proxy.authUserId,
+      household_id: householdId,
+      resource: `life_event:${data.id}`,
+      metadata: { resource_type: 'life_event', grant_id: proxy.grantId },
+    });
+  }
   await setFlashCookie(`${parsed.data.name} oprettet${noticeSuffix}`);
   redirect(`/begivenheder/${encodeURIComponent(data.id)}`);
 }

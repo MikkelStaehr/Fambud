@@ -12,6 +12,7 @@ import {
 } from '@/lib/proxy';
 import { sendProxyRequestEmail } from '@/lib/email/proxy-request';
 import { resolveSiteOrigin } from '@/lib/site-url';
+import { logAuditEvent } from '@/lib/audit-log';
 
 // ============================================================================
 // requestSetupProxy - Mikkel anmoder om at hjælpe et familiemedlem
@@ -150,6 +151,17 @@ export async function requestSetupProxy(formData: FormData) {
     );
   }
 
+  // Audit: en anmodning om delegeret adgang er et sikkerheds-event. user_id =
+  // grantor (den der bedes om adgang), acting_user_id = grantee (anmoderen).
+  await logAuditEvent({
+    action: 'proxy.requested',
+    result: 'success',
+    user_id: target.user_id,
+    acting_user_id: user.id,
+    household_id: householdId,
+    resource: `setup_proxy_grant:${grant.id}`,
+  });
+
   revalidatePath('/indstillinger');
   redirect(
     '/indstillinger?notice=' +
@@ -167,12 +179,12 @@ export async function acceptSetupProxy(formData: FormData) {
   }
 
   const tokenHash = hashProxyToken(token);
-  const { supabase, user } = await getHouseholdContext();
+  const { supabase, user, householdId } = await getHouseholdContext();
 
   // Slå grant op via hash + validér at caller er grantor (den der skal sige ja)
   const { data: grant } = await supabase
     .from('setup_proxy_grants')
-    .select('id, grantor_user_id, expires_at, accepted_at, revoked_at')
+    .select('id, grantor_user_id, grantee_user_id, expires_at, accepted_at, revoked_at')
     .eq('request_token_hash', tokenHash)
     .maybeSingle();
 
@@ -206,6 +218,17 @@ export async function acceptSetupProxy(formData: FormData) {
     redirect('/accept-proxy?error=' + encodeURIComponent('Kunne ikke aktivere - prøv igen'));
   }
 
+  // Audit: grantor (Louise) giver samtykke til delegeret adgang. Aktoer =
+  // grantor selv, saa acting_user_id udelades (ingen delegation her).
+  await logAuditEvent({
+    action: 'proxy.accepted',
+    result: 'success',
+    user_id: grant.grantor_user_id,
+    household_id: householdId,
+    resource: `setup_proxy_grant:${grant.id}`,
+    metadata: { grantee_user_id: grant.grantee_user_id },
+  });
+
   revalidatePath('/indstillinger');
   redirect(
     '/dashboard?notice=' +
@@ -223,11 +246,11 @@ export async function rejectSetupProxy(formData: FormData) {
   }
 
   const tokenHash = hashProxyToken(token);
-  const { supabase, user } = await getHouseholdContext();
+  const { supabase, user, householdId } = await getHouseholdContext();
 
   const { data: grant } = await supabase
     .from('setup_proxy_grants')
-    .select('id, grantor_user_id')
+    .select('id, grantor_user_id, grantee_user_id')
     .eq('request_token_hash', tokenHash)
     .maybeSingle();
 
@@ -243,6 +266,16 @@ export async function rejectSetupProxy(formData: FormData) {
     })
     .eq('id', grant.id);
 
+  // Audit: grantor afviser anmodningen. Aktoer = grantor selv.
+  await logAuditEvent({
+    action: 'proxy.rejected',
+    result: 'success',
+    user_id: grant.grantor_user_id,
+    household_id: householdId,
+    resource: `setup_proxy_grant:${grant.id}`,
+    metadata: { grantee_user_id: grant.grantee_user_id },
+  });
+
   redirect('/dashboard?notice=' + encodeURIComponent('Anmodningen er afvist'));
 }
 
@@ -253,7 +286,7 @@ export async function revokeSetupProxy(formData: FormData) {
   const grantId = String(formData.get('grant_id') ?? '').trim();
   if (!grantId) return;
 
-  const { supabase, user } = await getHouseholdContext();
+  const { supabase, user, householdId } = await getHouseholdContext();
 
   const { data: grant } = await supabase
     .from('setup_proxy_grants')
@@ -277,6 +310,21 @@ export async function revokeSetupProxy(formData: FormData) {
     await clearActiveProxyCookie();
   }
 
+  // Audit: aktiv eller pending grant trukket tilbage. Begge parter kan, saa
+  // vi noterer rollen. user_id = grantor (grant-subjektet), acting_user_id =
+  // den der faktisk revoker.
+  await logAuditEvent({
+    action: 'proxy.revoked',
+    result: 'success',
+    user_id: grant.grantor_user_id,
+    acting_user_id: user.id,
+    household_id: householdId,
+    resource: `setup_proxy_grant:${grant.id}`,
+    metadata: {
+      revoked_by_role: user.id === grant.grantor_user_id ? 'grantor' : 'grantee',
+    },
+  });
+
   revalidatePath('/indstillinger');
 }
 
@@ -287,11 +335,11 @@ export async function activateProxySession(formData: FormData) {
   const grantId = String(formData.get('grant_id') ?? '').trim();
   if (!grantId) return;
 
-  const { supabase, user } = await getHouseholdContext();
+  const { supabase, user, householdId } = await getHouseholdContext();
 
   const { data: grant } = await supabase
     .from('setup_proxy_grants')
-    .select('id, grantee_user_id, accepted_at, revoked_at, expires_at')
+    .select('id, grantor_user_id, grantee_user_id, accepted_at, revoked_at, expires_at')
     .eq('id', grantId)
     .maybeSingle();
 
@@ -302,6 +350,18 @@ export async function activateProxySession(formData: FormData) {
   if (new Date(grant.expires_at) <= new Date()) return;
 
   await setActiveProxyCookie(grant.id);
+
+  // Audit: grantee skifter ind i grantors perspektiv. Herfra og indtil
+  // deactivate skrives ressourcer som grantor men udfoeres af grantee.
+  await logAuditEvent({
+    action: 'proxy.activated',
+    result: 'success',
+    user_id: grant.grantor_user_id,
+    acting_user_id: user.id,
+    household_id: householdId,
+    resource: `setup_proxy_grant:${grant.id}`,
+  });
+
   revalidatePath('/', 'layout');
   redirect('/dashboard?notice=' + encodeURIComponent('Du redigerer nu for et familiemedlem'));
 }

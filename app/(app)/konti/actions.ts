@@ -7,6 +7,7 @@ import { parseAmountToOere, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import { resolveEffectiveUser } from '@/lib/proxy';
+import { logAuditEvent } from '@/lib/audit-log';
 import type {
   AccountKind,
   InvestmentType,
@@ -137,6 +138,25 @@ export async function createAccount(formData: FormData) {
   if (error) {
     console.error('createAccount failed:', error.message);
     redirect('/konti/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+  }
+
+  // Audit (migration 0067): konto oprettet under aktiv proxy. user_id =
+  // grantor (ejeren), acting_user_id = grantee (den der faktisk oprettede).
+  if (proxy.isProxyActive) {
+    await logAuditEvent({
+      action: 'proxy.resource_created',
+      result: 'success',
+      user_id: proxy.effectiveUserId,
+      acting_user_id: proxy.authUserId,
+      household_id: householdId,
+      resource: 'account',
+      metadata: {
+        resource_type: 'account',
+        name: parsed.data.name,
+        kind: parsed.data.kind,
+        grant_id: proxy.grantId,
+      },
+    });
   }
 
   revalidatePath('/konti');

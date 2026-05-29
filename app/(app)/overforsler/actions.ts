@@ -7,6 +7,7 @@ import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
 import { resolveEffectiveUser } from '@/lib/proxy';
+import { logAuditEvent } from '@/lib/audit-log';
 import type { RecurrenceFreq } from '@/lib/database.types';
 
 const VALID_FREQS: readonly RecurrenceFreq[] = [
@@ -132,6 +133,22 @@ export async function createTransfer(formData: FormData) {
   const noticeSuffix = proxy.isProxyActive
     ? ` for ${proxy.grantorName ?? 'familiemedlem'}`
     : '';
+  // Audit (migration 0067): overfoersel oprettet under aktiv proxy.
+  if (proxy.isProxyActive) {
+    await logAuditEvent({
+      action: 'proxy.resource_created',
+      result: 'success',
+      user_id: proxy.effectiveUserId,
+      acting_user_id: proxy.authUserId,
+      household_id: householdId,
+      resource: 'transfer',
+      metadata: {
+        resource_type: 'transfer',
+        grant_id: proxy.grantId,
+        life_event_id: parsed.data.life_event_id,
+      },
+    });
+  }
   // Hvis transferen blev linket til en begivenhed, invalider også den
   // begivenheds detalje- og listesider så live status (planning →
   // active) opdateres straks.

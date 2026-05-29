@@ -8,6 +8,7 @@ import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
 import { mapDbError } from '@/lib/actions/error-map';
 import { resolveEffectiveUser } from '@/lib/proxy';
+import { logAuditEvent } from '@/lib/audit-log';
 import type {
   IncomeRole,
   PrimaryIncomeSource,
@@ -237,6 +238,20 @@ export async function createIncome(formData: FormData) {
   if (error) {
     console.error('createIncome failed:', error.message);
     redirect('/indkomst/ny?error=' + encodeURIComponent(mapDbError(error, 'Indkomsten kunne ikke gemmes')));
+  }
+
+  // Audit (migration 0067): indkomst oprettet under aktiv proxy. user_id =
+  // grantor (indkomsten tilskrives), acting_user_id = grantee (opretteren).
+  if (proxy.isProxyActive) {
+    await logAuditEvent({
+      action: 'proxy.resource_created',
+      result: 'success',
+      user_id: proxy.effectiveUserId,
+      acting_user_id: proxy.authUserId,
+      household_id: householdId,
+      resource: 'transaction',
+      metadata: { resource_type: 'income', grant_id: proxy.grantId },
+    });
   }
 
   revalidatePath('/indkomst');

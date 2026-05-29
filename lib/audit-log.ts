@@ -39,6 +39,13 @@ export type AuditAction =
   | 'member.role_changed'
   // Account lifecycle
   | 'account.deleted'
+  // Setup-proxy: delegeret opsaetnings-adgang (migration 0065/0067)
+  | 'proxy.requested'
+  | 'proxy.accepted'
+  | 'proxy.rejected'
+  | 'proxy.revoked'
+  | 'proxy.activated'
+  | 'proxy.resource_created'
   // Periodic emails / cron jobs
   | 'monthly_summary.sent'
   | 'monthly_summary.failed'
@@ -56,6 +63,9 @@ type AuditLogRow = {
   action: AuditAction;
   result: AuditResult;
   user_id: string | null;
+  // Den faktisk handlende bruger ved delegerede handlinger (setup-proxy).
+  // Null naar aktoer = user_id. Se migration 0067.
+  acting_user_id: string | null;
   household_id: string | null;
   resource: string | null;
   ip: string | null;
@@ -67,6 +77,7 @@ type LogParams = {
   action: AuditAction;
   result: AuditResult;
   user_id?: string | null;
+  acting_user_id?: string | null;
   household_id?: string | null;
   resource?: string | null;
   ip?: string | null;
@@ -90,6 +101,7 @@ export async function logAuditEvent(params: LogParams): Promise<void> {
       action: params.action,
       result: params.result,
       user_id: params.user_id ?? null,
+      acting_user_id: params.acting_user_id ?? null,
       household_id: params.household_id ?? null,
       resource: params.resource ?? null,
       ip: params.ip ?? requestContext.ip,

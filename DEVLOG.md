@@ -4146,3 +4146,530 @@ prod-deploy af `main`.
 - **Conversion-tracking dashboard:** stadig ikke bygget. Data
   akkumulerer i `landing_flow_submissions`, men vi har ingen UI til
   at læse det. Næste sprint kandidat.
+
+---
+
+# Devlog — 26.-28. maj 2026 (rådgiver, rapport, dashboard-waterfall, betalings-påmindelser + onboarding-polish)
+
+To intense feature-dage med 36 commits og to nye migrations.
+Hovedretningerne: en **økonomi-rådgiver** der konkret allokerer overskud
+i fire fordelingsmodeller, en **finansrapport-side** med Gem-som-PDF
+til real-world brug (banken/rådgiver), en **dashboard-waterfall-graf**
+der per-konto viser overskud/underskud, en **ugentlig betalings-
+påmindelses-mail** (P-item P14), og en bunke onboarding-polish drevet
+af test-bruger-friction.
+
+Commits: `b4cc8ed` → `0f5088c` på main. Migrations 0063
+(`household_income_visibility`) og 0064 (`payment_reminder_email`).
+
+---
+
+## 1. Rådgiver: ny økonomi-agent under Værktøjer
+
+**Commits:** `e5be516`, `cc4e56a`, `45550e0`, `51c5668`, `924e8cc`,
+`41bc3cf`
+
+Ny side `/raadgiver` med en agent der ser på husstandens månedlige
+nøgletal og foreslår konkrete handlinger - ikke abstrakte råd, men
+"flyt 800 kr/md fra X til Y"-niveau.
+
+**Fire sektioner** ([app/(app)/raadgiver/_components/](app/(app)/raadgiver/_components/)):
+
+| Komponent | Hvad den gør |
+| --- | --- |
+| `ManglerSection` | Detection af manglende opsætning (ingen lønforecast, ingen buffer-konto, ingen budget på husholdning) med pre-fyldte "Opret"-CTAs. Den tager dig direkte til konteksten for at lukke hullet. |
+| `BufferSection` | Forslag til buffer-rate baseret på faste udgifter × 3-6 måneder. Viser nuværende vs mål. |
+| `AllokerSection` | Allokerer månedligt overskud efter to klassiske modeller (50/30/20 + låneoptimering) + en husstands-specifik som vi byggede selv ("Udlignet rådighed" - se nedenfor). |
+| `FaellesSplitSection` | Forslag til fællespotte-bidrag pr. person baseret på indkomst-andel. |
+
+### Tre fordelingsmodeller (én er vores egen)
+
+`AllokerSection` foreslår overskuds-allokering i tre modeller side om
+side så brugeren kan vælge:
+
+1. **50/30/20** (klassisk Elizabeth Warren): 50% behov, 30% lyst,
+   20% opsparing/gæld. Vises som tre stacks med pre-beregnede
+   beløb.
+2. **Låneoptimering**: ekstra afdrag på det dyreste lån (højeste
+   rente), så husstanden betaler mindst i renter samlet. Beregnes via
+   sort på `accounts.interest_rate desc` blandt `kind='credit'`.
+3. **Udlignet rådighed** (`51c5668`): vores eget bidrag - bygget til
+   adresser-økonomi-husstande med skæv indkomst-fordeling. Modellen
+   beregner hvad hver partner skal bidrage så de begge ender med
+   _samme absolutte rådighedsbeløb efter fælles-udgifter_. Mere
+   retfærdigt end "50/50" når indkomsterne er skæve, mere transparent
+   end "efter procent" som ofte alligevel ender i konflikt fordi tal
+   skifter måned-til-måned.
+
+Navngivet `45550e0` → `51c5668` efter brugeren tænkte over hvad det
+faktisk udretter for parret.
+
+### Guided tour (`41bc3cf`)
+
+Som de andre nye-feature-pages er der en `RaadgiverTour` der introducerer
+hver sektion ved første besøg. Bruger `PageTour` fra
+[app/(app)/_components/PageTour.tsx](app/(app)/_components/PageTour.tsx) -
+samme infrastruktur som de 9 tours fra etape 2 + 3.
+
+### Sidebar-placering
+
+Tilføjet til NAV_TOOLS-gruppen med `Sparkles`-ikonet for at signalere
+"agent/AI"-kontekst uden at love noget der ikke er der (det er
+deterministiske regler, ikke en LLM).
+
+---
+
+## 2. Rapport: samlet finansrapport med "Gem som PDF"
+
+**10 commits:** `5d4777e` (initial) → `0f5088c` (sidste justering)
+
+Ny `/rapport`-side der genererer en print-ready finansrapport over hele
+husstandens økonomi. Tænkt til real-world brug: at vise banken ved
+låneomlægning, at give til en rådgiver, eller bare som månedlig
+selvrevision.
+
+### Hvad rapporten indeholder
+
+I iteration nåede vi til:
+
+- **Brevhoved** (`464ac57` + `ee5eeb2`): husstand-navn, bopælsadresse,
+  rapport-dato, family-members med roller, "Genereret af Fambud"-footer.
+  Gentaget på hver side så PDF'en virker uafhængigt af hvilken side man
+  printer ud.
+- **Indkomst-fordeling** pr. familiemedlem med kilde (løn/understøttelse)
+  og månedlig forecast-nettobeløb.
+- **Komplet månedligt regnskab** (`7e579bf`): faste udgifter pr.
+  kategori-gruppe (Bolig & lån, Forsyning, Transport osv.) + husholdning
+  + andre overførsler ud + opsparingsindbetalinger - alt på samme tabel
+  så netto kan summeres ærligt.
+- **Lån-tabel** (`a95de9d`): viser nominel rente (det brugeren faktisk
+  betaler) i stedet for ÅOP. Mens ÅOP er regulatorisk standard, er den
+  beregnet over hele lånets løbetid og inkluderer gebyrer afskrevet pr.
+  år - ikke det relevante tal når man kigger på sin månedlige
+  cashflow. Nominel rente er det "rå rente"-tal banken bruger på
+  termiske breve.
+- **Gældsfaktor** (`790f33d`): vises både brutto og netto i én kasse.
+  Bankerne bruger brutto (lov-baseret), husholdningen lever af netto.
+  Ærlig kontekst-note tilføjet i `ee5eeb2` om at fortolkningen er
+  vejledende, ikke autoritativ.
+
+### Iteration var hård
+
+Rapporten gennemgik 10 commits over 1 time fordi vi konstant fandt
+inkonsistenser i hvordan beløbene blev summeret:
+
+- `5dbdd19`: opdaget at lån blev tællet både i "faste udgifter" og
+  igen som låneydelse. Fjernet fra fast-udgifter-gruppen
+- `c638ead`: omvendt - låneydelser var helt forsvundet. Tilbage som
+  informativt nøgletal
+- `e50c539`: lån trukket ud i egen tier UNDER faste udgifter -
+  visuelt klart at det er "betaling der reducerer gæld" vs
+  "betaling der bare er væk"
+- `7e579bf`: husholdningskonto-spending lækkede ind i recurring-
+  expense-summen pga delt category. Fix: husholdning er nu sin egen
+  tier, ikke en del af det recurring regnskab
+- `3159471`: samme husholdning-issue ramte andre sider. Konsolideret
+  konsekvent: husholdning er en SEPARAT gruppe i budget, poster,
+  rapport - aldrig blandet ind i "faste udgifter"-totalen
+
+Læring: data-modellen for hvad-tæller-som-fast-udgift er subtilt
+forskellig fra hvad mange brugere tænker. Husholdning er "fast" i den
+forstand at den er forventelig, men "variabel" i den forstand at den
+ikke er en specifik regning. Vi har valgt at behandle den som egen
+kategori snarere end at presse den ind i én af de to.
+
+### Print-button
+
+[PrintButton.tsx](app/(app)/rapport/_components/PrintButton.tsx) trigger
+`window.print()`. Print-CSS er bygget ind i siden via `print:` Tailwind-
+utilities (skjul navigation, bryd sider på bestemte sections, sort
+text-color, hvid bg). Brugeren får browser's "Gem som PDF" dialog.
+
+---
+
+## 3. Dashboard waterfall-graf per konto
+
+**Commits:** `fc27c4c`, `ecad6b6`, `1e9c0d3`, `d1c2da2`
+
+Tidligere viste dashboard én cashflow-Sankey. Den fortalte hvor pengene
+flyder PÅ TVÆRS - men ikke om hver enkelt konto faktisk er sund.
+
+`d1c2da2` tilføjer en waterfall-graf PR. KONTO: starter med saldo,
+plusser månedens forventede flow ind (paychecks + transfers IND),
+minusser månedens flow ud (recurring expenses + transfers UD), viser
+prognoseret saldo i slutningen.
+
+### Konto-perspektiv-fix på paychecks
+
+`fc27c4c`: tidligere blev paychecks behandlet som "husstands-indtægt"
+og fordelt symmetrisk i beregninger. Det fejlede når et husstand med
+to brugere har asymmetrisk indkomst - flowet på fælleskontoen
+overvurderede den ene partners bidrag.
+
+Nu filtreres paychecks per konto: dit egen forecast påvirker kun konti
+DU ejer eller bidrager til via transfer. Det matcher hvordan vi
+allerede regner i månedsmailen (`8621180` fra 12. maj).
+
+### Visuelle signaler (`ecad6b6`)
+
+På /konti-listen får hver konto nu et lille badge:
+- Grøn pil op: prognoseret overskud (flow ind > flow ud)
+- Rød pil ned: prognoseret underskud
+- Neutral: balance
+
+Brugeren kan spotte syge konti uden at klikke ind.
+
+### Husstands-niveau diagnostik (`1e9c0d3`)
+
+Rådgiver-agenten har fået en ekstra kapabilitet: hvis dashboards
+samlede netto er negativt på husstands-niveau, viser den en specifik
+diagnose ("din lønkonto-overførsel til budget er ikke stor nok til
+at dække faste udgifter") med en direkte CTA til at fixe det.
+
+---
+
+## 4. Privat/Fælles som rød tråd på tværs af appen
+
+**Commit:** `6aba8e3`
+
+Op til denne commit havde forskellige sider haft forskellige måder at
+vise privat-vs-fælles-distinktion på: nogle havde Fælles/Private-
+tabs, nogle havde badges, nogle blandede alt. Inkonsistens gjorde
+brugeren tøvende - "ser jeg på den rigtige kategori?"
+
+Refactor: ÉT mønster overalt. Fælles/Private er nu en konsekvent
+tab-control øverst på alle finansielle sider (poster, budget, rapport,
+husholdning, faste-udgifter). Default = "Fælles" fordi det er den
+mest delte mental model i en husstand.
+
+Hver tab viser sin egen total i kapital-tag bagved (`Fælles 12.500 kr`),
+så brugeren kan se proportionen mellem de to uden at skifte mellem
+dem.
+
+---
+
+## 5. Onboarding-polish: tre P-items + en wizard-fix
+
+**Commits:** `25bb79c`, `9c02330`, `52d06d2`, `e11cf4e`
+
+Onboarding-checklisten på dashboard er nu udvidet med et **indkomst-
+trin** (`25bb79c`). Tidligere stoppede den ved "tilføj lønkonto" -
+men registrering af faktiske paychecks er det der gør forecast-tallet
+meningsfuldt. Nyt trin pumper brugeren til `/indkomst/ny`.
+
+**P1.4** (`41bc3cf` allerede dækket): rådgiver guided tour.
+
+**P1.5** (`52d06d2`): /poster havde en tom empty state der ikke
+forklarede hvor man tilføjer. Ny empty state med 2 CTAs: "Tilføj
+manuelt" + "Vis månedens forventede poster fra faste udgifter".
+Plus tooltip på /konti der forklarer privat/fælles-distinktion på
+account-create-form.
+
+**P1.6** (`e11cf4e`): wizard kunne ende i en dead-end-state hvis
+brugeren valgte "shared income" men ikke havde oprettet en fælles
+lønkonto først. Detect: hvis `economy_type='shared'` og ingen
+shared-checking-account → vis varslen + CTA til at oprette en, i
+stedet for at vise et tomt income-form der ikke kan gemmes.
+
+**Wizard-bugfix** (`9c02330`): hvis lønseddel-INSERT fejlede under
+lønkonto-oprettelse, blev kontoen efterladt som dangling state.
+Compensating delete pattern (samme som `pushLoanToBudget`-fix fra
+Prompt 7): hvis paycheck-INSERT fejler, slet den nyligt oprettede
+lønkonto.
+
+---
+
+## 6. Indkomst-flow: understøttelse (SU, dagpenge, pension)
+
+**Commit:** `9e60801`
+
+Tidligere kunne `primary_income_source` være `'salary'` eller
+`'benefits'`. Salary havde fuldt paycheck-flow (gross_amount,
+pension_pct, andre felter). Benefits havde kun rå nettobeløb +
+recurrence - utilstrækkeligt for SU-modtagere der vil registrere
+ATP, fradrag, restskat etc.
+
+Nyt understøttelses-flow: stadig samme `income_role='primary'`-tabelle
+struktur, men UI'et tilbyder nu specifikke benefit-typer (SU,
+dagpenge, kontanthjælp, pension) med relevante felter (frikort-
+beløb, månedlig sats, fradragsbevis). Forecast-beregningen bruger
+samme "gennemsnit af sidste 3 indbetalinger"-pattern.
+
+---
+
+## 7. Betalings-påmindelser: ugentlig opt-in mail
+
+**Migration:** [0064_payment_reminder_email.sql](supabase/migrations/0064_payment_reminder_email.sql)
+**Commit:** `3caf705`
+
+Ud over månedssammendraget (12. maj's `0318dd8`) er der nu en valgfri
+**ugentlig digest** der lister forfaldne betalinger i den kommende
+uge. Tænkt til folk der ikke er inde i appen ugentligt og gerne vil
+huske at have penge til regningerne.
+
+### Hvorfor default OFF
+
+Ugentlige mails er mere påtrængende end den månedlige. Vi vil ikke
+opt-out'e folk passivt - den månedlige fungerer som default-retention.
+Den ugentlige er noget brugeren aktivt vælger til i /indstillinger.
+
+### Datamodel (migration 0064)
+
+- `family_members.payment_reminder_enabled boolean default false`
+- `family_members.last_payment_reminder_sent_at timestamptz`
+
+Idempotency-pattern matchende månedssammendraget.
+
+### Cron-route
+
+[/api/cron/payment-reminders/route.ts](app/api/cron/payment-reminders/route.ts)
+beskyttet med samme `Authorization: Bearer ${CRON_SECRET}`-pattern.
+Vercel cron-config i [vercel.json](vercel.json) tilføjet:
+`"0 8 * * 1"` (mandag morgen kl. 08).
+
+### Indhold
+
+For hver opt-in family_member:
+- Faste udgifter (recurring) der forfalder fredag-søndag den uge,
+  pr. konto brugeren ejer eller bidrager til
+- Recurring transfers UD den uge
+- Sum "samlet at trække"
+
+Hjælper folk planlægge "skal jeg overføre til budgetkontoen i
+weekenden?".
+
+---
+
+## 8. CSV-eksport på poster + budget
+
+**Commits:** `8106bef`, `d275e13`
+
+To nye knapper i toolbar'en:
+- /poster: "Eksportér måneden" → CSV med alle posteringer i den
+  valgte måned (kolonner: dato, beskrivelse, kategori, gruppe,
+  konto, beløb)
+- /budget: "Eksportér" → CSV med alle recurring expenses + month-
+  equivalent-beløb
+
+Begge bruger native `Blob`+`URL.createObjectURL` (ingen ekstern dep)
+og UTF-8 BOM-prefix så Excel åbner dem korrekt på dansk locale.
+
+Tænkt til brugere der vil parre med deres egen regneark / regnskab,
+eller dele en udskrift med deres rådgiver.
+
+---
+
+## 9. Husholdning: granulær kategori + fordelings-graf
+
+**Commit:** `0f5088c`
+
+Tidligere kunne husholdningskøb kun kategoriseres binært ("Husholdning"
+som én blob). Nu tilbyder /husholdning et lille dropdown med sub-
+kategorier (dagligvarer, takeaway, hygiejne, andet) så brugeren kan
+se hvor de faktisk bruger pengene.
+
+Ny fordelings-graf nederst på /husholdning viser månedlig brug pr.
+sub-kategori som donut. Hjælper folk identificere det "stille forbrug"
+(fx 1.500 kr/md i takeaway) der ellers ville være usynlig.
+
+Datamodel: ingen ny tabel - vi bruger eksisterende `categories`-
+tabellen med en parent-relation til "Husholdning"-paraply-kategorien.
+
+---
+
+## 10. Migration 0063: indkomst-synlighed på tværs af husstanden
+
+**Migration:** [0063_household_income_visibility.sql](supabase/migrations/0063_household_income_visibility.sql)
+
+Migration 0030/0031 (back from april) gjorde lønkonti private mellem
+partnere - så Anders ikke kan se Lises forbrug. Det er rigtig
+indstilling for forbrugs-privatliv.
+
+**Bivirkning vi ikke havde tænkt på:** den skjulte også partnerens
+INDKOMST. Til et par der budgetterer sammen er fælles indkomst-
+overblik nødvendigt:
+
+- /indkomst viser sektion per husstands-medlem (forecast pr. person) -
+  uden synlighed kunne man ikke se den anden
+- Dashboards "manglende bidragyder"-tjek skal kunne se begges
+  paychecks for ikke at fejl-alarmere ("Anders har ingen indkomst!"
+  når Anders faktisk har registreret sin løn på sin private konto)
+
+Migration 0063 sletter RLS-policy'en der blokerede cross-member-reads
+af `transactions` med `income_role='primary'` - kun den specifikke
+kategori. Almindeligt forbrug forbliver privat.
+
+---
+
+## 11. Sidebar: ny Indsigt-sektion + Indstillinger til bunden
+
+**Commit:** `d42fc95`
+
+Sidebar har vokset siden den oprindelige 7-item-liste. Nu:
+
+- **NAV_MAIN** (kerne-flow): Dashboard, Konti, Lån, Indkomst, Budget,
+  Poster, Overførsler
+- **NAV_INSIGHT** (ny gruppe under "Indsigt"-header): Rådgiver,
+  Rapport, Begivenheder
+- **NAV_TOOLS** ("Værktøjer"-header): Faste udgifter, Husholdning,
+  Opsparinger & buffer
+- **NAV_BOTTOM**: Indstillinger (flyttet ned fra hovedlisten)
+
+Begrundelse: "Indstillinger" er noget man rammer en gang om måneden -
+ikke noget der skal være lige under "Dashboard". Den nye Indsigt-
+gruppe sætter de tre "tag stilling"-sider (rådgiver, rapport,
+begivenheder) sammen, distinktivt fra hverdags-flow'et.
+
+---
+
+## 12. Tooltips fix
+
+**Commit:** `b4cc8ed`
+
+To bugs i `InfoTooltip`-komponenten:
+1. **Clipping**: tooltips på små skærme blev klippet af parent
+   `overflow: hidden`-container (sidebar/cards). Skift til
+   `position: fixed` med JavaScript-baseret positioning så de altid
+   renderer relativt til viewport.
+2. **Arvet CAPS**: når en tooltip sad inde i en `text-eyebrow`-
+   styled element (uppercase + tracking), arvede tooltip-indholdet
+   den samme CSS-transform. Fjernet ved at sætte
+   `text-transform: none` eksplicit på tooltip-content.
+
+---
+
+## 13. Begivenheder-iteration
+
+**Commits:** `b01b303`, `f6f004e`, `ca93e10`
+
+Tre små justeringer på begivenheder-feature'en:
+
+- `b01b303`: tilføjet "Opret overførsel" og "Slet"-handlinger direkte
+  på event-kortene (uden at skulle ind på detalje-siden først). Snake-
+  case CTAs på hover.
+- `f6f004e`: fremdriftsgraf tilføjet på detalje-side - lineær linje
+  fra `created_at` til `target_date` med en marker for "nu" og en
+  shaded zone for "krævet rate". Sektion `EventProgress.tsx`.
+- `ca93e10`: ... og fjernet igen samme dag efter test. Grafen gav
+  ikke meningsfuld info ud over hvad "Måneder tilbage" og "Krævet
+  pr. måned" allerede viste. Mere visuel støj end information.
+
+Pattern: prøv det, vis brugeren, slet hvis det ikke holder. Mindre
+arbejde end at debattere det i abstrakt.
+
+---
+
+## 14. Læringspunkter
+
+### 14.1 "Allokér overskud" er hvor agent-værdi for alvor lander
+
+Rådgiver-feature'en føltes som det største real-world UX-spring i
+denne periode. Modsat passive dashboards der "viser tal" giver
+rådgiveren brugeren et **konkret valg** at træffe: vælger du 50/30/20
+eller låneoptimering for denne måneds 4.200 kr i overskud? Det er
+aktivt budgeting i stedet for passive accounting.
+
+Den tredje fordelingsmodel ("Udlignet rådighed") var brugerens egen
+idé baseret på personlig erfaring med skæv-indkomst-par. Det er ikke
+en standard regel fra økonomi-litteraturen - det er en designet
+løsning på et reelt problem. Domain-specific value > generic best
+practice.
+
+### 14.2 Rapporten viste hvor mange små inkonsistenser der gemte sig
+
+10 commits over 1 time fordi vi opdagede at vores beløbs-summering
+varierede subtilt mellem sider:
+- Husholdning som "fast udgift" på ét sted, "variabelt forbrug" et
+  andet
+- Lån i "faste udgifter" + "låneydelser" (dobbelt-tælling)
+- Recurring transfers UD som "udgift" på dashboard, men ikke i
+  rapport-totalen
+
+Rapporten fungerede som auditeringsværktøj for vores egne
+beregningsmønstre. Bivirkning af "skriv det hele ned på samme side":
+inkonsistenser bliver visuelt åbenbare.
+
+### 14.3 Husholdning er sin egen tier - ikke "fast" eller "variabel"
+
+Vi har endt med en konsistent model: tre kategorier af monthly
+out-flow:
+
+1. **Faste udgifter** (recurring transactions med specifik kategori +
+   beløb)
+2. **Husholdning** (variabelt forbrug på husholdningskonto, manuelt
+   loggede køb)
+3. **Andre overførsler** (recurring transfers ud, fx aldersopsparing,
+   børneopsparing)
+
+Hvert vises separat i rapport, dashboard, budget. Det matcher den
+mentale model brugere har: "regninger jeg ikke kan undgå", "dagligvarer
++ takeaway-puljen", "det jeg lægger til side".
+
+### 14.4 Privat-vs-fælles-distinktion var værre end vi vidste
+
+Inkonsistensen var akkumuleret langsomt over måneder med forskellige
+løsninger pr. side. `6aba8e3` (rød tråd-refactor) er den slags
+oprydning som ingen specifik bruger har bedt om, men som alle vil
+opleve som "appen føles renere nu". Værd at tjekke regelmæssigt om
+en akkumuleret små-inkonsistens er ved at blive et reelt problem.
+
+### 14.5 Default OFF for ugentlig mail
+
+Den månedlige er **default ON** fordi den er retention-fundamental.
+Den ugentlige er **default OFF** fordi den er for påtrængende uden
+opt-in. Frequency er en valgfri dial brugere kalibrerer selv. Pattern:
+ÉN ting du sender uden samtykke, alt andet kræver eksplicit ja.
+
+---
+
+## 15. Status
+
+**Commits**: 36 fra `b4cc8ed` til `0f5088c`. Alle på main.
+
+**Nye routes**: `/raadgiver`, `/rapport` (sider med komponenter +
+client-side print-trigger).
+
+**Migrations på prod**:
+- 0063 household_income_visibility (cross-member income-RLS fix)
+- 0064 payment_reminder_email (opt-in ugentlig mail)
+
+**Nye cron-routes**: `/api/cron/payment-reminders` (ugentlig
+mandag-morgen kl. 08).
+
+**Sidebar-struktur**: NAV_MAIN (7), NAV_INSIGHT (3, ny gruppe),
+NAV_TOOLS (3), NAV_BOTTOM (Indstillinger).
+
+**Onboarding-checkliste**: 4 trin (var 3) inkl. indkomst-registrering.
+
+**Build**: `tsc --noEmit` clean. `npm install` ikke krævet (ingen
+nye deps).
+
+**Env-vars som er forudsætning** (allerede sat fra 12. maj):
+- `CRON_SECRET` (ny pkt: bruges nu af to cron-routes)
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SITE_URL`
+
+---
+
+## Åbne tråde
+
+- **Rapporten på mobile**: vi har bygget den til at se godt ud i print
+  (A4 portræt). På mobile er den sandsynligvis udfordret -
+  brevhovedet alene er bredt, og tabel-layout'et er ikke
+  responsivt. Worth en mobile-pass før vi promoverer det aktivt.
+- **CSV-eksport på andre sider**: nu hvor pattern er etableret
+  (Blob + UTF-8 BOM + native download) kan vi billigt tilføje samme
+  knap på /indkomst, /overforsler og /rapport. Hver tager ~20 min.
+- **Rådgiver-modeller flere**: "Udlignet rådighed" er domain-
+  specific. Hvis vi får flere brugere med specifikke situationer
+  (ledighed, deltidsarbejde, freelance) kan vi tilføje modeller
+  uden at omskrive resten af AllokerSection.
+- **Begivenheds-fremdriftsgraf**: slettet i `ca93e10`, men kan
+  reintroduceres senere hvis test viser den giver værdi i
+  multi-event-overblik. Ikke det samme som single-event-view.
+- **Sidebar-Indsigt-tour**: vi har stadig ikke en tour for den nye
+  Indsigt-gruppe. Når den udvider sig med flere features bør den
+  have sin egen tour-entry.
+- **Indkomst-flow for understøttelse: skattefradrag-felter**: vi har
+  felter til frikort + sats, men selve fradragsberegningen (i CashflowAdvisor
+  / forecast) ignorerer det stadig. Næste iteration: faktisk forecast med
+  fradragsbeløb.

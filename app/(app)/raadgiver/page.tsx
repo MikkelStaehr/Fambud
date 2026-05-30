@@ -111,6 +111,8 @@ export default async function RaadgiverPage() {
           currentUserId={plan.currentUserId}
           primaryFaellesAccountId={plan.primaryFaellesAccountId}
           primaryFaellesAccountName={plan.primaryFaellesAccountName}
+          bufferAccountId={plan.bufferAccountId}
+          bufferAccountName={plan.bufferAccountName}
         />
       </section>
 

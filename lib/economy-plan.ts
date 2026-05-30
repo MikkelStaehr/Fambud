@@ -23,7 +23,14 @@ export type PlanMember = {
   userId: string | null;
   monthlyIncome: number;        // forecast netto/md, eller bedste skøn
   incomeComplete: boolean;      // 3+ lønsedler registreret (ellers usikkert)
-  currentContribution: number;  // nuværende månedlige overførsler til fælles
+  currentContribution: number;  // total = expense + savings (bagudkomp.)
+  // Split af currentContribution efter destinations-kontotype så
+  // "Bidrager nu" i rådgiveren kan vise apples-to-apples med
+  // "Betaler til" der også er splittet i udgifter vs opsparing.
+  // Udgifter = transfers til budget/household/checking; Opsparing =
+  // transfers til kind=savings/investment fælleskonti.
+  currentToExpenseAccounts: number;
+  currentToSavingsAccounts: number;
   // Medlemmets egen lønkonto - kilde til foreslået "Opret overførsel"-CTA.
   // null hvis vedkommende ikke har oprettet en endnu (så viser vi i stedet
   // en note om at de skal igennem deres egen wizard).
@@ -36,55 +43,96 @@ export type MemberShare = {
   proportional: number;    // anbefalet andel - indkomst-proportional
   equal: number;           // anbefalet andel - 50/50
   equalRemaining: number;  // anbefalet andel - så alle ender med samme rådighed
-  current: number;         // nuværende bidrag
+  current: number;         // total nuværende bidrag (expense + savings)
+  // Anbefalet andel til opsparing (Buffer) - splittet efter samme model
+  // som udgifter. Total opsparingsbidrag fra alle medlemmer summer til
+  // bufferRecommendedMonthly. Vises som anden underkolonne i rådgiveren.
+  savingsProportional: number;
+  savingsEqual: number;
+  savingsEqualRemaining: number;
 };
 
 export type FaellesSplit = {
   total: number;          // samlede fælles udgifter/md
   totalIncome: number;    // sum af bidragydernes indkomst
   members: MemberShare[];
-  // Rådighedsbeløbet hver ender med under "lige rådighed"-modellen:
-  // (samlet indkomst - fælles udgifter) / antal bidragydere.
   equalRemainingTarget: number;
-  // True hvis mindst én bidragyders indkomst er ufuldstændig - så den
-  // proportionale fordeling er et foreløbigt skøn.
   hasIncompleteIncome: boolean;
+  // Anbefalet samlet månedlig opsparing til fælles buffer (kilde:
+  // bufferRecommendation længere nede). Fordeles per medlem via samme
+  // model som udgifter; vises som second-pair underkolonne.
+  savingsTotal: number;
 };
 
 export function splitFaellesExpenses(
   members: PlanMember[],
-  total: number
+  total: number,
+  // Den anbefalede samlede buffer-opsparingsrate per måned. Defaultet til
+  // 0 så eksisterende callers (uden buffer-info) ikke breaker - de får
+  // bare nul-savings-kolonner.
+  savingsTotal: number = 0
 ): FaellesSplit {
   const totalIncome = members.reduce((s, m) => s + m.monthlyIncome, 0);
   const n = Math.max(1, members.length);
   const equalShare = Math.round(total / n);
+  const equalSavings = Math.round(savingsTotal / n);
 
-  // "Lige rådighed": hver beholder samme beløb R = (indkomst - udgifter)/n,
-  // og bidrager dermed (egen indkomst - R). Den der tjener mest betaler mest,
-  // så begge står lige bagefter. Vi gulver andelen ved 0 i det sjældne
-  // tilfælde hvor en indkomst er lavere end R (meget skæve indkomster).
-  const equalRemainingTarget = Math.round((totalIncome - total) / n);
+  // "Lige rådighed": hver beholder samme beløb R = (indkomst - total cost)/n.
+  // Total cost = udgifter + opsparing - så det "rest"-beløb hver tager hjem
+  // er ægte fri rådighed efter både udgifter OG opsparingsmål.
+  const totalCost = total + savingsTotal;
+  const equalRemainingTarget = Math.round((totalIncome - totalCost) / n);
 
   return {
     total,
     totalIncome,
     equalRemainingTarget,
+    savingsTotal,
     hasIncompleteIncome: members.some((m) => !m.incomeComplete),
-    members: members.map((m) => ({
-      member: m,
-      // Hvis ingen indkomst er registreret endnu, falder vi tilbage til
-      // ligedeling så den proportionale kolonne ikke bliver 0 for alle.
-      proportional:
+    members: members.map((m) => {
+      // Udgifter-fordelingen (samme logik som før).
+      const proportional =
         totalIncome > 0
           ? Math.round(total * (m.monthlyIncome / totalIncome))
-          : equalShare,
-      equal: equalShare,
-      equalRemaining:
+          : equalShare;
+      const equalRemainingExpense =
         totalIncome > 0
-          ? Math.max(0, m.monthlyIncome - equalRemainingTarget)
-          : equalShare,
-      current: m.currentContribution,
-    })),
+          ? Math.max(
+              0,
+              // Andel af total cost (udgifter+opsparing) der hører til
+              // udgifter. Det er totalCost-share gange (udgifter/total).
+              Math.round(
+                (m.monthlyIncome - equalRemainingTarget) *
+                  (totalCost > 0 ? total / totalCost : 1)
+              )
+            )
+          : equalShare;
+      // Opsparing-fordelingen følger samme model.
+      const savingsProportional =
+        totalIncome > 0
+          ? Math.round(savingsTotal * (m.monthlyIncome / totalIncome))
+          : equalSavings;
+      const savingsEqualRemaining =
+        totalIncome > 0
+          ? Math.max(
+              0,
+              Math.round(
+                (m.monthlyIncome - equalRemainingTarget) *
+                  (totalCost > 0 ? savingsTotal / totalCost : 0)
+              )
+            )
+          : equalSavings;
+      return {
+        member: m,
+        proportional,
+        equal: equalShare,
+        equalRemaining: equalRemainingExpense,
+        current: m.currentContribution,
+        savingsProportional,
+        savingsEqual: equalSavings,
+        savingsEqualRemaining,
+      };
+    }),
   };
 }
 

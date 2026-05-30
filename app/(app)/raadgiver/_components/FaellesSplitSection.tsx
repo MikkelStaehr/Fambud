@@ -49,11 +49,28 @@ export function FaellesSplitSection({
       : model === 'equal'
         ? m.equal
         : m.equalRemaining;
+  const savingsShareOf = (m: FaellesSplit['members'][number]) =>
+    model === 'proportional'
+      ? m.savingsProportional
+      : model === 'equal'
+        ? m.savingsEqual
+        : m.savingsEqualRemaining;
+  const totalShareOf = (m: FaellesSplit['members'][number]) =>
+    shareOf(m) + savingsShareOf(m);
 
   const totalShare = split.members.reduce((s, m) => s + shareOf(m), 0);
+  const totalSavings = split.members.reduce((s, m) => s + savingsShareOf(m), 0);
   const totalIncome = split.totalIncome;
-  const totalRemaining = totalIncome - totalShare;
-  const totalCurrent = split.members.reduce((s, m) => s + m.current, 0);
+  const totalRemaining = totalIncome - totalShare - totalSavings;
+  const totalCurrentExpense = split.members.reduce(
+    (s, m) => s + m.member.currentToExpenseAccounts,
+    0
+  );
+  const totalCurrentSavings = split.members.reduce(
+    (s, m) => s + m.member.currentToSavingsAccounts,
+    0
+  );
+  const hasSavings = split.savingsTotal > 0;
 
   const me = split.members.find((m) => m.member.userId === currentUserId);
 
@@ -73,6 +90,14 @@ export function FaellesSplitSection({
         <span className="tabnum font-mono font-semibold text-neutral-900">
           {formatAmount(faellesMonthlyExpense)} kr/md
         </span>
+        {hasSavings && (
+          <>
+            , og anbefalet buffer-opsparing{' '}
+            <span className="tabnum font-mono font-semibold text-neutral-900">
+              {formatAmount(split.savingsTotal)} kr/md
+            </span>
+          </>
+        )}
         . Vælg en fordelingsmodel og se hvad hver har tilbage bagefter:
       </p>
 
@@ -132,17 +157,34 @@ export function FaellesSplitSection({
               <th className="px-4 py-2.5 text-right font-medium">Indkomst</th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Betaler til fælles
+                {hasSavings && (
+                  <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
+                    udgifter / opsparing
+                  </div>
+                )}
               </th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Tilbage til sig selv
               </th>
-              <th className="px-4 py-2.5 text-right font-medium">Bidrager nu</th>
+              <th className="px-4 py-2.5 text-right font-medium">
+                Bidrager nu
+                {hasSavings && (
+                  <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
+                    udgifter / opsparing
+                  </div>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {split.members.map((m) => {
               const share = shareOf(m);
-              const remaining = m.member.monthlyIncome - share;
+              const savingsShare = savingsShareOf(m);
+              const totalThisRow = share + savingsShare;
+              const remaining = m.member.monthlyIncome - totalThisRow;
+              const currentTotal =
+                m.member.currentToExpenseAccounts +
+                m.member.currentToSavingsAccounts;
               return (
                 <tr key={m.member.id}>
                   <td className="px-4 py-2.5 font-medium text-neutral-900">
@@ -158,16 +200,26 @@ export function FaellesSplitSection({
                   </td>
                   <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-neutral-900">
                     {formatAmount(share)}
+                    {hasSavings && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(savingsShare)} ops.
+                      </div>
+                    )}
                   </td>
                   <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-emerald-800">
                     {formatAmount(remaining)}
                   </td>
                   <td
                     className={`tabnum px-4 py-2.5 text-right font-mono ${
-                      m.current >= share ? 'text-emerald-700' : 'text-amber-700'
+                      currentTotal >= totalThisRow ? 'text-emerald-700' : 'text-amber-700'
                     }`}
                   >
-                    {formatAmount(m.current)}
+                    {formatAmount(m.member.currentToExpenseAccounts)}
+                    {hasSavings && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(m.member.currentToSavingsAccounts)} ops.
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
@@ -181,12 +233,22 @@ export function FaellesSplitSection({
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalShare)}
+                {hasSavings && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalSavings)} ops.
+                  </div>
+                )}
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalRemaining)}
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
-                {formatAmount(totalCurrent)}
+                {formatAmount(totalCurrentExpense)}
+                {hasSavings && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalCurrentSavings)} ops.
+                  </div>
+                )}
               </td>
             </tr>
           </tfoot>
@@ -208,11 +270,33 @@ export function FaellesSplitSection({
           <span className="tabnum font-mono font-semibold">
             {formatAmount(shareOf(me))} kr
           </span>
+          {hasSavings && (
+            <>
+              {' '}
+              udgifter +{' '}
+              <span className="tabnum font-mono font-semibold">
+                {formatAmount(savingsShareOf(me))} kr
+              </span>{' '}
+              opsparing
+            </>
+          )}
           . Du bidrager{' '}
-          <span className="tabnum font-mono">{formatAmount(me.current)} kr</span>{' '}
+          <span className="tabnum font-mono">
+            {formatAmount(me.member.currentToExpenseAccounts)} kr
+          </span>{' '}
+          til udgifter
+          {hasSavings && (
+            <>
+              {' '}+{' '}
+              <span className="tabnum font-mono">
+                {formatAmount(me.member.currentToSavingsAccounts)} kr
+              </span>{' '}
+              til opsparing
+            </>
+          )}{' '}
           i dag, og ville have{' '}
           <span className="tabnum font-mono font-semibold text-emerald-800">
-            {formatAmount(me.member.monthlyIncome - shareOf(me))} kr
+            {formatAmount(me.member.monthlyIncome - shareOf(me) - savingsShareOf(me))} kr
           </span>{' '}
           tilbage til dig selv.
         </div>
@@ -298,7 +382,11 @@ function TransferRecommendationRow({
   faellesAccountName: string;
 }) {
   const { member } = m;
-  const diff = share - m.current;
+  // Diff sammenligner UDGIFTER-andel mod nuværende overførsler til
+  // UDGIFTSDÆKKENDE fælleskonti - apples-to-apples. Opsparings-bidrag
+  // er en separat sektion (Buffer) og blandes ikke ind her.
+  const currentForExpense = member.currentToExpenseAccounts;
+  const diff = share - currentForExpense;
   // Threshold på 50 kr så små afrundinger ikke flagges som "skal justeres".
   const onTarget = Math.abs(diff) < 5000;
   const needsIncrease = diff >= 5000;
@@ -334,16 +422,16 @@ function TransferRecommendationRow({
             <span className="text-neutral-300">·</span>
             {onTarget ? (
               <span className="text-emerald-700">
-                På mål ({formatAmount(m.current)} kr/md i dag)
+                På mål ({formatAmount(currentForExpense)} kr/md til udgifter i dag)
               </span>
             ) : needsIncrease ? (
               <span className="text-amber-700">
-                I dag: {formatAmount(m.current)} kr. Øg med{' '}
+                I dag: {formatAmount(currentForExpense)} kr til udgifter. Øg med{' '}
                 {formatAmount(Math.abs(diff))} kr
               </span>
             ) : (
               <span className="text-neutral-600">
-                I dag: {formatAmount(m.current)} kr. Reducér med{' '}
+                I dag: {formatAmount(currentForExpense)} kr til udgifter. Reducér med{' '}
                 {formatAmount(Math.abs(diff))} kr
               </span>
             )}

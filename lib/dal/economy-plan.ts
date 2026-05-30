@@ -142,15 +142,36 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   }
 
   // Nuværende bidrag pr. medlem: sum af deres overførsler til fælleskonti
-  // (grupperet via from-kontoens creator i advisor-context).
-  const contributionByUser = new Map<string, number>();
+  // (grupperet via from-kontoens creator i advisor-context). Splittes
+  // efter destinations-kontotype så rådgiveren kan vise "udgifter" vs
+  // "opsparing" som apples-to-apples med de splittede anbefalinger.
+  const expenseFaellesIds = new Set(
+    faellesAccountList
+      .filter((a) => a.kind !== 'savings' && a.kind !== 'investment')
+      .map((a) => a.id)
+  );
+  const savingsFaellesIds = new Set(
+    faellesAccountList
+      .filter((a) => a.kind === 'savings' || a.kind === 'investment')
+      .map((a) => a.id)
+  );
+  const contributionByUser = new Map<
+    string,
+    { total: number; expense: number; savings: number }
+  >();
+  const bumpUser = (userId: string, bucket: 'expense' | 'savings', amount: number) => {
+    const prev = contributionByUser.get(userId) ?? { total: 0, expense: 0, savings: 0 };
+    prev.total += amount;
+    prev[bucket] += amount;
+    contributionByUser.set(userId, prev);
+  };
   for (const t of ctx.transfersByCreator) {
     if (t.creatorUserId == null) continue;
-    if (!faellesAccountIds.has(t.toAccountId)) continue;
-    contributionByUser.set(
-      t.creatorUserId,
-      (contributionByUser.get(t.creatorUserId) ?? 0) + t.monthly
-    );
+    if (expenseFaellesIds.has(t.toAccountId)) {
+      bumpUser(t.creatorUserId, 'expense', t.monthly);
+    } else if (savingsFaellesIds.has(t.toAccountId)) {
+      bumpUser(t.creatorUserId, 'savings', t.monthly);
+    }
   }
 
   const members: PlanMember[] = contributors.map((m, i) => {
@@ -173,15 +194,16 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
             !a.archived
         )
       : null;
+    const contrib = m.user_id ? contributionByUser.get(m.user_id) : undefined;
     return {
       id: m.id,
       name: m.name,
       userId: m.user_id,
       monthlyIncome,
       incomeComplete: f.status === 'ready',
-      currentContribution: m.user_id
-        ? contributionByUser.get(m.user_id) ?? 0
-        : 0,
+      currentContribution: contrib?.total ?? 0,
+      currentToExpenseAccounts: contrib?.expense ?? 0,
+      currentToSavingsAccounts: contrib?.savings ?? 0,
       lonkontoId: memberLonkonto?.id ?? null,
       lonkontoName: memberLonkonto?.name ?? null,
     };

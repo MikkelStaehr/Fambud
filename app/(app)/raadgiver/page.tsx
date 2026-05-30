@@ -25,10 +25,17 @@ export default async function RaadgiverPage() {
     getEconomyPlanData(),
     shouldShowTour('raadgiver'),
   ]);
-  const split = splitFaellesExpenses(plan.members, plan.faellesMonthlyExpense);
   const buffer = bufferRecommendation(
     plan.monthlyFixedExpenses,
     plan.bufferMonthlyContribution
+  );
+  // Buffer-andelen indgår nu i fordelings-tabellen som anden underkolonne
+  // ved hver beløbs-celle, så total "betaler til fælles" matcher "alt der
+  // bør gå ind på fælleskonti" (udgifter + opsparing).
+  const split = splitFaellesExpenses(
+    plan.members,
+    plan.faellesMonthlyExpense,
+    buffer.recommendedMonthly
   );
   const bufferOnTrack =
     buffer.monthsAtCurrentRate != null &&

@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, getActionPerspective } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
@@ -201,7 +201,11 @@ export async function createIncome(formData: FormData) {
     redirect('/indkomst/ny?error=' + encodeURIComponent(parsed.error));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  // Proxy-aware: validér at konto er i visible-set + brug admin-client
+  // i proxy-mode så Louises private lønkonto kan modtage indsætning.
+  const pRes = await getActionPerspective(parsed.data.account_id);
+  if (!pRes.ok) redirect('/indkomst/ny?error=' + encodeURIComponent(pRes.error));
+  const { supabase, householdId } = pRes.perspective;
 
   // SECURITY: Indkomst lander på checking/savings/etc - ikke på lån.
   const accCheck = await assertAccountKind(
@@ -268,7 +272,11 @@ export async function updateIncome(id: string, formData: FormData) {
     redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(parsed.error));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(parsed.data.account_id);
+  if (!pRes.ok) {
+    redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(pRes.error));
+  }
+  const { supabase, householdId } = pRes.perspective;
 
   // Same kind-validation as createIncome - hvis brugeren ændrer
   // account_id til et lån, skal det blokeres.
@@ -299,7 +307,9 @@ export async function updateIncome(id: string, formData: FormData) {
 export async function deleteIncome(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!id) return;
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective();
+  if (!pRes.ok) throw new Error('Internal error');
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transactions')
     .delete()

@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getActionPerspective } from '@/lib/dal';
 import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
@@ -76,7 +76,9 @@ export async function createTransaction(formData: FormData) {
     redirect('/poster/ny?error=' + encodeURIComponent(parsed.error));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(parsed.data.account_id);
+  if (!pRes.ok) redirect('/poster/ny?error=' + encodeURIComponent(pRes.error));
+  const { supabase, householdId } = pRes.perspective;
 
   // SECURITY: Bekræft at account_id er en konto-type der må modtage
   // transactions via /poster. Specielt UDELUKKER vi 'credit' (lån/
@@ -112,7 +114,11 @@ export async function updateTransaction(id: string, formData: FormData) {
     redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(parsed.error));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(parsed.data.account_id);
+  if (!pRes.ok) {
+    redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(pRes.error));
+  }
+  const { supabase, householdId } = pRes.perspective;
 
   // Samme account-kind-tjek som ved create - hvis brugeren ændrer
   // account_id til et lån, skal det blokeres.
@@ -142,7 +148,9 @@ export async function updateTransaction(id: string, formData: FormData) {
 export async function deleteTransaction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!id) return;
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective();
+  if (!pRes.ok) throw new Error('Internal error');
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transactions')
     .delete()

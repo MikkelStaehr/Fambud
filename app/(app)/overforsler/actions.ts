@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getActionPerspective } from '@/lib/dal';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
@@ -95,7 +95,14 @@ export async function createTransfer(formData: FormData) {
     redirect('/overforsler/ny?error=' + encodeURIComponent(parsed.error));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  // Proxy-aware: validér at BEGGE konti er i perspective's visible-set.
+  // I proxy-mode bruges admin-client til insert så Mikkel kan oprette
+  // overførsel mellem to af Louises private konti.
+  const fromRes = await getActionPerspective(parsed.data.from_account_id);
+  if (!fromRes.ok) redirect('/overforsler/ny?error=' + encodeURIComponent(fromRes.error));
+  const toRes = await getActionPerspective(parsed.data.to_account_id);
+  if (!toRes.ok) redirect('/overforsler/ny?error=' + encodeURIComponent(toRes.error));
+  const { supabase, householdId } = fromRes.perspective;
 
   // Hvis link til en begivenhed er angivet, verificér at event'en
   // tilhører dette household før insert. RLS ville også afvise via
@@ -172,7 +179,15 @@ export async function updateTransfer(id: string, formData: FormData) {
     );
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const fromRes = await getActionPerspective(parsed.data.from_account_id);
+  if (!fromRes.ok) {
+    redirect(`/overforsler/${encodeURIComponent(id)}?error=` + encodeURIComponent(fromRes.error));
+  }
+  const toRes = await getActionPerspective(parsed.data.to_account_id);
+  if (!toRes.ok) {
+    redirect(`/overforsler/${encodeURIComponent(id)}?error=` + encodeURIComponent(toRes.error));
+  }
+  const { supabase, householdId } = fromRes.perspective;
 
   if (parsed.data.life_event_id) {
     const { data: event } = await supabase
@@ -213,7 +228,11 @@ export async function updateTransfer(id: string, formData: FormData) {
 export async function deleteTransfer(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!id) return;
-  const { supabase, householdId } = await getHouseholdContext();
+  // Delete har ingen accountId at validere mod - vi stoler på at id'et er
+  // i caller's husstand. Admin-client + householdId-filter sikrer scope.
+  const pRes = await getActionPerspective();
+  if (!pRes.ok) throw new Error('Internal error');
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transfers')
     .delete()

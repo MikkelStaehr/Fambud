@@ -158,6 +158,32 @@ export const getVisibleAccountIds = cache(async (): Promise<string[]> => {
   return (data ?? []).map((r) => r.id);
 });
 
+// Perspective-aware action-kontekst: returnerer den supabase-klient som
+// skal bruges til skrivninger PLUS de samme felter som getPerspective().
+// I proxy-mode: hvis accountId er angivet, valideres den findes i
+// perspective's visible-set (svarende til RLS's can_write_account gating).
+// Hvis ikke, returneres { ok: false, error } så caller kan bounce med
+// "Kontoen findes ikke"-besked og holde sit redirect-flow.
+//
+// I normal-mode: ingen ekstra check - user-client + RLS sørger selv for
+// adgangs-kontrol via assertAccountKind længere nede i action-flowet.
+export type ActionPerspectiveResult =
+  | { ok: true; perspective: Perspective }
+  | { ok: false; error: string };
+
+export async function getActionPerspective(
+  accountId?: string | null
+): Promise<ActionPerspectiveResult> {
+  const p = await getPerspective();
+  if (p.isProxyActive && accountId) {
+    const visible = await getVisibleAccountIds();
+    if (!visible.includes(accountId)) {
+      return { ok: false, error: 'Kontoen findes ikke' };
+    }
+  }
+  return { ok: true, perspective: p };
+}
+
 // Wizard / onboarding helpers - used by the (app) layout to gate access and
 // by the wizard pages to read user-specific state.
 

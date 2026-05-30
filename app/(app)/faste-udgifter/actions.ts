@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getActionPerspective } from '@/lib/dal';
 import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, FIXED_EXPENSE_KINDS } from '@/lib/actions/account-validation';
 import {
@@ -93,7 +93,12 @@ export async function addExpense(formData: FormData) {
   if (!familyRaw) bounceWithError(accountId, 'Vælg hvem udgiften tilhører');
   const family_member_id = familyRaw === 'all' ? null : familyRaw;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  // Proxy-aware: i proxy-mode bruges admin-client + visible-account-check
+  // så Mikkel kan oprette udgift på en af Louises private konti uden at
+  // RLS blokerer. I normal-mode er det user-client som før.
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) bounceWithError(accountId, pRes.error);
+  const { supabase, householdId } = pRes.perspective;
 
   // SECURITY: faste udgifter må kun ramme budget- eller checking-konti.
   // Ellers kunne en angriber pege accountId på et lån (kind='credit')
@@ -131,7 +136,12 @@ export async function removeExpense(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim();
   if (!id) return;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId || null);
+  if (!pRes.ok) {
+    if (accountId) bounceWithError(accountId, pRes.error);
+    return;
+  }
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transactions')
     .delete()
@@ -167,7 +177,9 @@ export async function addComponent(formData: FormData) {
   if (!amountRes.ok) bounceWithError(accountId, amountRes.error);
   const amount = amountRes.value;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) bounceWithError(accountId, pRes.error);
+  const { supabase, householdId } = pRes.perspective;
 
   // Append to the end of the existing component list. We don't bother with
   // gap-numbering or reordering - sequence works fine here.
@@ -201,7 +213,12 @@ export async function removeComponent(formData: FormData) {
   const accountId = String(formData.get('account_id') ?? '').trim();
   if (!id) return;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId || null);
+  if (!pRes.ok) {
+    if (accountId) bounceWithError(accountId, pRes.error);
+    return;
+  }
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transaction_components')
     .delete()
@@ -241,7 +258,9 @@ export async function updateComponent(
   const familyRaw = String(formData.get('family_member_id') ?? '').trim();
   const family_member_id = familyRaw || null;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) return { ok: false, error: pRes.error };
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transaction_components')
     .update({ label, amount: amount as number, family_member_id })
@@ -307,7 +326,9 @@ export async function updateBudgetExpense(
   if (!familyRaw) return { ok: false, error: 'Vælg hvem udgiften tilhører' };
   const family_member_id = familyRaw === 'all' ? null : familyRaw;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) return { ok: false, error: pRes.error };
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transactions')
     .update({

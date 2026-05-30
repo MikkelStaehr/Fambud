@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getHouseholdContext } from '@/lib/dal';
+import { getHouseholdContext, getActionPerspective } from '@/lib/dal';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, HOUSEHOLD_PURCHASE_KINDS } from '@/lib/actions/account-validation';
 import {
@@ -77,7 +77,9 @@ export async function addHouseholdPurchase(
     redirect('/husholdning?error=' + encodeURIComponent('Ugyldig dato'));
   }
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) redirect('/husholdning?error=' + encodeURIComponent(pRes.error));
+  const { supabase, householdId } = pRes.perspective;
 
   // SECURITY: husholdning er KUN for kind='household' - en angriber må
   // ikke kunne pege accountId på et lån eller en checking-konto og
@@ -143,7 +145,9 @@ export async function setMonthlyBudget(
   }
   const amount = amountRes.value;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) redirect('/husholdning?error=' + encodeURIComponent(pRes.error));
+  const { supabase, householdId } = pRes.perspective;
 
   // monthly_budget giver kun mening på husholdningskonti - ellers er
   // det støj der kan forvirre forecast-logik.
@@ -172,7 +176,9 @@ export async function deleteHouseholdPurchase(formData: FormData) {
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  const { supabase, householdId } = await getHouseholdContext();
+  const pRes = await getActionPerspective();
+  if (!pRes.ok) return;
+  const { supabase, householdId } = pRes.perspective;
   const { error } = await supabase
     .from('transactions')
     .delete()

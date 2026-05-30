@@ -30,11 +30,78 @@ export function PrivatFaellesOverview({ summary, monthLabel }: Props) {
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {/* I proxy-mode er der 3 panels (Mine / Partner / Fælles). Vi bruger
+          1-2-3 kolonner ved md/lg så de tre kasser kan stå side om side
+          på desktop og stable pænt på mobile. */}
+      <div
+        className={
+          summary.partner
+            ? 'grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3'
+            : 'grid grid-cols-1 gap-4 md:grid-cols-2'
+        }
+      >
         <PrivatPanel privat={summary.privat} />
+        {summary.partner && <PartnerPanel partner={summary.partner} />}
         <FaellesPanel faelles={summary.faelles} />
       </div>
     </section>
+  );
+}
+
+// ---- Partner (proxy-mode) --------------------------------------------------
+
+function PartnerPanel({ partner }: { partner: NonNullable<PrivatFaellesSummary['partner']> }) {
+  const { income, expense, transfersOut, net, name } = partner;
+  const netPositive = net >= 0;
+  return (
+    <div className="rounded-lg border border-orange-200 bg-white">
+      <div className="flex items-center justify-between rounded-t-lg border-b border-orange-100 bg-orange-50/60 px-4 py-2.5">
+        <span className="inline-flex items-center gap-2">
+          <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+            {name}
+          </span>
+          <span className="text-sm font-medium text-neutral-900">{name}s økonomi</span>
+        </span>
+        <InfoTooltip position="left">
+          {name}s indtægt, private forbrug og overførsler. Vises her
+          fordi du hjælper {name} med opsætning. Handlinger logges
+          som dine.
+        </InfoTooltip>
+      </div>
+      <div className="px-4 py-4">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+          Tilbage hver måned
+        </div>
+        <div
+          className={`tabnum mt-1 font-mono text-3xl font-semibold ${
+            netPositive ? 'text-emerald-800' : 'text-amber-800'
+          }`}
+        >
+          {netPositive ? '+' : '−'} {formatAmount(Math.abs(net))} kr
+        </div>
+        <p
+          className={`mt-0.5 text-sm font-medium ${
+            netPositive ? 'text-emerald-800' : 'text-amber-800'
+          }`}
+        >
+          {netPositive
+            ? `Der er luft i ${name}s økonomi`
+            : `${name}s private forbrug overstiger indtægten`}
+        </p>
+
+        <dl className="mt-4 space-y-1.5 border-t border-neutral-100 pt-3 text-sm">
+          <Row label="Indtægt" amount={income} sign="+" tone="positive" />
+          <Row label="Privat forbrug" amount={expense} sign="−" tone="negative" />
+          <Row
+            label="Overført ud"
+            sublabel="til fælles & opsparing"
+            amount={transfersOut}
+            sign="−"
+            tone="muted"
+          />
+        </dl>
+      </div>
+    </div>
   );
 }
 

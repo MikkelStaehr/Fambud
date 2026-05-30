@@ -11,6 +11,7 @@ import {
   getUpcomingEvents,
   shouldShowTour,
 } from '@/lib/dal';
+import { getActiveProxyContext } from '@/lib/proxy';
 import {
   formatLongDateDA,
   formatMonthYearDA,
@@ -63,6 +64,7 @@ export default async function DashboardPage() {
     otherMembersStatus,
     lifeEvents,
     shouldAutoStartTour,
+    proxyCtx,
   ] = await Promise.all([
     getDashboardData(),
     getOnboardingProgress(),
@@ -75,6 +77,7 @@ export default async function DashboardPage() {
     getOtherMembersOnboardingStatus(),
     getLifeEvents(),
     shouldShowTour('dashboard'),
+    getActiveProxyContext(),
   ]);
 
   const issues = detectCashflowIssues(accounts, graph.perAccount);
@@ -112,7 +115,13 @@ export default async function DashboardPage() {
   const privatFaelles = computePrivatFaelles(
     accounts,
     graph.perAccount,
-    ctx.currentUserId
+    ctx.currentUserId,
+    proxyCtx
+      ? {
+          partnerUserId: proxyCtx.grantorUserId,
+          partnerName: proxyCtx.grantorName ?? 'Partner',
+        }
+      : undefined
   );
 
 

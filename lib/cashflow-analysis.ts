@@ -223,6 +223,16 @@ export type PrivatFaellesSummary = {
     transfersIn: number;   // overført ind til fælleskonti (begge partnere)
     net: number;           // transfersIn - expense (negativ = underdækket)
   };
+  // I proxy-mode: aggregat for grantorens private konti (Louises i Mikkels
+  // hjælper-flow). Undefined udenfor proxy så det eksisterende UI ikke
+  // viser et tomt 3. panel.
+  partner?: {
+    income: number;
+    expense: number;
+    transfersOut: number;
+    net: number;
+    name: string;        // grantorens navn ("Louise") - vises som badge
+  };
 };
 
 // Per-konto klassificering - den ENE kilde til sandhed om hvilket spor en
@@ -246,17 +256,26 @@ export function classifyAccountTrack(
 export function computePrivatFaelles(
   accounts: Account[],
   perAccount: Map<string, AccountCashflowDetail>,
-  currentUserId: string
+  currentUserId: string,
+  // Optional proxy-context: når sat tilføjes en `partner`-blok der
+  // aggregerer grantorens private konti separat (3. panel i dashboardet).
+  // I proxy-mode bruger vi d.income (ikke d.myIncome) fordi myMemberId
+  // i cashflow.ts kun peger på ÉN perspective ad gangen; for at vise
+  // BÅDE Mikkels og Louises korrekt antager vi at paychecks lander på
+  // konto-ejerens egen konto (normal case efter wizard'en).
+  proxy?: { partnerUserId: string; partnerName: string }
 ): PrivatFaellesSummary {
   let pIncome = 0;
   let pExpense = 0;
   let pTransfersOut = 0;
   let fExpense = 0;
   let fTransfersIn = 0;
+  let parIncome = 0;
+  let parExpense = 0;
+  let parTransfersOut = 0;
 
   for (const a of accounts) {
     if (a.archived) continue;
-    // Lån håndteres på /laan og er ikke en del af det månedlige cashflow her.
     if (a.kind === 'credit') continue;
     const d = perAccount.get(a.id);
     if (!d) continue;
@@ -266,13 +285,19 @@ export function computePrivatFaelles(
       fExpense += d.expense;
       fTransfersIn += d.transfersIn;
     } else if (track === 'privat') {
-      // Mine egne konti. myIncome sikrer at en evt. delt lønkonto ikke
-      // tæller partnerens løn med.
-      pIncome += d.myIncome;
+      // I proxy-mode bruger vi d.income så Mikkels lønkonto rapporterer
+      // hans paychecks korrekt (myMemberId = Louise i proxy → myIncome=0
+      // på Mikkels konti). Udenfor proxy beholder vi myIncome for at
+      // undgå shared-lønkonto-bias.
+      pIncome += proxy ? d.income : d.myIncome;
       pExpense += d.expense;
       pTransfersOut += d.transfersOut;
+    } else if (track === 'other' && proxy && a.created_by === proxy.partnerUserId) {
+      // Partnerens (grantorens) private konti i proxy-mode.
+      parIncome += d.income;
+      parExpense += d.expense;
+      parTransfersOut += d.transfersOut;
     }
-    // track === 'other': partnerens private konto - ekskluderet fra begge.
   }
 
   return {
@@ -287,6 +312,17 @@ export function computePrivatFaelles(
       transfersIn: fTransfersIn,
       net: fTransfersIn - fExpense,
     },
+    ...(proxy
+      ? {
+          partner: {
+            income: parIncome,
+            expense: parExpense,
+            transfersOut: parTransfersOut,
+            net: parIncome - parExpense - parTransfersOut,
+            name: proxy.partnerName,
+          },
+        }
+      : {}),
   };
 }
 

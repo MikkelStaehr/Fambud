@@ -68,7 +68,7 @@ jobs:
       # release. v2.x dropped --skip-git og --recursive flags - vi
       # bruger nu default-scan af working dir.
       - name: OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.3.5
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             ./

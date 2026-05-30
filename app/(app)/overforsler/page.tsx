@@ -32,7 +32,13 @@ import {
   Sparkles,
   AlertCircle,
 } from 'lucide-react';
-import { getTransferGraph, getTransfersForMonth, shouldShowTour } from '@/lib/dal';
+import {
+  getCurrentUserId,
+  getTransferGraph,
+  getTransfersForMonth,
+  shouldShowTour,
+} from '@/lib/dal';
+import { getActiveProxyContext } from '@/lib/proxy';
 import { OverforslerTour } from './_components/OverforslerTour';
 import {
   RECURRENCE_LABEL_DA,
@@ -51,6 +57,11 @@ function normaliseYearMonth(raw: string | undefined): string {
   return currentYearMonth();
 }
 
+// OwnerTrack: hvem ejer fra-kontoen i overførslen. Vises som farve-kant
+// + badge på hver række så det er øjeblikkeligt synligt hvis pengene
+// kommer fra dig, din partner under proxy, eller en fælles-konto.
+type OwnerTrack = 'mine' | 'partner' | 'shared' | 'other';
+
 type EnrichedTransfer = {
   id: string;
   amount: number;
@@ -60,6 +71,8 @@ type EnrichedTransfer = {
   fromAccount: Pick<Account, 'id' | 'name' | 'kind' | 'owner_name'> | undefined;
   toAccount: Pick<Account, 'id' | 'name' | 'kind' | 'owner_name'> | undefined;
   monthly: number; // monthlyEquivalent(amount, recurrence)
+  ownerTrack: OwnerTrack;
+  ownerLabel: string; // "Dig", "Louise", "Fælles", "Partner"
 };
 
 type GroupKey = 'shared' | 'savings' | 'credit' | 'other';
@@ -111,18 +124,40 @@ export default async function OverforslerPage({
 }) {
   const sp = await searchParams;
   const month = normaliseYearMonth(sp.month);
-  const [graph, transfersInMonth, autoStartTour] = await Promise.all([
+  const [graph, transfersInMonth, autoStartTour, currentUserId, proxyCtx] = await Promise.all([
     getTransferGraph(),
     getTransfersForMonth(month),
     shouldShowTour('overforsler'),
+    getCurrentUserId(),
+    getActiveProxyContext(),
   ]);
 
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
 
+  // Klassificér en transfer's "ejer" via fra-kontoens created_by/editable_by_all.
+  // Det er hvem der konceptuelt FLYTTER pengene - ikke hvem der oprettede
+  // selve transfer-rækken. I proxy: Louises konti markeres som 'partner' så
+  // Mikkel hurtigt kan se hvilke der er HENDES overførsler vs HANS egne.
+  const classifyOwner = (from: Account | undefined): { track: OwnerTrack; label: string } => {
+    if (!from) return { track: 'other', label: 'Ukendt' };
+    if (from.editable_by_all || from.owner_name === 'Fælles') {
+      return { track: 'shared', label: 'Fælles' };
+    }
+    if (from.created_by === currentUserId) {
+      return { track: 'mine', label: 'Dig' };
+    }
+    if (proxyCtx && from.created_by === proxyCtx.grantorUserId) {
+      return { track: 'partner', label: proxyCtx.grantorName ?? 'Partner' };
+    }
+    return { track: 'other', label: from.owner_name ?? 'Andet' };
+  };
+
   // Flatten recurring transfers - vi smider engangs ud her, de hører til
   // i deres egen sektion nederst.
-  const recurring: EnrichedTransfer[] = graph.edges.flatMap((edge) =>
-    edge.transfers
+  const recurring: EnrichedTransfer[] = graph.edges.flatMap((edge) => {
+    const fromAcc = accountById.get(edge.from);
+    const owner = classifyOwner(fromAcc);
+    return edge.transfers
       .filter((t) => t.recurrence !== 'once')
       .map((t) => ({
         id: t.id,
@@ -130,11 +165,13 @@ export default async function OverforslerPage({
         recurrence: t.recurrence,
         description: t.description,
         occurs_on: t.occurs_on,
-        fromAccount: accountById.get(edge.from),
+        fromAccount: fromAcc,
         toAccount: accountById.get(edge.to),
         monthly: monthlyEquivalent(t.amount, t.recurrence),
-      }))
-  );
+        ownerTrack: owner.track,
+        ownerLabel: owner.label,
+      }));
+  });
 
   const totalMonthly = recurring.reduce((s, t) => s + t.monthly, 0);
   const oneTimers = transfersInMonth.filter((t) => t.recurrence === 'once');
@@ -148,10 +185,23 @@ export default async function OverforslerPage({
   for (const t of recurring) {
     groups[classify(t.toAccount?.kind)].push(t);
   }
-  // Inden for hver gruppe sorteres efter månedligt beløb (størst først) så
-  // de tunge transfers læses først.
+  // Inden for hver gruppe sorteres FØRST efter ejer-track (Mine → Partner →
+  // Fælles → Andet) så samme ejers overførsler står sammen, og DEREFTER
+  // efter månedligt beløb. Det giver klar visuel separation når flere
+  // mennesker har overførsler til samme destinationstype.
+  const trackOrder: Record<OwnerTrack, number> = {
+    mine: 0,
+    partner: 1,
+    shared: 2,
+    other: 3,
+  };
   (Object.keys(groups) as GroupKey[]).forEach((k) => {
-    groups[k].sort((a, b) => b.monthly - a.monthly);
+    groups[k].sort((a, b) => {
+      if (a.ownerTrack !== b.ownerTrack) {
+        return trackOrder[a.ownerTrack] - trackOrder[b.ownerTrack];
+      }
+      return b.monthly - a.monthly;
+    });
   });
 
   // Smart insights - skal være konkrete og handlingsorienterede, ikke
@@ -390,28 +440,80 @@ function RecurringGroup({
       </div>
       <p className="mb-3 max-w-2xl text-xs text-neutral-500">{meta.description}</p>
       <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-        {items.map((t) => (
-          <RecurringRow key={t.id} t={t} />
-        ))}
+        {items.map((t, i) => {
+          // Indsæt sub-header når ejer-track skifter inden for gruppen.
+          // Giver visuel separation: "Dig", "Louise", "Fælles" som mini-
+          // overskrifter mellem rækker uden at gøre layoutet bredere.
+          const prev = i > 0 ? items[i - 1] : null;
+          const showOwnerHeader = !prev || prev.ownerTrack !== t.ownerTrack;
+          return (
+            <div key={t.id}>
+              {showOwnerHeader && (
+                <OwnerSubHeader track={t.ownerTrack} label={t.ownerLabel} />
+              )}
+              <RecurringRow t={t} />
+            </div>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function RecurringRow({ t }: { t: EnrichedTransfer }) {
-  const isFromShared = t.fromAccount?.owner_name === 'Fælles';
+// OWNER_STYLE: farver der spejler /konti og dashboardets perspective-
+// system - emerald for "dig", orange for partner (matcher ProxyBanner),
+// amber for fælles. Ensartet farve-sprog på tværs af appen.
+const OWNER_STYLE: Record<OwnerTrack, { bar: string; badgeBg: string; badgeText: string; rowBg: string }> = {
+  mine: {
+    bar: 'border-l-emerald-500',
+    badgeBg: 'bg-emerald-100',
+    badgeText: 'text-emerald-900',
+    rowBg: '',
+  },
+  partner: {
+    bar: 'border-l-orange-500',
+    badgeBg: 'bg-orange-100',
+    badgeText: 'text-orange-900',
+    rowBg: 'bg-orange-50/30',
+  },
+  shared: {
+    bar: 'border-l-amber-500',
+    badgeBg: 'bg-amber-100',
+    badgeText: 'text-amber-900',
+    rowBg: '',
+  },
+  other: {
+    bar: 'border-l-neutral-300',
+    badgeBg: 'bg-neutral-100',
+    badgeText: 'text-neutral-700',
+    rowBg: '',
+  },
+};
+
+function OwnerSubHeader({ track, label }: { track: OwnerTrack; label: string }) {
+  const s = OWNER_STYLE[track];
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3 last:border-b-0">
+    <div className={`flex items-center gap-1.5 border-b border-neutral-100 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider ${s.badgeText}`}>
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${s.bar.replace('border-l-', 'bg-')}`} />
+      Fra {label}
+    </div>
+  );
+}
+
+function RecurringRow({ t }: { t: EnrichedTransfer }) {
+  const s = OWNER_STYLE[t.ownerTrack];
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 border-b border-l-4 border-neutral-100 px-4 py-3 last:border-b-0 ${s.bar} ${s.rowBg}`}
+    >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-neutral-900">
             {t.fromAccount?.name ?? '-'}
           </span>
-          {!isFromShared && t.fromAccount?.owner_name && (
-            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600">
-              {t.fromAccount.owner_name}
-            </span>
-          )}
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${s.badgeBg} ${s.badgeText}`}>
+            {t.ownerLabel}
+          </span>
           <ArrowRight className="h-3 w-3 text-neutral-400" />
           <span className="font-medium text-neutral-900">
             {t.toAccount?.name ?? '-'}

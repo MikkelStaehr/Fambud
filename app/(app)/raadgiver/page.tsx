@@ -102,6 +102,8 @@ export default async function RaadgiverPage() {
           split={split}
           faellesMonthlyExpense={plan.faellesMonthlyExpense}
           currentUserId={plan.currentUserId}
+          primaryFaellesAccountId={plan.primaryFaellesAccountId}
+          primaryFaellesAccountName={plan.primaryFaellesAccountName}
         />
       </section>
 

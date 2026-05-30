@@ -10,9 +10,16 @@
 // forbrug, så vi ikke afslører partnerens private udgifter (de er private
 // via RLS). Det er beløbet hver har til sig selv (privat forbrug + opsparing)
 // efter de fælles forpligtelser er dækket.
+//
+// Konkret-handling-panelet nedenfor oversætter den valgte model til reelle
+// overførsler: "Mikkel: overfør X kr/md fra Lønkonto til Budgetkonto" med
+// deep-link til /overforsler/ny som pre-udfylder formen. Det fjerner det
+// mest almindelige post-rådgivnings-friktionspunkt: "hvad gør jeg nu?".
 
 import { useState } from 'react';
-import { formatAmount } from '@/lib/format';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
+import { formatAmount, formatOereForInput } from '@/lib/format';
 import type { FaellesSplit } from '@/lib/economy-plan';
 
 type Model = 'proportional' | 'equal' | 'equalRemaining';
@@ -21,12 +28,18 @@ type Props = {
   split: FaellesSplit;
   faellesMonthlyExpense: number;
   currentUserId: string;
+  // Mål for de foreslåede overførsler. Hvis null har husstanden ingen
+  // fælleskonti endnu - så viser vi en henvisning til at oprette en først.
+  primaryFaellesAccountId: string | null;
+  primaryFaellesAccountName: string | null;
 };
 
 export function FaellesSplitSection({
   split,
   faellesMonthlyExpense,
   currentUserId,
+  primaryFaellesAccountId,
+  primaryFaellesAccountName,
 }: Props) {
   const [model, setModel] = useState<Model>('proportional');
 
@@ -204,6 +217,148 @@ export function FaellesSplitSection({
           tilbage til dig selv.
         </div>
       )}
+
+      <TransferRecommendations
+        members={split.members}
+        shareOf={shareOf}
+        primaryFaellesAccountId={primaryFaellesAccountId}
+        primaryFaellesAccountName={primaryFaellesAccountName}
+      />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Konkret-handlings-panel: oversætter den valgte fordelingsmodel til reelle
+// overførsler. For hver bidragyder vises beløb + diff vs. nuværende bidrag.
+// CTA'en deep-linker til /overforsler/ny med pre-fyldte felter når
+// vedkommendes lønkonto findes; hvis lønkonto mangler vises en tydelig
+// instruktion i stedet. Knappen virker for caller's egen række altid; under
+// proxy virker den også for grantorens række fordi createTransfer-action
+// er perspective-aware (v1.7).
+// ---------------------------------------------------------------------------
+
+type FaellesSplitMember = FaellesSplit['members'][number];
+
+function TransferRecommendations({
+  members,
+  shareOf,
+  primaryFaellesAccountId,
+  primaryFaellesAccountName,
+}: {
+  members: FaellesSplitMember[];
+  shareOf: (m: FaellesSplitMember) => number;
+  primaryFaellesAccountId: string | null;
+  primaryFaellesAccountName: string | null;
+}) {
+  if (!primaryFaellesAccountId || !primaryFaellesAccountName) {
+    return (
+      <div className="mt-5 rounded-md border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-500">
+        Opret en fælleskonto (Budget, Husholdning eller buffer) før jeg kan
+        foreslå konkrete overførsler.{' '}
+        <Link
+          href="/konti/ny"
+          className="font-medium text-neutral-900 underline hover:text-emerald-700"
+        >
+          Opret konto
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5">
+      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-500">
+        Sådan sætter I overførslerne op
+      </h3>
+      <div className="space-y-2">
+        {members.map((m) => (
+          <TransferRecommendationRow
+            key={m.member.id}
+            member={m}
+            share={shareOf(m)}
+            faellesAccountId={primaryFaellesAccountId}
+            faellesAccountName={primaryFaellesAccountName}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TransferRecommendationRow({
+  member: m,
+  share,
+  faellesAccountId,
+  faellesAccountName,
+}: {
+  member: FaellesSplitMember;
+  share: number;
+  faellesAccountId: string;
+  faellesAccountName: string;
+}) {
+  const { member } = m;
+  const diff = share - m.current;
+  // Threshold på 50 kr så små afrundinger ikke flagges som "skal justeres".
+  const onTarget = Math.abs(diff) < 5000;
+  const needsIncrease = diff >= 5000;
+
+  const hasLonkonto = member.lonkontoId != null;
+  const prefillUrl = hasLonkonto
+    ? `/overforsler/ny?from=${encodeURIComponent(member.lonkontoId!)}&to=${encodeURIComponent(faellesAccountId)}&amount=${encodeURIComponent(formatOereForInput(share))}&recurrence=monthly&description=${encodeURIComponent('Fælles bidrag')}`
+    : null;
+
+  return (
+    <div className="rounded-md border border-amber-100 bg-amber-50/40 px-4 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1 text-sm">
+          <div className="flex flex-wrap items-baseline gap-x-2 text-neutral-900">
+            <span className="font-medium">{member.name}</span>
+            <span className="text-neutral-500">overfører</span>
+            <span className="tabnum font-mono font-semibold">
+              {formatAmount(share)} kr/md
+            </span>
+            <span className="text-neutral-500">til</span>
+            <span className="font-medium">{faellesAccountName}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-neutral-500">
+            {hasLonkonto ? (
+              <span>
+                Fra <span className="text-neutral-700">{member.lonkontoName}</span> · Månedlig
+              </span>
+            ) : (
+              <span className="text-amber-700">
+                {member.name} mangler en lønkonto. Skal igennem sin egen wizard
+              </span>
+            )}
+            <span className="text-neutral-300">·</span>
+            {onTarget ? (
+              <span className="text-emerald-700">
+                På mål ({formatAmount(m.current)} kr/md i dag)
+              </span>
+            ) : needsIncrease ? (
+              <span className="text-amber-700">
+                I dag: {formatAmount(m.current)} kr. Øg med{' '}
+                {formatAmount(Math.abs(diff))} kr
+              </span>
+            ) : (
+              <span className="text-neutral-600">
+                I dag: {formatAmount(m.current)} kr. Reducér med{' '}
+                {formatAmount(Math.abs(diff))} kr
+              </span>
+            )}
+          </div>
+        </div>
+        {prefillUrl && !onTarget && (
+          <Link
+            href={prefillUrl}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900"
+          >
+            Opsæt overførsel
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }

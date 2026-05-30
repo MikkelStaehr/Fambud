@@ -74,6 +74,11 @@ export type EconomyPlanData = {
   suggestedSourceName: string | null;
   // Fælleskonti der modtager bidrag (Opret-destinationer).
   faellesAccounts: { id: string; name: string }[];
+  // Foretrukket destination til "Opret fælles-overførsel"-CTA. Vi vælger
+  // budget-kontoen først (det er hvor faste udgifter bør trækkes), så
+  // husholdning, så første tilgængelige. null hvis der ingen fælleskonti er.
+  primaryFaellesAccountId: string | null;
+  primaryFaellesAccountName: string | null;
   currentUserId: string;
 };
 
@@ -117,6 +122,15 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   );
   const faellesAccountIds = new Set(faellesAccountList.map((a) => a.id));
 
+  // Primær destination til fælles-bidrags-overførsler. Budget-kontoen er
+  // standardvalget (det er hvor de faste regninger trækkes); ellers
+  // husholdning; ellers første fælleskonto.
+  const primaryFaelles =
+    faellesAccountList.find((a) => a.kind === 'budget') ??
+    faellesAccountList.find((a) => a.kind === 'household') ??
+    faellesAccountList[0] ??
+    null;
+
   // Samlede fælles udgifter + indgående overførsler fra cashflow-grafen.
   let faellesMonthlyExpense = 0;
   let faellesCurrentInflow = 0;
@@ -149,6 +163,16 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
               f.samples.reduce((s, p) => s + p.amount, 0) / f.samples.length
             )
           : 0;
+    // Find medlemmets egen lønkonto: checking-konto oprettet af deres user_id.
+    // Skal kunne bruges som from-konto i en foreslået overførsel til fælles.
+    const memberLonkonto = m.user_id
+      ? accounts.find(
+          (a) =>
+            a.kind === 'checking' &&
+            a.created_by === m.user_id &&
+            !a.archived
+        )
+      : null;
     return {
       id: m.id,
       name: m.name,
@@ -158,6 +182,8 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       currentContribution: m.user_id
         ? contributionByUser.get(m.user_id) ?? 0
         : 0,
+      lonkontoId: memberLonkonto?.id ?? null,
+      lonkontoName: memberLonkonto?.name ?? null,
     };
   });
 
@@ -262,6 +288,8 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     suggestedSourceId: myLonkonto?.id ?? null,
     suggestedSourceName: myLonkonto?.name ?? null,
     faellesAccounts: faellesAccountList.map((a) => ({ id: a.id, name: a.name })),
+    primaryFaellesAccountId: primaryFaelles?.id ?? null,
+    primaryFaellesAccountName: primaryFaelles?.name ?? null,
     currentUserId: user.id,
   };
 }

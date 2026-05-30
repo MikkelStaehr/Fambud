@@ -24,6 +24,11 @@ export type PlanMember = {
   monthlyIncome: number;        // forecast netto/md, eller bedste skøn
   incomeComplete: boolean;      // 3+ lønsedler registreret (ellers usikkert)
   currentContribution: number;  // nuværende månedlige overførsler til fælles
+  // Medlemmets egen lønkonto - kilde til foreslået "Opret overførsel"-CTA.
+  // null hvis vedkommende ikke har oprettet en endnu (så viser vi i stedet
+  // en note om at de skal igennem deres egen wizard).
+  lonkontoId: string | null;
+  lonkontoName: string | null;
 };
 
 export type MemberShare = {

@@ -5,7 +5,11 @@
 
 import type { Account, RecurrenceFreq, Transfer } from '@/lib/database.types';
 import { monthBounds, monthlyEquivalent } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import {
+  getPerspective,
+  privateAccountFilter,
+  getVisibleAccountIds,
+} from './auth';
 
 type TransferWithRelations = Transfer & {
   from_account: Pick<Account, 'id' | 'name'> | null;
@@ -15,20 +19,27 @@ type TransferWithRelations = Transfer & {
 export async function getTransfersForMonth(
   yearMonth: string
 ): Promise<TransferWithRelations[]> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
   const { start, end } = monthBounds(yearMonth);
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
-  // Two FKs from transfers→accounts, so we disambiguate by column name. This
-  // is more robust than the constraint-name form because we don't depend on
-  // Postgres's auto-generated constraint naming (transfers_from_account_id_fkey).
-  const { data, error } = await supabase
+  let q = p.supabase
     .from('transfers')
     .select(
       '*, from_account:accounts!from_account_id(id, name), to_account:accounts!to_account_id(id, name)'
     )
-    .eq('household_id', householdId)
+    .eq('household_id', p.householdId)
     .gte('occurs_on', start)
-    .lte('occurs_on', end)
+    .lte('occurs_on', end);
+  // RLS for transfers: visible hvis MINDST én side er læsbar (mig.0030)
+  if (visibleAccountIds) {
+    q = q.or(
+      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+    );
+  }
+
+  const { data, error } = await q
     .order('occurs_on', { ascending: false })
     .order('created_at', { ascending: false })
     .returns<TransferWithRelations[]>();
@@ -38,13 +49,19 @@ export async function getTransfersForMonth(
 }
 
 export async function getTransferById(id: string): Promise<Transfer> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  let q = p.supabase
     .from('transfers')
     .select('*')
     .eq('id', id)
-    .eq('household_id', householdId)
-    .single();
+    .eq('household_id', p.householdId);
+  if (visibleAccountIds) {
+    q = q.or(
+      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+    );
+  }
+  const { data, error } = await q.single();
   if (error) throw error;
   return data;
 }
@@ -80,20 +97,32 @@ type TransferGraphData = {
 };
 
 export async function getTransferGraph(): Promise<TransferGraphData> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) {
+    return { accounts: [], edges: [] };
+  }
+
+  let accountsQ = p.supabase
+    .from('accounts')
+    .select('*')
+    .eq('household_id', p.householdId)
+    .eq('archived', false);
+  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+
+  let transfersQ = p.supabase
+    .from('transfers')
+    .select('id, from_account_id, to_account_id, amount, recurrence, description, occurs_on')
+    .eq('household_id', p.householdId);
+  if (visibleAccountIds) {
+    transfersQ = transfersQ.or(
+      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+    );
+  }
 
   const [accountsRes, transfersRes] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('*')
-      .eq('household_id', householdId)
-      .eq('archived', false)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('transfers')
-      .select('id, from_account_id, to_account_id, amount, recurrence, description, occurs_on')
-      .eq('household_id', householdId)
-      .order('occurs_on', { ascending: false }),
+    accountsQ.order('created_at', { ascending: true }),
+    transfersQ.order('occurs_on', { ascending: false }),
   ]);
 
   if (accountsRes.error) throw accountsRes.error;

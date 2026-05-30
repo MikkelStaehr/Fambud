@@ -9,7 +9,11 @@ import {
   effectiveAmount,
   monthlyEquivalent,
 } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import {
+  getPerspective,
+  privateAccountFilter,
+  getVisibleAccountIds,
+} from './auth';
 import { getCashflowGraph } from './cashflow';
 
 // ----------------------------------------------------------------------------
@@ -24,16 +28,18 @@ export type DashboardData = {
 };
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
   const yearMonth = currentYearMonth();
 
   // Slim konto-liste til dashboardet. Vi læser kun navne/typer - ikke
   // opening_balance, fordi dashboardet handler om flow, ikke beholdning.
-  const { data: accounts, error: accErr } = await supabase
+  let accountsQ = p.supabase
     .from('accounts')
     .select('id, name, owner_name, kind')
-    .eq('household_id', householdId)
-    .eq('archived', false)
+    .eq('household_id', p.householdId)
+    .eq('archived', false);
+  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+  const { data: accounts, error: accErr } = await accountsQ
     .order('created_at', { ascending: true });
   if (accErr) throw accErr;
 
@@ -76,22 +82,28 @@ export type HouseholdFinancialSummary = {
 // perAccount.income - den inkluderer løn-forecastet (se /rapport og
 // getDashboardData).
 export async function getHouseholdFinancialSummary(): Promise<HouseholdFinancialSummary> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) {
+    return { monthlyFixedExpenses: 0 };
+  }
 
-  const { data, error } = await supabase
+  let q = p.supabase
     .from('transactions')
     .select(
       'amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
     )
-    .eq('household_id', householdId)
-    .neq('recurrence', 'once')
-    .returns<{
-      amount: number;
-      recurrence: RecurrenceFreq;
-      components_mode: 'additive' | 'breakdown';
-      category: { kind: 'income' | 'expense' } | null;
-      components: { amount: number }[];
-    }[]>();
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+
+  const { data, error } = await q.returns<{
+    amount: number;
+    recurrence: RecurrenceFreq;
+    components_mode: 'additive' | 'breakdown';
+    category: { kind: 'income' | 'expense' } | null;
+    components: { amount: number }[];
+  }[]>();
 
   if (error) throw error;
 

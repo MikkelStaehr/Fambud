@@ -53,7 +53,16 @@ export default async function AppLayout({
     // print:block + print:h-auto: app-shell'en er et h-screen flex-layout
     // til skærm, men ved print skal indholdet flyde frit over flere sider
     // (ellers klippes alt under første viewport væk).
-    <div className="flex h-screen flex-col md:flex-row print:block print:h-auto">
+    // I proxy-mode tegner vi en 4px orange venstre-kant på hele app-shellen
+    // (border-l-4 + farve via inline CSS-var i child). Sammen med banneret
+    // er det umuligt at glemme at man kigger som anden bruger.
+    <div
+      className={
+        'flex h-screen flex-col md:flex-row print:block print:h-auto ' +
+        (proxyCtx ? 'border-l-4 border-orange-500 print:border-l-0' : '')
+      }
+      data-proxy-active={proxyCtx ? 'true' : undefined}
+    >
       <MobileNav userEmail={user.email ?? ''} />
 
       <aside className="hidden w-56 shrink-0 flex-col border-r border-neutral-200 bg-white px-3 py-4 md:flex print:hidden">

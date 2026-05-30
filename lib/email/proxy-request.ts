@@ -48,18 +48,18 @@ export async function sendProxyRequestEmail(params: ProxyRequestParams): Promise
                 </p>
 
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#404040;">
-                  Hvis du siger ja, kan ${fromNameSafe} <strong>tilføje</strong> følgende på dine vegne:
+                  Hvis du siger ja, kan ${fromNameSafe} <strong>se og redigere</strong> din økonomi på dine vegne:
                 </p>
 
                 <ul style="margin:0 0 20px 20px;padding:0;font-size:14px;line-height:1.7;color:#404040;">
-                  <li>Dine konti (lønkonto, opsparing osv.)</li>
-                  <li>Dine lønudbetalinger</li>
-                  <li>Dine faste udgifter</li>
-                  <li>Dine opsparingsmål</li>
+                  <li>Se dine konti, transaktioner, lønudbetalinger og opsparingsmål</li>
+                  <li>Tilføje nye konti, lønudbetalinger og faste udgifter</li>
+                  <li>Oprette og redigere overførsler mellem dine konti</li>
+                  <li>Opdatere dine økonomiplaner og opsparingsmål</li>
                 </ul>
 
-                <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#525252;background:#f5f5f4;border-left:3px solid #065f46;padding:12px 16px;border-radius:4px;">
-                  <strong>Vigtigt:</strong> ${fromNameSafe} kan <strong>kun tilføje nyt</strong> - ikke se din eksisterende private data eller redigere det du allerede har oprettet. Adgangen udløber automatisk den ${expiryFormatted}, og du kan til enhver tid trække den tilbage i Indstillinger.
+                <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#525252;background:#fef3c7;border-left:3px solid #d97706;padding:12px 16px;border-radius:4px;">
+                  <strong>Vigtigt:</strong> ${fromNameSafe} f&aring;r samme adgang til din &oslash;konomi som dig selv s&aring;l&aelig;nge adgangen er aktiv. Hver handling logges med hvem der har gjort hvad. Adgangen udl&oslash;ber automatisk den ${expiryFormatted}, og du kan til enhver tid tr&aelig;kke den tilbage i Indstillinger.
                 </p>
 
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
@@ -99,13 +99,13 @@ export async function sendProxyRequestEmail(params: ProxyRequestParams): Promise
       ``,
       `${fromName} har spurgt om lov til at hjælpe dig med at sætte din økonomi op i ${householdName} på Fambud.`,
       ``,
-      `Hvis du siger ja, kan ${fromName} TILFØJE følgende på dine vegne:`,
-      `- Dine konti (lønkonto, opsparing osv.)`,
-      `- Dine lønudbetalinger`,
-      `- Dine faste udgifter`,
-      `- Dine opsparingsmål`,
+      `Hvis du siger ja, kan ${fromName} SE OG REDIGERE din økonomi på dine vegne:`,
+      `- Se dine konti, transaktioner, lønudbetalinger og opsparingsmål`,
+      `- Tilføje nye konti, lønudbetalinger og faste udgifter`,
+      `- Oprette og redigere overførsler mellem dine konti`,
+      `- Opdatere dine økonomiplaner og opsparingsmål`,
       ``,
-      `Vigtigt: ${fromName} kan KUN tilføje nyt - ikke se din eksisterende private data eller redigere det du allerede har oprettet. Adgangen udløber automatisk den ${expiryFormatted}, og du kan til enhver tid trække den tilbage i Indstillinger.`,
+      `Vigtigt: ${fromName} får samme adgang til din økonomi som dig selv sålænge adgangen er aktiv. Hver handling logges med hvem der har gjort hvad. Adgangen udløber automatisk den ${expiryFormatted}, og du kan til enhver tid trække den tilbage i Indstillinger.`,
       ``,
       `Se og bekræft anmodningen her:`,
       acceptUrl,

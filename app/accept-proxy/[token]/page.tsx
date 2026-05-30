@@ -140,23 +140,23 @@ export default async function AcceptProxyPage({
 
           <div className="mt-5 rounded-md border border-neutral-200 bg-stone-50 p-4">
             <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-              Hvis du siger ja, kan {granteeName} tilføje:
+              Hvis du siger ja, kan {granteeName}:
             </p>
             <ul className="mt-2 space-y-1 text-sm text-neutral-700">
-              <li>· Dine konti (lønkonto, opsparing osv.)</li>
-              <li>· Dine lønudbetalinger</li>
-              <li>· Dine faste udgifter</li>
-              <li>· Dine opsparingsmål</li>
+              <li>· Se dine konti, transaktioner og l&oslash;nudbetalinger</li>
+              <li>· Tilf&oslash;je nye konti, l&oslash;n og faste udgifter</li>
+              <li>· Oprette og redigere overf&oslash;rsler mellem dine konti</li>
+              <li>· Opdatere dine &oslash;konomiplaner og opsparingsm&aring;l</li>
             </ul>
           </div>
 
-          <div className="mt-5 rounded-md border-l-4 border-emerald-700 bg-emerald-50 px-4 py-3">
-            <p className="text-sm text-emerald-900">
-              <strong>Vigtigt:</strong> {granteeName} kan <strong>kun tilføje nyt</strong> -
-              ikke se din eksisterende private data eller redigere det du allerede har
-              oprettet. Adgangen udløber automatisk den{' '}
-              <strong>{expiryFormatted}</strong>, og du kan til enhver tid trække den
-              tilbage i Indstillinger.
+          <div className="mt-5 rounded-md border-l-4 border-orange-500 bg-orange-50 px-4 py-3">
+            <p className="text-sm text-orange-950">
+              <strong>Vigtigt:</strong> {granteeName} f&aring;r samme adgang til din
+              &oslash;konomi som dig selv s&aring;l&aelig;nge adgangen er aktiv.
+              Hver handling logges med hvem der har gjort hvad. Adgangen udl&oslash;ber
+              automatisk den <strong>{expiryFormatted}</strong>, og du kan til enhver
+              tid tr&aelig;kke den tilbage i Indstillinger.
             </p>
           </div>
 

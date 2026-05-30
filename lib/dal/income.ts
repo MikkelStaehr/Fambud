@@ -4,7 +4,7 @@
 // member tags og valgfri brutto/pension-felter.
 
 import type { Account, Transaction } from '@/lib/database.types';
-import { getHouseholdContext } from './auth';
+import { getHouseholdContext, getPerspective, getVisibleAccountIds } from './auth';
 
 export type IncomeRow = Pick<
   Transaction,
@@ -37,31 +37,36 @@ const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_
    family_member:family_members(id, name)`;
 
 export async function getIncomeTransactions(): Promise<IncomeRow[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  // !inner makes this filter via a join - PostgREST only allows filtering
-  // through joined columns when the join is inner.
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  let q = p.supabase
     .from('transactions')
     .select(`${INCOME_SELECT}, category:categories!inner(kind)`)
-    .eq('household_id', householdId)
-    .eq('category.kind', 'income')
+    .eq('household_id', p.householdId)
+    .eq('category.kind', 'income');
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+
+  const { data, error } = await q
     .order('occurs_on', { ascending: false })
     .order('created_at', { ascending: false })
     .returns<(IncomeRow & { category: { kind: 'income' } })[]>();
 
   if (error) throw error;
-  // Strip the join-only `category` field - callers don't need it.
   return (data ?? []).map(({ category: _c, ...rest }) => rest);
 }
 
 export async function getIncomeById(id: string): Promise<IncomeRow> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  let q = p.supabase
     .from('transactions')
     .select(INCOME_SELECT)
     .eq('id', id)
-    .eq('household_id', householdId)
-    .single<IncomeRow>();
+    .eq('household_id', p.householdId);
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  const { data, error } = await q.single<IncomeRow>();
   if (error) throw error;
   return data;
 }

@@ -5137,3 +5137,134 @@ Stadig udestående fra setup-proxy:
   valg (ingen auto-attribution) og addHouseholdPurchase er delt, så de er
   lavere prioritet, men for et komplet spor kunne de tilføjes.
 - **eslint 10:** venter stadig på upstream.
+
+---
+
+# Devlog — 30. maj 2026 (proxy v1.5: ægte perspektiv-skift + visuel adskillelse)
+
+V1-banneret sagde "Hjælper-tilstand" og v1's privacy-løfte i emailen var
+"kan kun tilføje, ikke se". I praksis blev det dødvande: Mikkel kunne ikke
+oprette en overførsel mellem to af Louises konti fordi hendes konti ikke
+dukkede op i hans dropdown (RLS filtrerede dem væk), og dashboardet
+viste stadig hans eget perspektiv mens han var "i hjælper-tilstand". Det
+var en utility-failure — uden read-adgang var write-adgang halvt værdiløs.
+
+V1.5 vender det: når proxy er aktiv ser Mikkel HENDES perspektiv (delte
++ Louises private konti, ikke hans egne private). Tidligere "add-only"-
+løftet blev erstattet af ærlig samtykke-tekst: "samme adgang som dig selv
+sålænge adgangen er aktiv, hver handling logges".
+
+## 1. Read-impersonation: `getPerspective()` + admin-client
+
+**Fil:** [lib/dal/auth.ts](lib/dal/auth.ts)
+
+Tilføjet `getPerspective()` der returnerer `{supabase, householdId,
+perspectiveUserId, isProxyActive, …}`. I normal-mode er det den
+authenticerede bruger + user-client (RLS aktiv). I proxy-mode er det
+grantorens user_id + admin-client (RLS bypasset).
+
+Hvorfor admin-client og ikke RLS-policy-baseret løsning: vi har en
+cookie-baseret toggle ("Skift til Louises perspektiv"). RLS kan ikke
+læse cookies — `has_active_proxy(grantor, auth.uid())` i policy ville
+give Mikkel adgang HVER GANG grant'en findes, ikke kun når han aktivt har
+toggled. Vi vil have brugerkontrolleret perspektiv-skift, så
+app-laget håndterer det.
+
+To helper-funktioner geninstallerer privacy-filteret som RLS ellers ville
+have håndteret:
+
+- `privateAccountFilter(p)`: PostgREST-or-streng `editable_by_all.eq.true,
+  created_by.eq.<perspective>` — bruges på direkte `accounts`-queries
+- `getVisibleAccountIds()`: per-request cached liste af konto-id'er som
+  perspective kan se — bruges som `.in('account_id', …)`-filter på
+  child-tabeller (transactions, transfers, components) for at mimicke
+  RLS's `can_write_account()`-gating
+
+## 2. DAL-refactor: 7 filer migreret til perspective
+
+Hver perspective-følsom DAL-funktion bruger nu `getPerspective()` i stedet
+for `getHouseholdContext()` og applyer privacy-filtre når proxy er aktiv:
+
+- [accounts.ts](lib/dal/accounts.ts): `getAccounts`, `getAccountById`,
+  `getAccountFlows`, `getBudgetAccounts`, `getSavingsAccountsWithFlow`
+- [transactions.ts](lib/dal/transactions.ts): `getTransactionsForMonth`,
+  `getTransactionById`, `getRecurringExpensesForAccount`,
+  `getDistinctExpenseGroups`, `getOnboardingProgress`
+- [transfers.ts](lib/dal/transfers.ts): `getTransfersForMonth`,
+  `getTransferById`, `getTransferGraph`
+- [dashboard.ts](lib/dal/dashboard.ts): `getDashboardData`,
+  `getHouseholdFinancialSummary`
+- [cashflow.ts](lib/dal/cashflow.ts): `getCashflowGraph` (inkl.
+  `myMemberId` slås op via `perspectiveUserId` så "myIncome" bliver
+  Louises løn)
+- [income.ts](lib/dal/income.ts): `getIncomeTransactions`, `getIncomeById`
+- `getCurrentUserId()` returnerer nu `perspectiveUserId` så
+  /konti's Privat/Fælles-klassifikation matcher Louises perspektiv
+
+Tomme `visibleAccountIds` (proxy hvor grantor ikke har nogen konti)
+returnerer tomme resultater i stedet for at sende `.in.()` som PostgREST
+ikke kan parse.
+
+## 3. Bevidst NOT i v1.5
+
+- `getMostRecentPaycheck` og `getPrimaryIncomeForecast` filtrerer kun på
+  family_member_id (caller passer den ind) — perspective-filtering ikke
+  nødvendig
+- `life-events.ts`, `advisor.ts`, `predictable.ts`, `upcoming-events.ts`,
+  `expenses-by-category.ts`, `economy-plan.ts`, `loans.ts`,
+  `categories.ts`, `family.ts` — bruger stadig user-client. Det betyder
+  fx /raadgiver og dashboard-widget'er afledt af disse stadig viser
+  Mikkels eget perspektiv selv i proxy-mode. Kandidat til v1.6 hvis
+  brugere klager — mest af det er aggregeret husstandsdata uden privat-
+  filter, så forskellen vil være mindre mærkbar end /konti og /poster
+
+## 4. Visuel adskillelse
+
+**[ProxyBanner.tsx](app/(app)/_components/ProxyBanner.tsx):**
+- Tidligere: amber/gul, "Hjælper-tilstand: du tilføjer data for X"
+- Nu: orange-gradient + 2px orange border-bunden, badge med øje-ikon
+  "SER SOM", tekst "Du ser og redigerer som X. Handlinger gemmes på
+  hendes konto."
+
+**[layout.tsx](app/(app)/layout.tsx):** 4px orange venstre-kant på hele
+app-shellen når proxy er aktiv (`border-l-4 border-orange-500`). Print-
+view skjuler den. Hele skærmen får et konstant visuelt signal udover
+banneret.
+
+`data-proxy-active="true"` data-attribut på app-shell-roden så
+fremtidige komponenter (sidebar-styling, toast-farver) kan reagere på
+proxy-state via CSS uden at gentage server-side context-tjek.
+
+## 5. Ærlig samtykke-tekst
+
+**[email/proxy-request.ts](lib/email/proxy-request.ts) og
+[accept-proxy/[token]/page.tsx](app/accept-proxy/[token]/page.tsx):**
+
+Erstattet "kan kun tilføje nyt, ikke se din eksisterende private data":
+- Email-bullet'erne ændret fra "Dine konti, lønudbetalinger, …" (passiv
+  add-only) til eksplicit "Se …, Tilføje …, Oprette og redigere …,
+  Opdatere …" (4 handlinger, ærligt)
+- Vigtigt-boks: "samme adgang til din økonomi som dig selv sålænge
+  adgangen er aktiv. Hver handling logges med hvem der har gjort hvad."
+- Email-vigtigt-boks fik orange-gul styling for at signalere "her er
+  noget at læse" frem for v1's grønne "alt er ok"
+
+Beslutningen tager udgangspunkt i v1's praktiske erfaring: add-only
+gav ikke værdi når Mikkel ikke kunne SE Louises konti for at vide hvad
+han skulle supplere. Honest tradeoff > fancy promise.
+
+## Åbne tråde
+
+- **DB-niveau RLS for proxy-reads:** v1.5 enforcer privacy app-side via
+  admin-client + manuel filter. Hvis vi senere vil have defense-in-depth
+  kan vi tilføje en RLS-policy der læser proxy-cookie via JWT-claim,
+  men det kræver custom JWT-flow ved aktivering. Lavt på prioritet
+  fordi: caller's householdId tjekkes overalt, perspective-filteret er
+  centraliseret i to helpers
+- **Resterende DAL til v1.6:** advisor, predictable, upcoming-events,
+  life-events. Lavest hængende er nok `getActiveLifeEventCount` så
+  /opsparinger viser Louises mål når Mikkel hjælper hende
+- **Auto-log read-events:** vi logger writes med acting_user_id, men
+  ikke reads. Hvis tilladt under proxy at SE Louises data, bør hver
+  view-event også logges. Strategien skal være rate-limited (1 entry
+  per /konti-visit, ikke per query)

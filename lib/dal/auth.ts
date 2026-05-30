@@ -8,7 +8,11 @@
 
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getActiveProxyContext } from '@/lib/proxy';
+import type { Database } from '@/lib/database.types';
 
 // PERFORMANCE: requireUser kaldes fra alle DAL-funktioner. Cache
 // dedupliker auth.getUser() og createClient() per request - de er
@@ -52,13 +56,99 @@ export const getHouseholdContext = cache(async () => {
   return { supabase, householdId: data.household_id, user };
 });
 
-// Den indloggede brugers auth-id. Bruges fx af /konti til at klassificere
-// konti som Privat (created_by === mig) vs Fælles. Tynd wrapper over den
-// cachede getHouseholdContext, så det ikke koster en ekstra DB-tur.
+// Den indloggede brugers auth-id - eller grantorens id når proxy er aktiv.
+// Bruges fx af /konti til at klassificere konti som Privat (created_by === mig)
+// vs Fælles. I proxy-mode skal denne returnere perspectiveUserId så
+// klassifikationen matcher "hvad ser Louise" når Mikkel hjælper hende.
 export async function getCurrentUserId(): Promise<string> {
-  const { user } = await getHouseholdContext();
-  return user.id;
+  const p = await getPerspective();
+  return p.perspectiveUserId;
 }
+
+// ---------------------------------------------------------------------------
+// Perspektiv: hvis bruger har aktivt proxy-toggle (kigger som anden bruger),
+// returneres admin-klient + grantorens user_id. Ellers normal user-klient.
+//
+// HVORFOR ADMIN-CLIENT: Når Mikkel toggler "kig som Louise", skal han se
+// HENDES private konti og transaktioner. RLS på user-clienten ville filtrere
+// dem væk fordi auth.uid() = Mikkel. Vi bypasser RLS bevidst og GENINDFØRER
+// privacy-filteret manuelt i DAL-funktionerne ved at filtrere på
+// (editable_by_all OR created_by = perspectiveUserId).
+//
+// SIKKERHEDSREGLEN: enhver query der bruger perspective.supabase MÅ filtrere
+// på householdId. Uden den læses tværs af husstande. Helperen `privateAccountFilter`
+// returnerer Postgrest-OR-strengen til den private-aware del.
+//
+// Hvorfor ikke RLS-løsning med has_active_proxy() direkte i policy: så ville
+// Mikkel se Louises private konti HVER GANG grant'en findes, ikke kun når
+// han aktivt har valgt at agere som hende. Cookie-toggle giver kontrolleret
+// perspektiv-skift; RLS kan ikke læse cookies.
+// ---------------------------------------------------------------------------
+
+export type Perspective = {
+  supabase: SupabaseClient<Database>;
+  householdId: string;
+  // user_id der bestemmer privacy (created_by = denne). I normal-mode caller.id,
+  // i proxy-mode grantor.id.
+  perspectiveUserId: string;
+  // Den faktisk indloggede brugers id (caller). Bruges i audit-log som
+  // acting_user_id under proxy.
+  authUserId: string;
+  isProxyActive: boolean;
+  grantorName: string | null;
+  grantId: string | null;
+};
+
+export const getPerspective = cache(async (): Promise<Perspective> => {
+  const base = await getHouseholdContext();
+  const proxy = await getActiveProxyContext();
+
+  if (!proxy) {
+    return {
+      supabase: base.supabase,
+      householdId: base.householdId,
+      perspectiveUserId: base.user.id,
+      authUserId: base.user.id,
+      isProxyActive: false,
+      grantorName: null,
+      grantId: null,
+    };
+  }
+
+  return {
+    supabase: createAdminClient(),
+    householdId: base.householdId,
+    perspectiveUserId: proxy.grantorUserId,
+    authUserId: base.user.id,
+    isProxyActive: true,
+    grantorName: proxy.grantorName,
+    grantId: proxy.grantId,
+  };
+});
+
+// PostgREST `.or()`-streng der mimicker accounts-RLS:
+//   editable_by_all OR created_by = perspectiveUserId
+// Bruges af DAL-queries på `accounts` når perspective er proxy (admin-client
+// uden RLS) for at re-applye privacy-filteret. I normal-mode er udtrykket
+// ikke nødvendigt - RLS håndterer det.
+export function privateAccountFilter(p: Perspective): string {
+  return `editable_by_all.eq.true,created_by.eq.${p.perspectiveUserId}`;
+}
+
+// Hent id'erne på de konti den nuværende perspective kan se. Bruges af
+// queries på child-tabeller (transactions, transfers, components) til at
+// mimicke RLS's `can_write_account()`-gating. Cached per request.
+export const getVisibleAccountIds = cache(async (): Promise<string[]> => {
+  const p = await getPerspective();
+  let q = p.supabase
+    .from('accounts')
+    .select('id')
+    .eq('household_id', p.householdId);
+  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map((r) => r.id);
+});
 
 // Wizard / onboarding helpers - used by the (app) layout to gate access and
 // by the wizard pages to read user-specific state.

@@ -5,27 +5,35 @@
 
 import type { Account, AccountKind, RecurrenceFreq } from '@/lib/database.types';
 import { effectiveAmount, monthlyEquivalent } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import {
+  getPerspective,
+  privateAccountFilter,
+  getVisibleAccountIds,
+} from './auth';
 
 export async function getAccounts(
   opts: { includeArchived?: boolean } = {}
 ): Promise<Account[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  let query = supabase.from('accounts').select('*').eq('household_id', householdId);
+  const p = await getPerspective();
+  let query = p.supabase.from('accounts').select('*').eq('household_id', p.householdId);
   if (!opts.includeArchived) query = query.eq('archived', false);
+  // I proxy-mode bypasser admin-client RLS - vi geninstaller privacy-filteret
+  // så Mikkel kun ser de konti Louise selv ville se (delte + hendes private).
+  if (p.isProxyActive) query = query.or(privateAccountFilter(p));
   const { data, error } = await query.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
 export async function getAccountById(id: string): Promise<Account> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  let query = p.supabase
     .from('accounts')
     .select('*')
     .eq('id', id)
-    .eq('household_id', householdId)
-    .single();
+    .eq('household_id', p.householdId);
+  if (p.isProxyActive) query = query.or(privateAccountFilter(p));
+  const { data, error } = await query.single();
   if (error) throw error;
   return data;
 }
@@ -57,42 +65,63 @@ export type AccountFlow = {
 };
 
 export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  // I proxy-mode bruges admin-client og RLS er ikke aktiv. For child-tabeller
+  // (transactions/transfers) skal vi manuelt scope til de konti perspective'en
+  // kan se - svarende til RLS's can_write_account()-gating.
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  // Tomme proxy-visible-accounts = perspective ser ingenting. Returner tom Map
+  // i stedet for at sende ".in.()" som PostgREST ikke kan parse.
+  if (visibleAccountIds && visibleAccountIds.length === 0) {
+    return new Map();
+  }
+
+  const txnsQ = p.supabase
+    .from('transactions')
+    .select(
+      'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  const transfersQ = p.supabase
+    .from('transfers')
+    .select('from_account_id, to_account_id, amount, recurrence')
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  const paychecksQ = p.supabase
+    .from('transactions')
+    .select('account_id, family_member_id, amount, occurs_on')
+    .eq('household_id', p.householdId)
+    .eq('income_role', 'primary')
+    .eq('recurrence', 'once')
+    .order('occurs_on', { ascending: false });
 
   const [txnsRes, transfersRes, paychecksRes] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select(
-        'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
-      )
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once')
-      .returns<{
-        account_id: string;
-        amount: number;
-        recurrence: RecurrenceFreq;
-        components_mode: 'additive' | 'breakdown';
-        category: { kind: 'income' | 'expense' } | null;
-        components: { amount: number }[];
-      }[]>(),
-    supabase
-      .from('transfers')
-      .select('from_account_id, to_account_id, amount, recurrence')
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once'),
-    supabase
-      .from('transactions')
-      .select('account_id, family_member_id, amount, occurs_on')
-      .eq('household_id', householdId)
-      .eq('income_role', 'primary')
-      .eq('recurrence', 'once')
-      .order('occurs_on', { ascending: false })
-      .returns<{
-        account_id: string;
-        family_member_id: string | null;
-        amount: number;
-        occurs_on: string;
-      }[]>(),
+    (visibleAccountIds
+      ? txnsQ.in('account_id', visibleAccountIds)
+      : txnsQ
+    ).returns<{
+      account_id: string;
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      category: { kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>(),
+    visibleAccountIds
+      ? transfersQ.or(
+          `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+        )
+      : transfersQ,
+    (visibleAccountIds
+      ? paychecksQ.in('account_id', visibleAccountIds)
+      : paychecksQ
+    ).returns<{
+      account_id: string;
+      family_member_id: string | null;
+      amount: number;
+      occurs_on: string;
+    }[]>(),
   ]);
 
   if (txnsRes.error) throw txnsRes.error;
@@ -165,14 +194,15 @@ export const SAVINGS_ACCOUNT_KINDS: AccountKind[] = ['savings', 'investment'];
 export type BudgetAccount = Pick<Account, 'id' | 'name' | 'owner_name' | 'kind'>;
 
 export async function getBudgetAccounts(): Promise<BudgetAccount[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  let q = p.supabase
     .from('accounts')
     .select('id, name, owner_name, kind')
-    .eq('household_id', householdId)
+    .eq('household_id', p.householdId)
     .eq('archived', false)
-    .in('kind', BUDGET_ACCOUNT_KINDS)
-    .order('created_at', { ascending: true });
+    .in('kind', BUDGET_ACCOUNT_KINDS);
+  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  const { data, error } = await q.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
@@ -187,21 +217,32 @@ export type SavingsAccountWithFlow = Account & {
 };
 
 export async function getSavingsAccountsWithFlow(): Promise<SavingsAccountWithFlow[]> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  let accountsQ = p.supabase
+    .from('accounts')
+    .select('*')
+    .eq('household_id', p.householdId)
+    .eq('archived', false)
+    .in('kind', SAVINGS_ACCOUNT_KINDS);
+  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+
+  let transfersQ = p.supabase
+    .from('transfers')
+    .select('to_account_id, amount, recurrence')
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) {
+    transfersQ = transfersQ.or(
+      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+    );
+  }
 
   const [accountsRes, transfersRes] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('*')
-      .eq('household_id', householdId)
-      .eq('archived', false)
-      .in('kind', SAVINGS_ACCOUNT_KINDS)
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('transfers')
-      .select('to_account_id, amount, recurrence')
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once'),
+    accountsQ.order('created_at', { ascending: true }),
+    transfersQ,
   ]);
 
   if (accountsRes.error) throw accountsRes.error;

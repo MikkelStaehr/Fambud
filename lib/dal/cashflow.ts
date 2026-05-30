@@ -19,7 +19,7 @@
 import { cache } from 'react';
 import type { RecurrenceFreq } from '@/lib/database.types';
 import { effectiveAmount, monthlyEquivalent } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import { getPerspective, getVisibleAccountIds } from './auth';
 
 export type AccountCashflowDetail = {
   income: number;        // monthlyEquivalent af kategori=income transaktioner (husstands-totaler)
@@ -44,7 +44,14 @@ export type CashflowGraphData = {
 // cache() memoizer pr. React-request, så getDashboardData og dashboard-page
 // der begge læser cashflow-data ikke laver dobbelt round-trip mod DB'en.
 export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
-  const { supabase, householdId, user } = await getHouseholdContext();
+  // I proxy-mode: perspectiveUserId = grantorens id (Louise), så "myIncome"
+  // bliver hendes løn-paychecks. supabase = admin-client; vi gen-applyer
+  // privacy via visibleAccountIds.
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) {
+    return { perAccount: new Map(), edges: [] };
+  }
 
   // Vi henter fire datasæt parallelt:
   //   1. Recurring (ikke-once) transaktioner - almindelig income/expense
@@ -59,46 +66,53 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   //      (mine paychecks) fra "income" (husstandens samlede paychecks).
   //      Dashboard'et viser min personlige cashflow-historie og må ikke
   //      lægge partnerens løn på som min indtægt.
+  const myMemberQ = p.supabase
+    .from('family_members')
+    .select('id')
+    .eq('household_id', p.householdId)
+    .eq('user_id', p.perspectiveUserId)
+    .maybeSingle();
+  const txnsQ = p.supabase
+    .from('transactions')
+    .select(
+      'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
+    )
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  const transfersQ = p.supabase
+    .from('transfers')
+    .select('from_account_id, to_account_id, amount, recurrence')
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  const paychecksQ = p.supabase
+    .from('transactions')
+    .select('account_id, family_member_id, amount, occurs_on')
+    .eq('household_id', p.householdId)
+    .eq('income_role', 'primary')
+    .eq('recurrence', 'once')
+    .order('occurs_on', { ascending: false });
+
   const [myMemberRes, txnsRes, transfersRes, paychecksRes] = await Promise.all([
-    supabase
-      .from('family_members')
-      .select('id')
-      .eq('household_id', householdId)
-      .eq('user_id', user.id)
-      .maybeSingle(),
-    supabase
-      .from('transactions')
-      .select(
-        'account_id, amount, recurrence, components_mode, category:categories(kind), components:transaction_components(amount)'
-      )
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once')
-      .returns<{
-        account_id: string;
-        amount: number;
-        recurrence: RecurrenceFreq;
-        components_mode: 'additive' | 'breakdown';
-        category: { kind: 'income' | 'expense' } | null;
-        components: { amount: number }[];
-      }[]>(),
-    supabase
-      .from('transfers')
-      .select('from_account_id, to_account_id, amount, recurrence')
-      .eq('household_id', householdId)
-      .neq('recurrence', 'once'),
-    supabase
-      .from('transactions')
-      .select('account_id, family_member_id, amount, occurs_on')
-      .eq('household_id', householdId)
-      .eq('income_role', 'primary')
-      .eq('recurrence', 'once')
-      .order('occurs_on', { ascending: false })
-      .returns<{
-        account_id: string;
-        family_member_id: string | null;
-        amount: number;
-        occurs_on: string;
-      }[]>(),
+    myMemberQ,
+    (visibleAccountIds ? txnsQ.in('account_id', visibleAccountIds) : txnsQ).returns<{
+      account_id: string;
+      amount: number;
+      recurrence: RecurrenceFreq;
+      components_mode: 'additive' | 'breakdown';
+      category: { kind: 'income' | 'expense' } | null;
+      components: { amount: number }[];
+    }[]>(),
+    visibleAccountIds
+      ? transfersQ.or(
+          `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+        )
+      : transfersQ,
+    (visibleAccountIds ? paychecksQ.in('account_id', visibleAccountIds) : paychecksQ).returns<{
+      account_id: string;
+      family_member_id: string | null;
+      amount: number;
+      occurs_on: string;
+    }[]>(),
   ]);
 
   if (myMemberRes.error) throw myMemberRes.error;

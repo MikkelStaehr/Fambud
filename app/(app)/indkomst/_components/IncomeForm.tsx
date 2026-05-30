@@ -5,13 +5,14 @@ import { useRef, useState } from 'react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
+import { AccountSelectGrouped } from '../../_components/AccountSelectGrouped';
 import { formatAmount, formatOereForInput, parseAmountToOere } from '@/lib/format';
 import type { Account, IncomeRole, RecurrenceFreq } from '@/lib/database.types';
 import type { FamilyMemberRow } from '@/lib/dal';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
-  accounts: Pick<Account, 'id' | 'name' | 'archived'>[];
+  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name'>[];
   familyMembers: FamilyMemberRow[];
   defaultValues?: {
     family_member_id?: string | null;
@@ -213,21 +214,14 @@ export function IncomeForm({
 
         <div>
           <label htmlFor="account_id" className={labelClass}>Indsættes på konto</label>
-          <select
+          <AccountSelectGrouped
             id="account_id"
             name="account_id"
             required
-            defaultValue={dv.account_id ?? ''}
             className={fieldClass}
-          >
-            <option value="" disabled>Vælg konto</option>
-            {visibleAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.archived ? ' (arkiveret)' : ''}
-              </option>
-            ))}
-          </select>
+            accounts={visibleAccounts}
+            defaultValue={dv.account_id ?? ''}
+          />
         </div>
       </div>
 

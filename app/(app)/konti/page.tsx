@@ -7,6 +7,7 @@ import {
   shouldShowTour,
   type AccountFlow,
 } from '@/lib/dal';
+import { getActiveProxyContext } from '@/lib/proxy';
 import { classifyAccountTrack, type AccountTrack } from '@/lib/cashflow-analysis';
 import { KontiTour } from './_components/KontiTour';
 import {
@@ -23,13 +24,15 @@ import type { Account, AccountKind } from '@/lib/database.types';
 // Privat og Fælles. Inden for hvert spor grupperes efter formål (daglig
 // brug / opsparing / andet) så man hurtigt kan se hvad der hører hvor.
 // Lån (kind='credit') vises ikke her; de bor på /laan og linkes nederst.
-const TRACKS: {
-  track: Exclude<AccountTrack, 'other'>;
+type TrackConfig = {
+  track: AccountTrack;
   label: string;
   description: string;
   badgeClass: string;
   borderClass: string;
-}[] = [
+};
+
+const BASE_TRACKS: TrackConfig[] = [
   {
     track: 'privat',
     label: 'Privat',
@@ -63,11 +66,12 @@ export default async function KontiPage({
 }) {
   const sp = await searchParams;
   const showArchived = sp.archived === '1';
-  const [accounts, flows, currentUserId, autoStartTour] = await Promise.all([
+  const [accounts, flows, currentUserId, autoStartTour, proxyCtx] = await Promise.all([
     getAccounts({ includeArchived: showArchived }),
     getAccountFlows(),
     getCurrentUserId(),
     shouldShowTour('konti'),
+    getActiveProxyContext(),
   ]);
 
   // Lån filtreres ud af sektionerne - de bor på /laan. Vi tæller dem alligevel
@@ -80,9 +84,23 @@ export default async function KontiPage({
   const activeAccounts = nonLoan.filter((a) => !a.archived);
   const archivedAccounts = nonLoan.filter((a) => a.archived);
 
-  // Klassificér aktive konti i Privat / Fælles (samme regel som dashboardet).
-  // 'other' = partnerens private konti; de vises ikke i mit overblik.
-  const accountsByTrack = (track: Exclude<AccountTrack, 'other'>) =>
+  // I proxy-mode (union) viser vi 3 tracks: Mine (Mikkels), Fælles, og
+  // grantorens konti som "<grantorName>". Uden for proxy bliver det blot 2.
+  const TRACKS: TrackConfig[] = proxyCtx
+    ? [
+        ...BASE_TRACKS,
+        {
+          track: 'other',
+          label: proxyCtx.grantorName ?? 'Partner',
+          description: `${proxyCtx.grantorName ?? 'Partner'}s private konti (du hjælper)`,
+          badgeClass: 'bg-orange-600',
+          borderClass: 'border-orange-200',
+        },
+      ]
+    : BASE_TRACKS;
+
+  // Klassificér aktive konti efter perspective.
+  const accountsByTrack = (track: AccountTrack) =>
     activeAccounts.filter((a) => classifyAccountTrack(a, currentUserId) === track);
   const shownCount = TRACKS.reduce(
     (sum, t) => sum + accountsByTrack(t.track).length,
@@ -162,6 +180,8 @@ export default async function KontiPage({
                 <div className={`overflow-hidden rounded-md border ${t.borderClass} bg-white px-4 py-6 text-center text-sm text-neutral-400`}>
                   {t.track === 'privat'
                     ? 'Ingen private konti endnu'
+                    : t.track === 'other'
+                    ? `Ingen private konti for ${t.label} endnu`
                     : 'Ingen fælleskonti endnu'}
                 </div>
               ) : (

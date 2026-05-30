@@ -2,12 +2,13 @@ import Link from 'next/link';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
+import { AccountSelectGrouped } from '../../_components/AccountSelectGrouped';
 import { formatOereForInput } from '@/lib/format';
 import type { Account, Category, RecurrenceFreq } from '@/lib/database.types';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
-  accounts: Pick<Account, 'id' | 'name' | 'archived'>[];
+  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name'>[];
   categories: Pick<Category, 'id' | 'name' | 'kind' | 'archived'>[];
   defaultValues?: {
     account_id?: string;
@@ -56,21 +57,14 @@ export function TransactionForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="account_id" className={labelClass}>Konto</label>
-          <select
+          <AccountSelectGrouped
             id="account_id"
             name="account_id"
             required
-            defaultValue={dv.account_id ?? ''}
             className={fieldClass}
-          >
-            <option value="" disabled>Vælg konto</option>
-            {visibleAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.archived ? ' (arkiveret)' : ''}
-              </option>
-            ))}
-          </select>
+            accounts={visibleAccounts}
+            defaultValue={dv.account_id ?? ''}
+          />
         </div>
 
         <div>

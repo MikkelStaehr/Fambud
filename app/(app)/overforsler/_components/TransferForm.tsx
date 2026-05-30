@@ -6,6 +6,7 @@ import { CalendarClock, Wand2 } from 'lucide-react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
+import { AccountSelectGrouped } from '../../_components/AccountSelectGrouped';
 import {
   INVESTMENT_TYPE_ANNUAL_CAP_KR,
   INVESTMENT_TYPE_LABEL_DA,
@@ -22,7 +23,7 @@ import type { Account, RecurrenceFreq } from '@/lib/database.types';
 // dem også. Begge kalde-sites har allerede full Account fra getAccounts().
 type FormAccount = Pick<
   Account,
-  'id' | 'name' | 'archived' | 'kind' | 'investment_type'
+  'id' | 'name' | 'archived' | 'kind' | 'investment_type' | 'owner_name'
 >;
 
 type Props = {
@@ -120,41 +121,27 @@ export function TransferForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="from_account_id" className={labelClass}>Fra konto</label>
-          <select
+          <AccountSelectGrouped
             id="from_account_id"
             name="from_account_id"
             required
-            defaultValue={dv.from_account_id ?? ''}
             className={fieldClass}
-          >
-            <option value="" disabled>Vælg konto</option>
-            {visibleAccounts(dv.from_account_id).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.archived ? ' (arkiveret)' : ''}
-              </option>
-            ))}
-          </select>
+            accounts={visibleAccounts(dv.from_account_id)}
+            defaultValue={dv.from_account_id ?? ''}
+          />
         </div>
 
         <div>
           <label htmlFor="to_account_id" className={labelClass}>Til konto</label>
-          <select
+          <AccountSelectGrouped
             id="to_account_id"
             name="to_account_id"
             required
-            value={toAccountId}
-            onChange={(e) => setToAccountId(e.target.value)}
             className={fieldClass}
-          >
-            <option value="" disabled>Vælg konto</option>
-            {visibleAccounts(toAccountId).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.archived ? ' (arkiveret)' : ''}
-              </option>
-            ))}
-          </select>
+            accounts={visibleAccounts(toAccountId)}
+            value={toAccountId}
+            onChange={setToAccountId}
+          />
         </div>
       </div>
 

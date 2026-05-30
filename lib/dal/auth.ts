@@ -56,13 +56,14 @@ export const getHouseholdContext = cache(async () => {
   return { supabase, householdId: data.household_id, user };
 });
 
-// Den indloggede brugers auth-id - eller grantorens id når proxy er aktiv.
-// Bruges fx af /konti til at klassificere konti som Privat (created_by === mig)
-// vs Fælles. I proxy-mode skal denne returnere perspectiveUserId så
-// klassifikationen matcher "hvad ser Louise" når Mikkel hjælper hende.
+// Den indloggede brugers auth-id (Mikkel). Bruges fx af /konti til at
+// klassificere konti som Privat (created_by === mig) vs Fælles vs Andet
+// (partnerens private). I proxy-mode union: returnerer stadig authUserId
+// så Mikkels egne konti vises som "Mine" og Louises som "Andet" - /konti
+// renderer alle tre tracks når proxy er aktiv så han ser hele billedet.
 export async function getCurrentUserId(): Promise<string> {
   const p = await getPerspective();
-  return p.perspectiveUserId;
+  return p.authUserId;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,12 +127,19 @@ export const getPerspective = cache(async (): Promise<Perspective> => {
   };
 });
 
-// PostgREST `.or()`-streng der mimicker accounts-RLS:
-//   editable_by_all OR created_by = perspectiveUserId
-// Bruges af DAL-queries på `accounts` når perspective er proxy (admin-client
-// uden RLS) for at re-applye privacy-filteret. I normal-mode er udtrykket
-// ikke nødvendigt - RLS håndterer det.
+// PostgREST `.or()`-streng der mimicker accounts-RLS i proxy-mode.
+// V1.6: UNION-mode - Mikkel ser BÅDE Louises private OG sine egne private
+// OG fælles konti, så han kan sætte transfers op mellem dem og bevare
+// overblikket. Konto-cards har owner_name-badge så det er tydeligt hvis
+// er hvis. Dropdowns grupperes via owner_name (se _components/
+// AccountSelectGrouped). UI'en viser ejerskab eksplicit i stedet for at
+// skjule hans/hendes konti for hinanden.
+//
+// I normal-mode er udtrykket ikke nødvendigt - RLS håndterer det.
 export function privateAccountFilter(p: Perspective): string {
+  if (p.isProxyActive && p.authUserId !== p.perspectiveUserId) {
+    return `editable_by_all.eq.true,created_by.eq.${p.perspectiveUserId},created_by.eq.${p.authUserId}`;
+  }
   return `editable_by_all.eq.true,created_by.eq.${p.perspectiveUserId}`;
 }
 

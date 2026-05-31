@@ -129,9 +129,17 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     contributors.map((m) => getPrimaryIncomeForecast(m.id))
   );
 
-  // Fælleskonti: ejet af 'Fælles', ikke arkiveret, ikke lån.
+  // Fælleskonti: editable_by_all=true ELLER owner_name='Fælles' (legacy
+  // fallback), ikke arkiveret, ikke lån. Konsistent med
+  // classifyAccountOwnership's 'shared'-track. Tidligere brugte vi kun
+  // owner_name-string-matchen, hvilket fejl-ekskluderede shared Buffer/
+  // event-konti der ikke har owner_name='Fælles' eksplicit - så Louises
+  // bidrag dertil aldrig nåede contributionByUser-bucketing.
   const faellesAccountList = accounts.filter(
-    (a) => a.owner_name === 'Fælles' && !a.archived && a.kind !== 'credit'
+    (a) =>
+      (a.editable_by_all || a.owner_name === 'Fælles') &&
+      !a.archived &&
+      a.kind !== 'credit'
   );
   const faellesAccountIds = new Set(faellesAccountList.map((a) => a.id));
 

@@ -5268,3 +5268,136 @@ han skulle supplere. Honest tradeoff > fancy promise.
   ikke reads. Hvis tilladt under proxy at SE Louises data, bør hver
   view-event også logges. Strategien skal være rate-limited (1 entry
   per /konti-visit, ikke per query)
+
+---
+
+# Devlog — 30.-31. maj 2026 (proxy v2.0-v2.2: 360-audit + stabilisering + RLS-cutover)
+
+V1.5 viste perspektiv-skift; v1.6 indførte union-mode med tre konto-tracks;
+v1.7 gjorde server-actions perspective-aware; v1.8 tilføjede partner-panel
+til dashboard. Derefter rådgiver-iterationer, owner-grupperede dropdowns,
+event-CTA-per-medlem, smart-link-suggestion, og fixet 3 divergerende
+klassifikatorer.
+
+Brugerrapport efter at have sat Louises overførsler op: "flere steder
+hvor rapporter ikke rapporterer korrekt". Det udløste audit + stabilise-
+ringsarbejde.
+
+## 1. 360-audit (commit 0e80645) - perspective-coverage gabs
+
+[En audit-agent](.) gennemgik systematisk hvilke DAL'er der stadig brugte
+user-client + RLS, og hvilke server-actions der manglede `revalidatePath('/raadgiver')`.
+
+KLASSE 1 - DAL stadig på user-client + RLS (perspective-blind):
+- [advisor.ts](lib/dal/advisor.ts): `transfersByCreator` manglede Louises
+  transfers (RLS filtrerede fra-konti hun ejer privat væk). Rådgiverens
+  "Bidrager nu" viste 0 for Louise selv når hun havde overførsler.
+- [economy-plan.ts](lib/dal/economy-plan.ts): brugte `user.id` (Mikkel)
+  hvor `perspectiveUserId` (Louise) skulle bruges. `meMember`,
+  `suggestedSourceId`, `privatSurplus` reflekterede caller ikke perspective.
+- [expenses-by-category.ts](lib/dal/expenses-by-category.ts): privat-bucket
+  på dashboardets CategoryGroupChart + rådgiverens 50/30/20-model missede
+  Louises private udgifter.
+- [upcoming-events.ts](lib/dal/upcoming-events.ts), [life-events.ts](lib/dal/life-events.ts),
+  [loans.ts](lib/dal/loans.ts) - alle perspective-blinde.
+
+Alle 6 filer migreret til `getPerspective()` + `getVisibleAccountIds()`.
+
+KLASSE 2 - `revalidatePath('/raadgiver')` manglede i 16 actions. Sweep'et
+ind via replace_all. Konsekvensen: efter en overførsel viste rådgiveren
+præ-mutation-tal indtil hard refresh.
+
+## 2. Per-medlem CTAs på begivenheder (commit 3032fff)
+
+Begivenheder havde én generisk "Opsæt overførsel"-CTA. I proxy mente
+Mikkel "sæt op for Louise" men måtte vælge fra-konto manuelt i form'en.
+
+Per-medlem CTAs på [/begivenheder/[id]](app/(app)/begivenheder/[id]/page.tsx):
+- `SetupOption[]` per bidragyder med lønkonto pre-udfyldt via `&from=<lonkontoId>`
+- 2+ bidragydere: "Opsæt for Mikkel" / "Opsæt for Louise" side-om-side
+- Mangler lønkonto: disabled badge "Louise mangler lønkonto"
+
+## 3. Smart event-link suggestion (commit d66c5d4)
+
+Brugeren spurgte: "vi ved jo at en begivenhed er knyttet til en konto. Når
+jeg sætter en overførsel til Ferie-konto for Louise, bør appen være
+intelligent nok til at foreslå at knytte til begivenheden."
+
+Implementering:
+- DAL: [getActiveEventsByToAccount()](lib/dal/life-events.ts) returnerer
+  `Record<accountId, Event[]>` ved at indeksere aktive begivenheders
+  transfers efter til-konto
+- [TransferForm](app/(app)/overforsler/_components/TransferForm.tsx)
+  tager `eventsByToAccount`-prop. Når til-konto vælges, vises grøn boks:
+  - 1 match: checkbox "Knyt til Sommerferie 2026" auto-tjekket
+  - 2+ matches: dropdown
+  - 0 matches: skjult
+
+Combined med perspective-aware createTransfer betyder det: Mikkel under
+proxy kan sætte Louises event-bidrag op via dropdown eller direkte fra
+event-side, og overførslen knyttes automatisk til den rette begivenhed.
+
+## 4. Helikopter-stabilisering (commit 3c4cf90)
+
+12 commits af hotfixes uden konsolidering. Tre divergerende
+ownership-klassifikatorer; revalidatePath sprawl; ingen tests; ingen
+dokumentation af arkitekturen.
+
+TIER 1 - Unified klassifikator:
+- [lib/account-ownership.ts](lib/account-ownership.ts):
+  `classifyAccountOwnership(account, ctx) → {track, label}` er den
+  ENESTE autoritative kilde. Prioritets-orderingen (testet):
+  1. `editable_by_all=true` → shared (DB-truth)
+  2. `created_by = currentUserId` → mine
+  3. `created_by = partnerUserId` → partner
+  4. `owner_name = 'Fælles'` → shared (legacy fallback)
+  5. owner_name som label → other
+- Tre eksisterende klassifikatorer delegerer nu:
+  cashflow-analysis.classifyAccountTrack, /overforsler/page.tsx
+  classifyOwner, AccountSelectGrouped.groupAccountsByOwner
+
+TIER 2 - revalidateCashflowPaths():
+- [lib/actions/revalidate.ts](lib/actions/revalidate.ts) invaliderer
+  alle 12 cashflow-sider i ét kald
+- 5 actions migreret fra 3-4 linjers `revalidatePath`-blokke til ét kald
+- 2 nye Semgrep-regler:
+  * `fambud-admin-client-needs-household-filter`
+  * `fambud-cashflow-action-needs-revalidate`
+
+TIER 3 - CLAUDE.md sektion 6 (94 nye linjer):
+- Hvornår bruger man `getHouseholdContext` vs `getPerspective`
+- Pattern for nye DAL-funktioner + actions
+- Pligt til at bruge `classifyAccountOwnership`
+- Henvisning til Semgrep-håndhævelse
+
+TIER 4 - Tests via Node `--test` + tsx:
+- 11 tests for `classifyAccountOwnership` + `groupAccountsByOwnership`
+- Fangede regression i v1 unification (jeg havde sat created_by FØR
+  editable_by_all → fælles-konti ville have klassificeret som "mine")
+- Fixet inden commit. Præcis den klasse bug der tidligere kostede en
+  brugerrapport-runde
+- `npm test` script + CI security.yml-gate
+
+## Læringspunkter fra hele perioden
+
+1. **Hotfixes uden konsolidering = teknisk gæld**. Vi shippede 12
+   commits i træk uden helikopter-perspektiv. Resultat: tre divergerende
+   klassifikatorer, sprawl af revalidatePath-kald, ingen tests. En
+   "helikopter-pause" hver 5-8 commits ville have fanget det tidligere.
+
+2. **Pure-function tests har vild ROI**. Tests fangede den første v1
+   unification-bug (created_by FØR editable_by_all). Ingen integration,
+   ingen mocks, kun 11 assertions på ren TypeScript. tsx + node --test
+   = nul deps + 320ms køretid.
+
+3. **Audit-agent er hurtig**. 360-auditen via Agent-tool fandt 6 perspective-
+   blinde DAL-filer på ~2 min med specifikke linjenumre. Manuel gennemgang
+   ville tage en time+ og misse nogen.
+
+4. **Convention vs enforcement**: Semgrep-regler er essentielle når man
+   har konventionel sikkerhed (admin-client + manuel filter). Uden CI-
+   håndhævelse er det et spørgsmål om tid før en udvikler glemmer mønsteret.
+
+5. **Klassifikations-logik centraliseres med 1-rygtes-regel**: hvis tre
+   call-sites duplikerer samme spørgsmål ("hvem ejer denne konto?") med
+   subtle forskelle, opstår der subtle bugs. ÉN funktion + delegering.

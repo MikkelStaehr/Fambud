@@ -135,19 +135,20 @@ export default async function OverforslerPage({
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
 
   // Klassificér en transfer's "ejer" via fra-kontoens created_by/editable_by_all.
-  // Det er hvem der konceptuelt FLYTTER pengene - ikke hvem der oprettede
-  // selve transfer-rækken. I proxy: Louises konti markeres som 'partner' så
-  // Mikkel hurtigt kan se hvilke der er HENDES overførsler vs HANS egne.
+  // PRIORITET: created_by vinder over owner_name/editable_by_all - en konto
+  // du selv oprettede er DIN, selv hvis owner_name er sat fejlagtigt til
+  // 'Fælles' eller editable_by_all er flippet. Det matcher den intuitive
+  // "min lønkonto" selv om labels er rodede.
   const classifyOwner = (from: Account | undefined): { track: OwnerTrack; label: string } => {
     if (!from) return { track: 'other', label: 'Ukendt' };
-    if (from.editable_by_all || from.owner_name === 'Fælles') {
-      return { track: 'shared', label: 'Fælles' };
-    }
     if (from.created_by === currentUserId) {
       return { track: 'mine', label: 'Dig' };
     }
     if (proxyCtx && from.created_by === proxyCtx.grantorUserId) {
       return { track: 'partner', label: proxyCtx.grantorName ?? 'Partner' };
+    }
+    if (from.editable_by_all || from.owner_name === 'Fælles') {
+      return { track: 'shared', label: 'Fælles' };
     }
     return { track: 'other', label: from.owner_name ?? 'Andet' };
   };

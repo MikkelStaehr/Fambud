@@ -220,6 +220,64 @@ export async function getLifeEventById(id: string): Promise<LifeEventWithItems> 
   };
 }
 
+// Map fra to_account_id → liste af aktive begivenheder hvor mindst én af
+// begivenhedens transfers peger på den konto. Bruges af TransferForm til
+// at AUTO-FORESLÅ at en ny overførsel knyttes til en eksisterende
+// begivenhed når til-kontoen matcher: "du laver en overførsel til Ferie-
+// konto, og der findes en aktiv Sommerferie-begivenhed der allerede har
+// transfers til samme konto - skal denne overførsel også knyttes?"
+//
+// Kun begivenheder i status='planning' eller 'active' tæller med. Vi
+// returnerer alle matching events per konto (typisk 0 eller 1, men flere
+// kan eksistere) så formularen kan vise dem som dropdown ved tvetydighed.
+export type EventForAccountMap = Record<
+  string,  // to_account_id
+  { id: string; name: string }[]
+>;
+
+export async function getActiveEventsByToAccount(): Promise<EventForAccountMap> {
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return {};
+
+  // Hent alle aktive events først så vi kan join'e navn på resultatet.
+  const { data: events, error: eventsErr } = await p.supabase
+    .from('life_events')
+    .select('id, name')
+    .eq('household_id', p.householdId)
+    .in('status', ['planning', 'active']);
+  if (eventsErr) throw eventsErr;
+  if (!events || events.length === 0) return {};
+
+  const eventNameById = new Map(events.map((e) => [e.id, e.name]));
+  const eventIds = events.map((e) => e.id);
+
+  let transfersQ = p.supabase
+    .from('transfers')
+    .select('to_account_id, life_event_id')
+    .eq('household_id', p.householdId)
+    .in('life_event_id', eventIds)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) {
+    transfersQ = transfersQ.in('to_account_id', visibleAccountIds);
+  }
+  const { data: transfers, error: transfersErr } = await transfersQ;
+  if (transfersErr) throw transfersErr;
+
+  const map: EventForAccountMap = {};
+  for (const tr of transfers ?? []) {
+    if (!tr.life_event_id || !tr.to_account_id) continue;
+    const eventName = eventNameById.get(tr.life_event_id);
+    if (!eventName) continue;
+    const arr = (map[tr.to_account_id] ??= []);
+    // Undgå dubletter (samme event flere transfers til samme konto)
+    if (!arr.some((e) => e.id === tr.life_event_id)) {
+      arr.push({ id: tr.life_event_id, name: eventName });
+    }
+  }
+  return map;
+}
+
 // Antal aktive (ikke-aflyste, ikke-gennemførte) begivenheder. Bruges
 // af dashboard og evt. badges i sidebaren senere.
 export async function getActiveLifeEventCount(): Promise<number> {

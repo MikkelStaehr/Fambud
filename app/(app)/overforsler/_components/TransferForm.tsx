@@ -36,6 +36,12 @@ type Props = {
   currentLabel?: string;
   partnerUserId?: string;
   partnerLabel?: string;
+  // Map fra to_account_id → aktive begivenheder der allerede har transfers
+  // til den konto. Bruges til at AUTO-FORESLÅ at en ny overførsel knyttes
+  // til en begivenhed: "Ferie-konto er destination for Sommerferie 2026 -
+  // skal denne overførsel også tælle med?". Frictionless flow når man laver
+  // overførsel #2 til samme event-konto (fx Louises bidrag efter Mikkels).
+  eventsByToAccount?: Record<string, { id: string; name: string }[]>;
   defaultValues?: {
     from_account_id?: string;
     to_account_id?: string;
@@ -70,6 +76,7 @@ export function TransferForm({
   currentLabel,
   partnerUserId,
   partnerLabel,
+  eventsByToAccount = {},
   defaultValues = {},
   submitLabel,
   cancelHref,
@@ -100,6 +107,19 @@ export function TransferForm({
   );
   const [amountKey, setAmountKey] = useState(0);
 
+  // Event-link state: hvis to-kontoen matcher en aktiv begivenheds andre
+  // transfers, foreslår vi at knytte til den. Init fra prefill (URL-param);
+  // hvis ikke prefilled men der findes præcis ÉT match, auto-vælg det.
+  const candidateEvents = toAccountId ? eventsByToAccount[toAccountId] ?? [] : [];
+  const [linkedEventId, setLinkedEventId] = useState<string>(() => {
+    if (dv.life_event_id) return dv.life_event_id;
+    return '';
+  });
+  // Re-evaluér auto-suggestion når to-kontoen ændres. Sker kun hvis brugeren
+  // ikke allerede har valgt noget eksplicit (linkedEventId === '').
+  const autoSuggestId =
+    candidateEvents.length === 1 && !dv.life_event_id ? candidateEvents[0].id : null;
+
   const selectedTo = accounts.find((a) => a.id === toAccountId);
   const annualCapKr =
     selectedTo?.investment_type
@@ -117,16 +137,23 @@ export function TransferForm({
     setAmountKey((k) => k + 1);
   }
 
+  // Det effektive event-link der submittes: linkedEventId vinder hvis sat
+  // (kan være __none__ hvis brugeren aktivt opt'er ud); ellers auto-suggest.
+  // Tom streng = ingen link til server.
+  const effectiveLifeEventId =
+    linkedEventId === '__none__'
+      ? ''
+      : linkedEventId || autoSuggestId || '';
+
   return (
     <form action={action} className="space-y-5">
-      {/* Skjult binding til en begivenhed når flow'et starter fra
-          /begivenheder/<id>'s "Opsæt overførsel"-CTA. Server-actionen
-          læser feltet og verificerer ejerskab før den linker. */}
-      {dv.life_event_id && (
+      {/* Skjult input bærer det faktiske life_event_id til server-actionen.
+          Server-actionen verificerer ejerskab via household-tjek. */}
+      {effectiveLifeEventId && (
         <input
           type="hidden"
           name="life_event_id"
-          value={dv.life_event_id}
+          value={effectiveLifeEventId}
         />
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -155,7 +182,13 @@ export function TransferForm({
             className={fieldClass}
             accounts={visibleAccounts(toAccountId)}
             value={toAccountId}
-            onChange={setToAccountId}
+            onChange={(v) => {
+              setToAccountId(v);
+              // Reset event-link når brugeren skifter til-konto - hvis den
+              // nye konto har andre matching events skal vi auto-foreslå dem,
+              // ikke beholde det gamle event som måske ikke længere matcher.
+              if (!dv.life_event_id) setLinkedEventId('');
+            }}
             currentUserId={currentUserId}
             currentLabel={currentLabel}
             partnerUserId={partnerUserId}
@@ -163,6 +196,52 @@ export function TransferForm({
           />
         </div>
       </div>
+
+      {/* Begivenheds-link: vises kun når der findes aktive begivenheder
+          der peger på den valgte til-konto. Et match = auto-suggested
+          checkbox; flere = dropdown. Brugeren kan altid opt-out via
+          "Ingen begivenhed". */}
+      {candidateEvents.length > 0 && !dv.life_event_id && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+          <div className="text-xs font-medium text-emerald-900">
+            Knyt til begivenhed?
+          </div>
+          {candidateEvents.length === 1 ? (
+            <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-sm text-neutral-800">
+              <input
+                type="checkbox"
+                checked={effectiveLifeEventId === candidateEvents[0].id}
+                onChange={(e) =>
+                  setLinkedEventId(e.target.checked ? candidateEvents[0].id : '__none__')
+                }
+                className="h-4 w-4 rounded border-neutral-300 text-emerald-700 focus:ring-emerald-600"
+              />
+              <span>
+                Knyt til <strong>{candidateEvents[0].name}</strong> (andre
+                overførsler peger allerede dertil)
+              </span>
+            </label>
+          ) : (
+            <select
+              value={effectiveLifeEventId}
+              onChange={(e) => setLinkedEventId(e.target.value || '__none__')}
+              className="mt-1.5 block w-full rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+            >
+              <option value="">Ingen begivenhed</option>
+              {candidateEvents.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+      {dv.life_event_id && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-xs text-emerald-900">
+          Knyttes til begivenhed (sat via link fra begivenheds-siden).
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

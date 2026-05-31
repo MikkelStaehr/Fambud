@@ -121,7 +121,113 @@ verifikation. Lighed mellem code og prod skal valideres.
 
 ---
 
-## 6. Beløb gemmes som `bigint`-øre, ikke `numeric`/`float`
+## 6. Perspective-aware DAL og actions (proxy-mode)
+
+**Reglen**: Når en DAL-funktion eller server action læser eller skriver
+data der kan være perspective-følsom (transfers, transactions, accounts,
+life_events, m.fl.), brug `getPerspective()` / `getActionPerspective()`
+i stedet for `getHouseholdContext()`. Den fælles owner-klassifikator i
+`lib/account-ownership.ts` er den ENESTE kilde til "hvis konto er det
+her?"-spørgsmålet på tværs af UI.
+
+**Hvorfor**: Mikkel kan agere på Louises vegne via setup-proxy
+(migration 0065). I proxy-mode skal han se HENDES private konti (read)
+og kunne oprette ressourcer på hendes vegne (write). User-client + RLS
+filtrerer hendes private data væk fra hans session. Vi bypasser RLS
+via `createAdminClient` og geninstallerer privacy-filteret manuelt via
+`privateAccountFilter()` + `getVisibleAccountIds()`. Det er
+KONVENTIONELT, ikke håndhævet af DB - derfor er CI-reglerne nedenfor
+kritiske.
+
+### Hvornår bruger man hvad?
+
+```
+                          getHouseholdContext   getPerspective
+Reads af account-private  ❌                    ✅
+data (transactions,       (Louises private          (returnerer admin-client
+transfers, life_events,    skjules af RLS)         + grantor.id som
+expenses-by-category,                              perspectiveUserId)
+upcoming-events, loans)
+
+Wizard/onboarding-state   ✅                    ❌
+(family_members,          (proxy giver ingen       (overkill - membership-state
+households, tours)         mening her)              er household-niveau)
+
+Skriver til transactions/  ❌                   ❌  - brug `getActionPerspective(accountId)`
+transfers (server actions)                          som validerer accountId mod
+                                                    visible-set + returnerer
+                                                    samme supabase-klient
+```
+
+### Pattern for nye DAL-funktioner
+
+```ts
+// lib/dal/min-nye-dal.ts
+import { getPerspective, privateAccountFilter, getVisibleAccountIds } from './auth';
+
+export async function getMineTing() {
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  let q = p.supabase
+    .from('transactions')
+    .select('*')
+    .eq('household_id', p.householdId);  // ALTID household-scope
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+
+  const { data } = await q;
+  return data ?? [];
+}
+```
+
+### Pattern for nye server actions
+
+```ts
+// app/(app)/min-feature/actions.ts
+'use server';
+import { getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
+
+export async function createMinPost(formData: FormData) {
+  const accountId = String(formData.get('account_id') ?? '');
+  const pRes = await getActionPerspective(accountId);
+  if (!pRes.ok) redirect('/?error=' + encodeURIComponent(pRes.error));
+  const { supabase, householdId } = pRes.perspective;
+
+  await supabase.from('transactions').insert({
+    household_id: householdId,
+    account_id: accountId,
+    /* ... */
+  });
+
+  revalidateCashflowPaths();  // ALTID på cashflow-affekterende mutationer
+}
+```
+
+### Klassifikation: brug `classifyAccountOwnership`
+
+For at vise konto-ejerskab i UI (badges, optgroups, tracks): kald
+`classifyAccountOwnership(account, { currentUserId, currentLabel,
+partnerUserId, partnerLabel })` fra `lib/account-ownership.ts`. ALDRIG
+duplikér klassifikations-logik. Tre divergerende implementeringer kostede
+os flere bug-runder i v1.5-v2.0.
+
+### Semgrep-håndhævelse
+
+- `fambud-admin-client-needs-household-filter` (WARNING): flagger
+  `createAdminClient()`-konstruktioner uden `.eq('household_id', ...)`
+  i samme funktion.
+- `fambud-cashflow-action-needs-revalidate` (WARNING): flagger
+  `'use server'`-actions der muterer transactions/transfers uden at
+  importere `revalidateCashflowPaths`.
+
+Reference: DEVLOG 30. maj 2026 (v1.5 → v2.0), SECURITY_AUDITS.md kommende
+P25-P28.
+
+---
+
+## 7. Beløb gemmes som `bigint`-øre, ikke `numeric`/`float`
 
 **Reglen**: alle finansielle felter er `bigint` med øre som enhed
 (1 kr = 100 øre). Aldrig `numeric` eller `decimal` eller `float`.

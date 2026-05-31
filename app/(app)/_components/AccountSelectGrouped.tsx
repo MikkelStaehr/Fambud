@@ -10,6 +10,11 @@
 
 'use client';
 
+import {
+  groupAccountsByOwnership,
+  type OwnershipContext,
+} from '@/lib/account-ownership';
+
 type GroupableAccount = {
   id: string;
   name: string;
@@ -19,60 +24,14 @@ type GroupableAccount = {
   editable_by_all?: boolean;
 };
 
-type OwnerCtx = {
-  currentUserId?: string;
-  currentLabel?: string;  // default "Dig"
-  partnerUserId?: string;
-  partnerLabel?: string;
-};
-
-function ownerLabelFor<T extends GroupableAccount>(
-  a: T,
-  ctx: OwnerCtx
-): string {
-  // created_by vinder over owner_name - en konto du oprettede er DIN
-  // selv hvis labels er rodede.
-  if (ctx.currentUserId && a.created_by === ctx.currentUserId) {
-    return ctx.currentLabel ?? 'Dig';
-  }
-  if (ctx.partnerUserId && a.created_by === ctx.partnerUserId) {
-    return ctx.partnerLabel ?? 'Partner';
-  }
-  if (a.editable_by_all || a.owner_name === 'Fælles') {
-    return 'Fælles';
-  }
-  const owner = a.owner_name?.trim();
-  return owner && owner.length > 0 ? owner : 'Fælles';
-}
-
+// Re-export under det gamle navn for bagudkompat-imports. Delegerer til
+// den fælles ownership-helper (lib/account-ownership.ts) som er den
+// autoritative klassifikator overalt i appen.
 export function groupAccountsByOwner<T extends GroupableAccount>(
   accounts: T[],
-  ctx: OwnerCtx = {}
+  ctx: OwnershipContext = {}
 ): { label: string; accounts: T[] }[] {
-  const groups = new Map<string, T[]>();
-  for (const a of accounts) {
-    const label = ownerLabelFor(a, ctx);
-    const arr = groups.get(label) ?? [];
-    arr.push(a);
-    groups.set(label, arr);
-  }
-  const currentLabel = ctx.currentLabel ?? 'Dig';
-  const partnerLabel = ctx.partnerLabel ?? 'Partner';
-  // Sortering: Dig -> Partner -> Fælles -> alfabetisk
-  const weight = (l: string) => {
-    if (l === currentLabel) return 0;
-    if (l === partnerLabel) return 1;
-    if (l === 'Fælles') return 2;
-    return 3;
-  };
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => {
-      const wa = weight(a);
-      const wb = weight(b);
-      if (wa !== wb) return wa - wb;
-      return a.localeCompare(b, 'da');
-    })
-    .map(([label, accs]) => ({ label, accounts: accs }));
+  return groupAccountsByOwnership(accounts, ctx);
 }
 
 type Props<T extends GroupableAccount> = {
@@ -111,7 +70,7 @@ export function AccountSelectGrouped<T extends GroupableAccount>({
   partnerUserId,
   partnerLabel,
 }: Props<T>) {
-  const groups = groupAccountsByOwner(accounts, {
+  const groups = groupAccountsByOwnership(accounts, {
     currentUserId,
     currentLabel,
     partnerUserId,

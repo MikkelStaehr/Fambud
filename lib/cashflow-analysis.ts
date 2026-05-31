@@ -7,6 +7,7 @@
 import { formatAmount } from './format';
 import type { Account } from './database.types';
 import type { AccountCashflowDetail, AdvisorContext } from './dal';
+import { classifyAccountOwnership } from './account-ownership';
 
 export type CashflowIssue =
   | {
@@ -235,22 +236,24 @@ export type PrivatFaellesSummary = {
   };
 };
 
-// Per-konto klassificering - den ENE kilde til sandhed om hvilket spor en
-// konto hører til. Bruges af både dashboardet (aggregering) og /konti
-// (gruppering), så en konto altid lander samme sted overalt.
-//   • faelles = owner_name 'Fælles' (Budget, Husholdning, Buffer, lån)
-//   • privat  = mine egne konti (oprettet af mig, ikke fælles) - inkl.
-//               børnekonti jeg administrerer
-//   • other   = partnerens egne private konti (ekskluderes fra mit overblik)
+// Per-konto klassificering - delegerer til den fælles classifyAccountOwnership
+// i lib/account-ownership.ts. Returnerer det legacy AccountTrack-format
+// ('privat'/'faelles'/'other') som /konti, dashboard og /budget bruger.
+// 'mine' fra ownership-helperen mapper til 'privat'; 'partner' og 'other'
+// begge til 'other' her (cashflow-analysens kunder kender ikke proxy).
+//   • faelles = delt konto (editable_by_all / owner_name='Fælles')
+//   • privat  = mine egne konti (created_by = mig)
+//   • other   = ikke-mine + ikke-delte (typisk partnerens private)
 export type AccountTrack = 'privat' | 'faelles' | 'other';
 
 export function classifyAccountTrack(
-  account: Pick<Account, 'owner_name' | 'created_by'>,
+  account: Pick<Account, 'owner_name' | 'created_by' | 'editable_by_all'>,
   currentUserId: string
 ): AccountTrack {
-  if (account.owner_name === 'Fælles') return 'faelles';
-  if (account.created_by === currentUserId) return 'privat';
-  return 'other';
+  const { track } = classifyAccountOwnership(account, { currentUserId });
+  if (track === 'mine') return 'privat';
+  if (track === 'shared') return 'faelles';
+  return 'other'; // 'partner' eller 'other' fra helperen
 }
 
 export function computePrivatFaelles(

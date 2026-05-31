@@ -96,6 +96,11 @@ jobs:
       - name: TypeScript strict
         run: npx tsc --noEmit
 
+      # Unit-tests for pure helpers (account-ownership.ts mfl). Ingen
+      # framework - bruger Node 20's indbyggede --test via tsx.
+      - name: Unit tests
+        run: npm test
+
       # Build verificerer at Sentry source-maps kan uploades, alle
       # routes kan genereres osv. Bruger placeholder-DSN så vi ikke
       # spammer rigtige Sentry under CI-builds.

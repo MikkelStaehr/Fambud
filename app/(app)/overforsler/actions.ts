@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
 import { parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { mapDbError } from '@/lib/actions/error-map';
@@ -130,9 +131,7 @@ export async function createTransfer(formData: FormData) {
     redirect('/overforsler/ny?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
-  revalidatePath('/overforsler');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   // Proxy-mode (migration 0065): transfers er husstands-scoped og har ingen
   // per-bruger-kolonne, så data lander korrekt uanset hvem der opretter.
   // Vi tilføjer kun en "for Louise"-note til bekræftelsen så Mikkel ved at
@@ -216,9 +215,7 @@ export async function updateTransfer(id: string, formData: FormData) {
     );
   }
 
-  revalidatePath('/overforsler');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   if (parsed.data.life_event_id) {
     revalidatePath('/begivenheder');
     revalidatePath(`/begivenheder/${parsed.data.life_event_id}`);
@@ -241,9 +238,7 @@ export async function deleteTransfer(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
-  revalidatePath('/overforsler');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   await setFlashCookie('Overførsel slettet');
   redirect('/overforsler');
 }

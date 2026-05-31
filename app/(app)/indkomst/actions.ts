@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
 import { parseOptionalAmount, parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
@@ -258,10 +259,7 @@ export async function createIncome(formData: FormData) {
     });
   }
 
-  revalidatePath('/indkomst');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
   const noticeSuffix = proxy.isProxyActive ? ` for ${proxy.grantorName ?? 'familiemedlem'}` : '';
   await setFlashCookie(`Indkomst registreret${noticeSuffix}`);
   redirect('/indkomst');
@@ -298,10 +296,7 @@ export async function updateIncome(id: string, formData: FormData) {
     redirect(`/indkomst/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Indkomsten kunne ikke gemmes')));
   }
 
-  revalidatePath('/indkomst');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
   await setFlashCookie('Indkomst gemt');
   redirect('/indkomst');
 }
@@ -319,10 +314,7 @@ export async function deleteIncome(formData: FormData) {
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
-  revalidatePath('/indkomst');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
   await setFlashCookie('Indkomst slettet');
   redirect('/indkomst');
 }
@@ -353,9 +345,7 @@ export async function setPrimaryIncomeSource(formData: FormData) {
     redirect('/indkomst?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
-  revalidatePath('/indkomst');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   await setFlashCookie('Indkomst-kilde gemt');
   redirect('/indkomst');
 }

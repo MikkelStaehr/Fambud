@@ -39,6 +39,7 @@ import {
   shouldShowTour,
 } from '@/lib/dal';
 import { getActiveProxyContext } from '@/lib/proxy';
+import { classifyAccountOwnership } from '@/lib/account-ownership';
 import { OverforslerTour } from './_components/OverforslerTour';
 import {
   RECURRENCE_LABEL_DA,
@@ -134,23 +135,18 @@ export default async function OverforslerPage({
 
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
 
-  // Klassificér en transfer's "ejer" via fra-kontoens created_by/editable_by_all.
-  // PRIORITET: created_by vinder over owner_name/editable_by_all - en konto
-  // du selv oprettede er DIN, selv hvis owner_name er sat fejlagtigt til
-  // 'Fælles' eller editable_by_all er flippet. Det matcher den intuitive
-  // "min lønkonto" selv om labels er rodede.
+  // Klassificér transfers via den fælles ownership-helper. Delegering sikrer
+  // at /overforsler, /konti, AccountSelectGrouped og dashboard alle bruger
+  // præcis samme regler om "hvis konto er det her?".
   const classifyOwner = (from: Account | undefined): { track: OwnerTrack; label: string } => {
     if (!from) return { track: 'other', label: 'Ukendt' };
-    if (from.created_by === currentUserId) {
-      return { track: 'mine', label: 'Dig' };
-    }
-    if (proxyCtx && from.created_by === proxyCtx.grantorUserId) {
-      return { track: 'partner', label: proxyCtx.grantorName ?? 'Partner' };
-    }
-    if (from.editable_by_all || from.owner_name === 'Fælles') {
-      return { track: 'shared', label: 'Fælles' };
-    }
-    return { track: 'other', label: from.owner_name ?? 'Andet' };
+    const result = classifyAccountOwnership(from, {
+      currentUserId,
+      currentLabel: 'Dig',
+      partnerUserId: proxyCtx?.grantorUserId,
+      partnerLabel: proxyCtx?.grantorName ?? 'Partner',
+    });
+    return result;
   };
 
   // Flatten recurring transfers - vi smider engangs ud her, de hører til

@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getHouseholdContext, getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
 import { parseOptionalAmount, parseRequiredAmount, capLength, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, HOUSEHOLD_PURCHASE_KINDS } from '@/lib/actions/account-validation';
 import {
@@ -120,10 +121,7 @@ export async function addHouseholdPurchase(
     redirect('/husholdning?error=' + encodeURIComponent('Købet kunne ikke gemmes'));
   }
 
-  revalidatePath('/husholdning');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
 }
 
 // Manuelt månedligt rådighedsbeløb. Gemmes på accounts.monthly_budget
@@ -187,8 +185,5 @@ export async function deleteHouseholdPurchase(formData: FormData) {
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
-  revalidatePath('/husholdning');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
 }

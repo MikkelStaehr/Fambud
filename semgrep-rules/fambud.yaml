@@ -178,3 +178,76 @@ rules:
         - 'next.config.ts'
         - 'instrumentation.ts'
         - 'instrumentation-client.ts'
+
+  # ----------------------------------------------------------------
+  # Perspective-aware admin-client skal applye household_id-filter.
+  # Når en DAL- eller action-funktion bruger createAdminClient (eller
+  # spreader getPerspective().supabase) til at lave queries, MISSER
+  # den RLS som ellers ville have scoped til caller's household. Den
+  # ENESTE forsvarslinje er manuel .eq('household_id', ...) på hver
+  # query. Glemmes det → cross-household-data-leak.
+  #
+  # Reglen flagger admin-client-konstruktioner i lib/dal/ + actions
+  # uden et åbenlyst household_id-filter i samme funktion. Det fanger
+  # ikke alle bugs (filteret kan være længere væk), men gør den vigtige
+  # konvention SYNLIG for CI-output.
+  #
+  # nosemgrep-line på createAdminClient hvis du virkelig har valideret
+  # at scoping sker andetsteds (fx via en wrapper helper).
+  # ----------------------------------------------------------------
+  - id: fambud-admin-client-needs-household-filter
+    message: |
+      createAdminClient bypasser RLS - ALLE queries skal scope manuelt
+      på household_id for at forhindre cross-household-data-leak. Brug
+      .eq('household_id', householdId) på hver from().select/insert/
+      update/delete, eller wrap i en helper der gør det.
+      Reference: lib/dal/auth.ts getPerspective() + DEVLOG 30. maj v1.5.
+    severity: WARNING
+    languages: [typescript]
+    paths:
+      include:
+        - 'lib/dal/**'
+        - 'app/**/actions.ts'
+    pattern: |
+      const $X = createAdminClient()
+    pattern-not-inside: |
+      function $F(...) {
+        ...
+        .eq('household_id', ...)
+        ...
+      }
+
+  # ----------------------------------------------------------------
+  # Cashflow-actions skal kalde revalidateCashflowPaths(). Sider som
+  # /raadgiver, /dashboard, /opsparinger, /rapport afleder data fra
+  # transactions og transfers - hvis en action muterer dem uden at
+  # invalidere de relevante paths, ser brugeren stale tal indtil
+  # næste hard refresh.
+  #
+  # Reglen advarer 'use server'-actions der bruger transactions/
+  # transfers insert/update/delete uden også at importere
+  // revalidateCashflowPaths fra lib/actions/revalidate.
+  # ----------------------------------------------------------------
+  - id: fambud-cashflow-action-needs-revalidate
+    message: |
+      Actions der muterer transactions eller transfers SKAL kalde
+      revalidateCashflowPaths() fra '@/lib/actions/revalidate' så
+      /dashboard, /raadgiver, /opsparinger og andre cashflow-sider
+      opdateres øjeblikkeligt. Ellers ser brugeren stale aggregater.
+      Reference: DEVLOG 30. maj v2.0 - 360-revurdering.
+    severity: WARNING
+    languages: [typescript]
+    paths:
+      include:
+        - 'app/**/actions.ts'
+    pattern-either:
+      - patterns:
+          - pattern: $X.from('transactions').insert(...)
+          - pattern-not-inside: |
+              import { revalidateCashflowPaths } from '@/lib/actions/revalidate'
+              ...
+      - patterns:
+          - pattern: $X.from('transfers').insert(...)
+          - pattern-not-inside: |
+              import { revalidateCashflowPaths } from '@/lib/actions/revalidate'
+              ...

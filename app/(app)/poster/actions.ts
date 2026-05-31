@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
 import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { setFlashCookie } from '@/lib/flash';
 import { assertAccountKind, POSTER_KINDS } from '@/lib/actions/account-validation';
@@ -102,9 +103,7 @@ export async function createTransaction(formData: FormData) {
     redirect('/poster/ny?error=' + encodeURIComponent(mapDbError(error, 'Posten kunne ikke gemmes - tjek felterne')));
   }
 
-  revalidatePath('/poster');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   await setFlashCookie('Post oprettet');
   redirect('/poster');
 }
@@ -140,9 +139,7 @@ export async function updateTransaction(id: string, formData: FormData) {
     redirect(`/poster/${encodeURIComponent(id)}?error=` + encodeURIComponent(mapDbError(error, 'Posten kunne ikke gemmes')));
   }
 
-  revalidatePath('/poster');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   await setFlashCookie('Post gemt');
   redirect('/poster');
 }
@@ -159,9 +156,7 @@ export async function deleteTransaction(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
-  revalidatePath('/poster');
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
+  revalidateCashflowPaths();
   await setFlashCookie('Post slettet');
   redirect('/poster');
 }

@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getActionPerspective } from '@/lib/dal';
+import { revalidateCashflowPaths } from '@/lib/actions/revalidate';
 import { parseRequiredAmount, capLength, isValidOccursOn, TEXT_LIMITS } from '@/lib/format';
 import { assertAccountKind, FIXED_EXPENSE_KINDS } from '@/lib/actions/account-validation';
 import {
@@ -126,10 +127,7 @@ export async function addExpense(formData: FormData) {
     bounceWithError(accountId, 'Udgiften kunne ikke gemmes');
   }
 
-  revalidatePath(`/faste-udgifter/${accountId}`);
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
 }
 
 export async function removeExpense(formData: FormData) {
@@ -351,9 +349,6 @@ export async function updateBudgetExpense(
     return { ok: false, error: 'Kunne ikke gemme udgiften' };
   }
 
-  revalidatePath(`/faste-udgifter/${accountId}`);
-  revalidatePath('/dashboard');
-  revalidatePath('/raadgiver');
-  revalidatePath('/poster');
+  revalidateCashflowPaths();
   return { ok: true };
 }

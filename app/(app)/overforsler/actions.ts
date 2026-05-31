@@ -132,6 +132,7 @@ export async function createTransfer(formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   // Proxy-mode (migration 0065): transfers er husstands-scoped og har ingen
   // per-bruger-kolonne, så data lander korrekt uanset hvem der opretter.
   // Vi tilføjer kun en "for Louise"-note til bekræftelsen så Mikkel ved at
@@ -217,6 +218,7 @@ export async function updateTransfer(id: string, formData: FormData) {
 
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   if (parsed.data.life_event_id) {
     revalidatePath('/begivenheder');
     revalidatePath(`/begivenheder/${parsed.data.life_event_id}`);
@@ -241,6 +243,7 @@ export async function deleteTransfer(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Overførsel slettet');
   redirect('/overforsler');
 }

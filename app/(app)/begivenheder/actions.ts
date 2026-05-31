@@ -273,6 +273,7 @@ export async function deleteLifeEvent(formData: FormData) {
   revalidatePath('/begivenheder');
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie(
     stopTransfers ? 'Begivenhed og overførsel slettet' : 'Begivenhed slettet'
   );
@@ -300,6 +301,7 @@ export async function stopEventTransfer(formData: FormData) {
   revalidatePath(`/begivenheder/${eventId}`);
   revalidatePath('/overforsler');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Overførsel stoppet');
   redirect('/begivenheder');
 }

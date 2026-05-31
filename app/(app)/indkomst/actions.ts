@@ -260,6 +260,7 @@ export async function createIncome(formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
   const noticeSuffix = proxy.isProxyActive ? ` for ${proxy.grantorName ?? 'familiemedlem'}` : '';
   await setFlashCookie(`Indkomst registreret${noticeSuffix}`);
@@ -299,6 +300,7 @@ export async function updateIncome(id: string, formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
   await setFlashCookie('Indkomst gemt');
   redirect('/indkomst');
@@ -319,6 +321,7 @@ export async function deleteIncome(formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
   await setFlashCookie('Indkomst slettet');
   redirect('/indkomst');
@@ -352,6 +355,7 @@ export async function setPrimaryIncomeSource(formData: FormData) {
 
   revalidatePath('/indkomst');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Indkomst-kilde gemt');
   redirect('/indkomst');
 }

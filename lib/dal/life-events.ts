@@ -15,7 +15,7 @@ import type {
   RecurrenceFreq,
 } from '@/lib/database.types';
 import { monthlyEquivalent } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import { getPerspective, getVisibleAccountIds } from './auth';
 
 // Slim-summary af en transfer linket til et event. Vi henter kun de
 // felter UI'et faktisk skal bruge (sammenligning af mål-konti,
@@ -45,7 +45,10 @@ export type LifeEventWithItems = LifeEvent & {
 export async function getLifeEvents(
   includeCancelled = false
 ): Promise<LifeEventWithItems[]> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const { supabase } = p;
+  const householdId = p.householdId;
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
 
   let eventsQuery = supabase
     .from('life_events')
@@ -82,11 +85,17 @@ export async function getLifeEvents(
   // Transfers joint-fetch: alle recurring transfers tied til disse
   // events. 'once'-transfers ekskluderes - de er engangsindbetalinger,
   // ikke månedlig opsparing, og skal ikke flippe status til active.
-  const { data: transfers, error: transfersErr } = await supabase
+  let transfersQ = supabase
     .from('transfers')
     .select('id, life_event_id, to_account_id, amount, recurrence')
     .in('life_event_id', eventIds)
     .neq('recurrence', 'once');
+  if (visibleAccountIds) {
+    transfersQ = transfersQ.or(
+      `from_account_id.in.(${visibleAccountIds.join(',') || '00000000-0000-0000-0000-000000000000'}),to_account_id.in.(${visibleAccountIds.join(',') || '00000000-0000-0000-0000-000000000000'})`
+    );
+  }
+  const { data: transfers, error: transfersErr } = await transfersQ;
   if (transfersErr) throw transfersErr;
 
   // Berig transfers med kontonavne. Ét select pr. unique account_id.
@@ -142,7 +151,9 @@ export async function getLifeEvents(
 }
 
 export async function getLifeEventById(id: string): Promise<LifeEventWithItems> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const { supabase } = p;
+  const householdId = p.householdId;
 
   const { data: event, error: eventErr } = await supabase
     .from('life_events')
@@ -212,7 +223,9 @@ export async function getLifeEventById(id: string): Promise<LifeEventWithItems> 
 // Antal aktive (ikke-aflyste, ikke-gennemførte) begivenheder. Bruges
 // af dashboard og evt. badges i sidebaren senere.
 export async function getActiveLifeEventCount(): Promise<number> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const { supabase } = p;
+  const householdId = p.householdId;
   const { count, error } = await supabase
     .from('life_events')
     .select('*', { count: 'exact', head: true })

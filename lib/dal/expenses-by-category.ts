@@ -12,7 +12,7 @@ import {
   categoryGroupFor,
   type CategoryGroup,
 } from '@/lib/categories';
-import { getHouseholdContext } from './auth';
+import { getPerspective, getVisibleAccountIds } from './auth';
 
 // "Hvor går pengene hen?" - pr.-kategori-fordeling af alle faste udgifter
 // (recurring), normaliseret til månedligt beløb. Bruges af dashboardets
@@ -25,15 +25,18 @@ export type CategoryExpenseSummary = {
 };
 
 export async function getMonthlyExpensesByCategory(): Promise<CategoryExpenseSummary[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+  let q = p.supabase
     .from('transactions')
     .select(
       'amount, recurrence, components_mode, category:categories(id, name, color, kind), components:transaction_components(amount)'
     )
-    .eq('household_id', householdId)
-    .neq('recurrence', 'once')
-    .returns<{
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  const { data, error } = await q.returns<{
       amount: number;
       recurrence: RecurrenceFreq;
       components_mode: 'additive' | 'breakdown';
@@ -78,15 +81,20 @@ export type ExpenseGroupBuckets = {
 };
 
 export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) {
+    return { private: [], shared: [] };
+  }
+  let q = p.supabase
     .from('transactions')
     .select(
       'amount, recurrence, components_mode, account:accounts(owner_name, kind), category:categories(name, kind), components:transaction_components(amount)'
     )
-    .eq('household_id', householdId)
-    .neq('recurrence', 'once')
-    .returns<{
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  const { data, error } = await q.returns<{
       amount: number;
       recurrence: RecurrenceFreq;
       components_mode: 'additive' | 'breakdown';
@@ -138,15 +146,18 @@ export type TopExpenseRow = {
 };
 
 export async function getTopRecurringExpenses(limit = 5): Promise<TopExpenseRow[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+  let q = p.supabase
     .from('transactions')
     .select(
       'id, description, amount, recurrence, components_mode, category:categories(name, color, kind), components:transaction_components(amount)'
     )
-    .eq('household_id', householdId)
-    .neq('recurrence', 'once')
-    .returns<{
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once');
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  const { data, error } = await q.returns<{
       id: string;
       description: string | null;
       amount: number;

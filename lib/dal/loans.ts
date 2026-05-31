@@ -5,32 +5,34 @@
 // /laan edit form is where the user fills them in.
 
 import type { Account } from '@/lib/database.types';
-import { getHouseholdContext } from './auth';
+import { getPerspective, privateAccountFilter } from './auth';
 
 export type LoanRow = Account;
 
 export async function getLoans(): Promise<LoanRow[]> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  let q = p.supabase
     .from('accounts')
     .select('*')
-    .eq('household_id', householdId)
+    .eq('household_id', p.householdId)
     .eq('kind', 'credit')
-    .eq('archived', false)
-    .order('created_at', { ascending: true });
+    .eq('archived', false);
+  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  const { data, error } = await q.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
 export async function getLoanById(id: string): Promise<LoanRow> {
-  const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
+  const p = await getPerspective();
+  let q = p.supabase
     .from('accounts')
     .select('*')
     .eq('id', id)
-    .eq('household_id', householdId)
-    .eq('kind', 'credit')
-    .single();
+    .eq('household_id', p.householdId)
+    .eq('kind', 'credit');
+  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  const { data, error } = await q.single();
   if (error) throw error;
   return data;
 }

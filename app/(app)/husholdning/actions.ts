@@ -122,6 +122,7 @@ export async function addHouseholdPurchase(
 
   revalidatePath('/husholdning');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
 }
 
@@ -188,5 +189,6 @@ export async function deleteHouseholdPurchase(formData: FormData) {
 
   revalidatePath('/husholdning');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
 }

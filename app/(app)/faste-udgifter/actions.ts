@@ -128,6 +128,7 @@ export async function addExpense(formData: FormData) {
 
   revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
 }
 
@@ -151,6 +152,7 @@ export async function removeExpense(formData: FormData) {
 
   if (accountId) revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
 }
 
@@ -351,6 +353,7 @@ export async function updateBudgetExpense(
 
   revalidatePath(`/faste-udgifter/${accountId}`);
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   revalidatePath('/poster');
   return { ok: true };
 }

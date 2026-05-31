@@ -186,6 +186,7 @@ export async function createLoan(formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
+  revalidatePath('/raadgiver');
   await setFlashCookie(`${parsed.data.name} oprettet`);
   redirect('/laan');
 }
@@ -209,6 +210,7 @@ export async function updateLoan(id: string, formData: FormData) {
 
   revalidatePath('/laan');
   revalidatePath('/konti');
+  revalidatePath('/raadgiver');
   await setFlashCookie(`${parsed.data.name} gemt`);
   redirect('/laan');
 }
@@ -226,6 +228,7 @@ export async function deleteLoan(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/laan');
   revalidatePath('/konti');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Lån slettet');
   redirect('/laan');
 }
@@ -413,6 +416,7 @@ export async function pushLoanToBudget(loanId: string, formData: FormData) {
   revalidatePath('/budget');
   revalidatePath('/poster');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   const message = targetAccount?.name
     ? `Tilføjet på ${targetAccount.name}`
     : 'Tilføjet på budget';

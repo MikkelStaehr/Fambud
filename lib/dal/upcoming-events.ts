@@ -18,7 +18,7 @@
 
 import type { RecurrenceFreq } from '@/lib/database.types';
 import { nextOccurrenceAfter } from '@/lib/format';
-import { getHouseholdContext } from './auth';
+import { getPerspective, getVisibleAccountIds } from './auth';
 
 export type EventScope = 'private' | 'shared';
 
@@ -35,37 +35,47 @@ export type UpcomingEvent = {
 };
 
 export async function getUpcomingEvents(days: number = 7): Promise<UpcomingEvent[]> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const p = await getPerspective();
+  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
   const today = new Date();
   const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const horizon = new Date(todayDateOnly);
   horizon.setDate(horizon.getDate() + days);
 
+  let txnsQ = p.supabase
+    .from('transactions')
+    .select(
+      'id, account_id, amount, description, occurs_on, recurrence, account:accounts(id, name, owner_name), category:categories!inner(name, color, kind)'
+    )
+    .eq('household_id', p.householdId)
+    .eq('category.kind', 'expense');
+  if (visibleAccountIds) txnsQ = txnsQ.in('account_id', visibleAccountIds);
+  let transfersQ = p.supabase
+    .from('transfers')
+    .select(
+      'id, amount, description, occurs_on, recurrence, from_account:accounts!from_account_id(id, name, owner_name), to_account:accounts!to_account_id(id, name)'
+    )
+    .eq('household_id', p.householdId);
+  if (visibleAccountIds) {
+    transfersQ = transfersQ.or(
+      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
+    );
+  }
+
   const [txnsRes, transfersRes] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select(
-        'id, account_id, amount, description, occurs_on, recurrence, account:accounts(id, name, owner_name), category:categories!inner(name, color, kind)'
-      )
-      .eq('household_id', householdId)
-      .eq('category.kind', 'expense')
-      .returns<{
-        id: string;
-        account_id: string;
-        amount: number;
-        description: string | null;
-        occurs_on: string;
-        recurrence: RecurrenceFreq;
-        account: { id: string; name: string; owner_name: string | null } | null;
-        category: { name: string; color: string; kind: 'expense' } | null;
-      }[]>(),
-    supabase
-      .from('transfers')
-      .select(
-        'id, amount, description, occurs_on, recurrence, from_account:accounts!from_account_id(id, name, owner_name), to_account:accounts!to_account_id(id, name)'
-      )
-      .eq('household_id', householdId)
-      .returns<{
+    txnsQ.returns<{
+      id: string;
+      account_id: string;
+      amount: number;
+      description: string | null;
+      occurs_on: string;
+      recurrence: RecurrenceFreq;
+      account: { id: string; name: string; owner_name: string | null } | null;
+      category: { name: string; color: string; kind: 'expense' } | null;
+    }[]>(),
+    transfersQ.returns<{
         id: string;
         amount: number;
         description: string | null;

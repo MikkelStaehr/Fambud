@@ -161,6 +161,7 @@ export async function createAccount(formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   const noticeSuffix = proxy.isProxyActive ? ` for ${proxy.grantorName ?? 'familiemedlem'}` : '';
   await setFlashCookie(`${parsed.data.name} oprettet${noticeSuffix}`);
   redirect('/konti');
@@ -185,6 +186,7 @@ export async function updateAccount(id: string, formData: FormData) {
 
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie(`${parsed.data.name} gemt`);
   redirect('/konti');
 }
@@ -205,6 +207,7 @@ export async function archiveAccount(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Konto arkiveret');
   redirect('/konti');
 }
@@ -221,6 +224,7 @@ export async function restoreAccount(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/konti');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Konto gendannet');
   redirect('/konti?archived=1');
 }

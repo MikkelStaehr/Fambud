@@ -104,6 +104,7 @@ export async function createTransaction(formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Post oprettet');
   redirect('/poster');
 }
@@ -141,6 +142,7 @@ export async function updateTransaction(id: string, formData: FormData) {
 
   revalidatePath('/poster');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Post gemt');
   redirect('/poster');
 }
@@ -159,6 +161,7 @@ export async function deleteTransaction(formData: FormData) {
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
   revalidatePath('/poster');
   revalidatePath('/dashboard');
+  revalidatePath('/raadgiver');
   await setFlashCookie('Post slettet');
   redirect('/poster');
 }

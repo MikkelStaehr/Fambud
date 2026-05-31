@@ -5,7 +5,7 @@
 
 import { monthlyEquivalent } from '@/lib/format';
 import { computePrivatFaelles } from '@/lib/cashflow-analysis';
-import { getHouseholdContext } from './auth';
+import { getPerspective } from './auth';
 import { getCashflowGraph } from './cashflow';
 import { getAdvisorContext } from './advisor';
 import { getAccounts } from './accounts';
@@ -83,7 +83,11 @@ export type EconomyPlanData = {
 };
 
 export async function getEconomyPlanData(): Promise<EconomyPlanData> {
-  const { user } = await getHouseholdContext();
+  // Perspective-aware: i proxy-mode er "jeg" Louise (perspectiveUserId),
+  // ikke Mikkel (authUserId). Rådgiveren skal vise HENDES lønkonto,
+  // HENDES privatSurplus, HENDES meMember-status så Mikkel kan koordinere.
+  const p = await getPerspective();
+  const perspectiveUserId = p.perspectiveUserId;
 
   const [
     familyMembers,
@@ -209,13 +213,15 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     };
   });
 
-  // Brugerens egen lønkonto = foreslået kilde til Opret-overførsler.
+  // Perspective-brugerens lønkonto = foreslået kilde til Opret-overførsler.
+  // I proxy-mode peger denne på Louises lønkonto (ikke Mikkels) så
+  // "Opsæt overførsel"-CTAen pre-udfylder formen med hendes konto.
   const myLonkonto = accounts.find(
-    (a) => a.kind === 'checking' && a.created_by === user.id && !a.archived
+    (a) => a.kind === 'checking' && a.created_by === perspectiveUserId && !a.archived
   );
 
-  // Den indloggede brugers egen status (til "manglende opsætning").
-  const meMember = members.find((m) => m.userId === user.id);
+  // Den indloggede perspectives egen status (til "manglende opsætning").
+  const meMember = members.find((m) => m.userId === perspectiveUserId);
 
   // Buffer-konto: foretræk savings_purposes='buffer', ellers navn der
   // indeholder "buffer". Nuværende månedlige indskud = transfersIn (flow).
@@ -264,12 +270,12 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     }
   }
 
-  // Den indloggede brugers uallokerede overskud (samme tal som dashboardets
-  // Privat-panel "tilbage hver måned").
+  // Perspective-brugerens uallokerede overskud (samme tal som dashboardets
+  // Privat-panel "tilbage hver måned"). I proxy-mode: Louises overskud.
   const privatSurplus = computePrivatFaelles(
     accounts,
     graph.perAccount,
-    user.id
+    perspectiveUserId
   ).privat.net;
 
   return {
@@ -312,6 +318,6 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     faellesAccounts: faellesAccountList.map((a) => ({ id: a.id, name: a.name })),
     primaryFaellesAccountId: primaryFaelles?.id ?? null,
     primaryFaellesAccountName: primaryFaelles?.name ?? null,
-    currentUserId: user.id,
+    currentUserId: perspectiveUserId,
   };
 }

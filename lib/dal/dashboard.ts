@@ -38,7 +38,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     .select('id, name, owner_name, kind')
     .eq('household_id', p.householdId)
     .eq('archived', false);
-  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+  accountsQ = accountsQ.or(privateAccountFilter(p));
   const { data: accounts, error: accErr } = await accountsQ
     .order('created_at', { ascending: true });
   if (accErr) throw accErr;
@@ -83,7 +83,7 @@ export type HouseholdFinancialSummary = {
 // getDashboardData).
 export async function getHouseholdFinancialSummary(): Promise<HouseholdFinancialSummary> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) {
     return { monthlyFixedExpenses: 0 };
   }

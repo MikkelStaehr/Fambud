@@ -21,7 +21,7 @@ export async function getTransfersForMonth(
 ): Promise<TransferWithRelations[]> {
   const p = await getPerspective();
   const { start, end } = monthBounds(yearMonth);
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
   let q = p.supabase
@@ -50,7 +50,7 @@ export async function getTransfersForMonth(
 
 export async function getTransferById(id: string): Promise<Transfer> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   let q = p.supabase
     .from('transfers')
     .select('*')
@@ -98,7 +98,7 @@ type TransferGraphData = {
 
 export async function getTransferGraph(): Promise<TransferGraphData> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) {
     return { accounts: [], edges: [] };
   }
@@ -108,7 +108,7 @@ export async function getTransferGraph(): Promise<TransferGraphData> {
     .select('*')
     .eq('household_id', p.householdId)
     .eq('archived', false);
-  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+  accountsQ = accountsQ.or(privateAccountFilter(p));
 
   let transfersQ = p.supabase
     .from('transfers')

@@ -19,7 +19,7 @@ export async function getAccounts(
   if (!opts.includeArchived) query = query.eq('archived', false);
   // I proxy-mode bypasser admin-client RLS - vi geninstaller privacy-filteret
   // så Mikkel kun ser de konti Louise selv ville se (delte + hendes private).
-  if (p.isProxyActive) query = query.or(privateAccountFilter(p));
+  query = query.or(privateAccountFilter(p));
   const { data, error } = await query.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -32,7 +32,7 @@ export async function getAccountById(id: string): Promise<Account> {
     .select('*')
     .eq('id', id)
     .eq('household_id', p.householdId);
-  if (p.isProxyActive) query = query.or(privateAccountFilter(p));
+  query = query.or(privateAccountFilter(p));
   const { data, error } = await query.single();
   if (error) throw error;
   return data;
@@ -69,7 +69,7 @@ export async function getAccountFlows(): Promise<Map<string, AccountFlow>> {
   // I proxy-mode bruges admin-client og RLS er ikke aktiv. For child-tabeller
   // (transactions/transfers) skal vi manuelt scope til de konti perspective'en
   // kan se - svarende til RLS's can_write_account()-gating.
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   // Tomme proxy-visible-accounts = perspective ser ingenting. Returner tom Map
   // i stedet for at sende ".in.()" som PostgREST ikke kan parse.
   if (visibleAccountIds && visibleAccountIds.length === 0) {
@@ -201,7 +201,7 @@ export async function getBudgetAccounts(): Promise<BudgetAccount[]> {
     .eq('household_id', p.householdId)
     .eq('archived', false)
     .in('kind', BUDGET_ACCOUNT_KINDS);
-  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  q = q.or(privateAccountFilter(p));
   const { data, error } = await q.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -218,7 +218,7 @@ export type SavingsAccountWithFlow = Account & {
 
 export async function getSavingsAccountsWithFlow(): Promise<SavingsAccountWithFlow[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
   let accountsQ = p.supabase
@@ -227,7 +227,7 @@ export async function getSavingsAccountsWithFlow(): Promise<SavingsAccountWithFl
     .eq('household_id', p.householdId)
     .eq('archived', false)
     .in('kind', SAVINGS_ACCOUNT_KINDS);
-  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+  accountsQ = accountsQ.or(privateAccountFilter(p));
 
   let transfersQ = p.supabase
     .from('transfers')

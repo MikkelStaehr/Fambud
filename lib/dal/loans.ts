@@ -17,7 +17,7 @@ export async function getLoans(): Promise<LoanRow[]> {
     .eq('household_id', p.householdId)
     .eq('kind', 'credit')
     .eq('archived', false);
-  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  q = q.or(privateAccountFilter(p));
   const { data, error } = await q.order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -31,7 +31,7 @@ export async function getLoanById(id: string): Promise<LoanRow> {
     .eq('id', id)
     .eq('household_id', p.householdId)
     .eq('kind', 'credit');
-  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
+  q = q.or(privateAccountFilter(p));
   const { data, error } = await q.single();
   if (error) throw error;
   return data;

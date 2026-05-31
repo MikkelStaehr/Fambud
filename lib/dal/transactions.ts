@@ -31,7 +31,7 @@ export async function getTransactionsForMonth(
 ): Promise<TransactionWithRelations[]> {
   const p = await getPerspective();
   const { start, end } = monthBounds(yearMonth);
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
   let q = p.supabase
@@ -55,7 +55,7 @@ export async function getTransactionsForMonth(
 
 export async function getTransactionById(id: string): Promise<Transaction> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   let q = p.supabase
     .from('transactions')
     .select('*')
@@ -98,7 +98,7 @@ export async function getRecurringExpensesForAccount(
   accountId: string
 ): Promise<RecurringExpenseRow[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   // I proxy-mode: verifér at den specifikke konto er synlig for perspective.
   // Hvis ikke, returner tomt (caller skulle have RLS-blockeret kontoen)
   if (visibleAccountIds && !visibleAccountIds.includes(accountId)) return [];
@@ -129,7 +129,7 @@ export async function getRecurringExpensesForAccount(
 // adding/editing an expense, reducing typo-driven group splits.
 export async function getDistinctExpenseGroups(): Promise<string[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
   let q = p.supabase
     .from('transactions')
@@ -165,7 +165,7 @@ export async function getOnboardingProgress(): Promise<OnboardingProgress> {
   // sin første lønudbetaling?). hasIncome bruger perspectiveUserId til at
   // slå family_member op.
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
 
   // Tomme visible-accounts (proxy uden nogen synlige konti) - return defaults.
   if (visibleAccountIds && visibleAccountIds.length === 0) {
@@ -214,7 +214,7 @@ export async function getOnboardingProgress(): Promise<OnboardingProgress> {
             `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
           )
         : transferQ,
-      (p.isProxyActive ? accountQ.or(privateAccountFilter(p)) : accountQ)
+      accountQ.or(privateAccountFilter(p))
         .returns<{ id: string; savings_purposes: string[] | null }[]>(),
       myMemberQ,
       (visibleAccountIds ? paychecksQ.in('account_id', visibleAccountIds) : paychecksQ)

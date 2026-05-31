@@ -48,7 +48,7 @@ export async function getLifeEvents(
   const p = await getPerspective();
   const { supabase } = p;
   const householdId = p.householdId;
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
 
   let eventsQuery = supabase
     .from('life_events')
@@ -237,7 +237,7 @@ export type EventForAccountMap = Record<
 
 export async function getActiveEventsByToAccount(): Promise<EventForAccountMap> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return {};
 
   // Hent alle aktive events først så vi kan join'e navn på resultatet.

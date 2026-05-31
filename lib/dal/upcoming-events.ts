@@ -36,7 +36,7 @@ export type UpcomingEvent = {
 
 export async function getUpcomingEvents(days: number = 7): Promise<UpcomingEvent[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
   const today = new Date();

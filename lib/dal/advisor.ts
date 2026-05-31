@@ -49,7 +49,7 @@ export async function getAdvisorContext(): Promise<AdvisorContext> {
   // rådgiverens "Bidrager nu" viste 0 for Louise selv når hun havde
   // overførsler. Admin-client + manuel visible-filter løser det.
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
 
   let transfersQ = p.supabase
     .from('transfers')
@@ -68,7 +68,7 @@ export async function getAdvisorContext(): Promise<AdvisorContext> {
     .from('accounts')
     .select('id, created_by')
     .eq('household_id', p.householdId);
-  if (p.isProxyActive) accountsQ = accountsQ.or(privateAccountFilter(p));
+  accountsQ = accountsQ.or(privateAccountFilter(p));
 
   const [transfersRes, accountsRes, familyRes, graphData] = await Promise.all([
     transfersQ,

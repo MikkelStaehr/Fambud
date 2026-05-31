@@ -38,7 +38,7 @@ const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_
 
 export async function getIncomeTransactions(): Promise<IncomeRow[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
 
   let q = p.supabase
@@ -59,7 +59,7 @@ export async function getIncomeTransactions(): Promise<IncomeRow[]> {
 
 export async function getIncomeById(id: string): Promise<IncomeRow> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   let q = p.supabase
     .from('transactions')
     .select(INCOME_SELECT)

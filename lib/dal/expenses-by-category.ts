@@ -26,7 +26,7 @@ export type CategoryExpenseSummary = {
 
 export async function getMonthlyExpensesByCategory(): Promise<CategoryExpenseSummary[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
   let q = p.supabase
     .from('transactions')
@@ -82,7 +82,7 @@ export type ExpenseGroupBuckets = {
 
 export async function getMonthlyExpensesByGroup(): Promise<ExpenseGroupBuckets> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) {
     return { private: [], shared: [] };
   }
@@ -147,7 +147,7 @@ export type TopExpenseRow = {
 
 export async function getTopRecurringExpenses(limit = 5): Promise<TopExpenseRow[]> {
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) return [];
   let q = p.supabase
     .from('transactions')

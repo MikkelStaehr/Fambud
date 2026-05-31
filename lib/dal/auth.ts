@@ -146,14 +146,21 @@ export function privateAccountFilter(p: Perspective): string {
 // Hent id'erne på de konti den nuværende perspective kan se. Bruges af
 // queries på child-tabeller (transactions, transfers, components) til at
 // mimicke RLS's `can_write_account()`-gating. Cached per request.
+//
+// V2.3: filteret applyes ALTID (ikke kun i proxy-mode). Efter migration
+// 0069 udvider RLS adgangen til union, så vi skal eksplicit filtrere i
+// app-layer for at preservere "min view" når cookie OFF. Pseudo-kode:
+//   Normal mode: privateAccountFilter expanderer til "editable_by_all OR
+//                created_by = caller" — samme som RLS gjorde tidligere
+//   Proxy mode:  privateAccountFilter expanderer til "editable_by_all OR
+//                created_by = grantor OR created_by = caller" (union)
 export const getVisibleAccountIds = cache(async (): Promise<string[]> => {
   const p = await getPerspective();
-  let q = p.supabase
+  const { data, error } = await p.supabase
     .from('accounts')
     .select('id')
-    .eq('household_id', p.householdId);
-  if (p.isProxyActive) q = q.or(privateAccountFilter(p));
-  const { data, error } = await q;
+    .eq('household_id', p.householdId)
+    .or(privateAccountFilter(p));
   if (error) throw error;
   return (data ?? []).map((r) => r.id);
 });

@@ -48,7 +48,7 @@ export const getCashflowGraph = cache(async (): Promise<CashflowGraphData> => {
   // bliver hendes løn-paychecks. supabase = admin-client; vi gen-applyer
   // privacy via visibleAccountIds.
   const p = await getPerspective();
-  const visibleAccountIds = p.isProxyActive ? await getVisibleAccountIds() : null;
+  const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) {
     return { perAccount: new Map(), edges: [] };
   }

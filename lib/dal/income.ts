@@ -37,18 +37,17 @@ const INCOME_SELECT = `id, account_id, category_id, amount, description, occurs_
    family_member:family_members(id, name)`;
 
 export async function getIncomeTransactions(): Promise<IncomeRow[]> {
+  // /indkomst er HUSSTANDS-OMFATTENDE - migration 0063 tillader
+  // household-wide read af income-transaktioner uafhængigt af konto-
+  // privacy. Vi dropper bevidst visibleAccountIds-filteret her så
+  // Mikkel ser Louises lønudbetalinger og omvendt (uden proxy). Income
+  // er ikke privacy-følsom på samme måde som forbrugsdetaljer.
   const p = await getPerspective();
-  const visibleAccountIds = await getVisibleAccountIds();
-  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
-
-  let q = p.supabase
+  const { data, error } = await p.supabase
     .from('transactions')
     .select(`${INCOME_SELECT}, category:categories!inner(kind)`)
     .eq('household_id', p.householdId)
-    .eq('category.kind', 'income');
-  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
-
-  const { data, error } = await q
+    .eq('category.kind', 'income')
     .order('occurs_on', { ascending: false })
     .order('created_at', { ascending: false })
     .returns<(IncomeRow & { category: { kind: 'income' } })[]>();

@@ -14,11 +14,8 @@
 // Vi samler alt i én helper så CashflowAdvisor kun har én DAL-call.
 
 import { monthlyEquivalent } from '@/lib/format';
-import {
-  getPerspective,
-  privateAccountFilter,
-  getVisibleAccountIds,
-} from './auth';
+import { getPerspective } from './auth';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getCashflowGraph, type AccountCashflowDetail } from './cashflow';
 
 export type PendingMember = { id: string; name: string; email: string };
@@ -44,35 +41,31 @@ export type AdvisorContext = {
 };
 
 export async function getAdvisorContext(): Promise<AdvisorContext> {
-  // Perspective-aware: i proxy-mode brugte vi user-client + RLS som
-  // skjulte transfers FRA Louises private konti for Mikkel. Resultat:
-  // rådgiverens "Bidrager nu" viste 0 for Louise selv når hun havde
-  // overførsler. Admin-client + manuel visible-filter løser det.
+  // HOUSEHOLD-WIDE for contribution tracking - rådgiveren skal vise alle
+  // bidragsyderes overførsler, ikke kun perspektivets. Mikkel skal kunne
+  // se Louises bidrag uden at toggle proxy.
+  //
+  // Sikkerhed:
+  // - Transfers: RLS fra migration 0030 tillader allerede read når
+  //   mindst én side er writable_to_me. Louises transfer FROM hendes
+  //   private TIL Budget (shared) er synlig fordi to-siden er fælles.
+  // - Accounts (id, created_by): minimal data-eksposition via admin-
+  //   client. Vi har brug for at mappe transfer.from_account_id ->
+  //   creator for at attribuere bidrag korrekt. Kun id + created_by -
+  //   ikke balance, name, monthly_budget eller andre felter.
   const p = await getPerspective();
-  const visibleAccountIds = await getVisibleAccountIds();
-
-  let transfersQ = p.supabase
-    .from('transfers')
-    .select('from_account_id, to_account_id, amount, recurrence')
-    .eq('household_id', p.householdId)
-    .neq('recurrence', 'once');
-  if (visibleAccountIds && visibleAccountIds.length > 0) {
-    transfersQ = transfersQ.or(
-      `from_account_id.in.(${visibleAccountIds.join(',')}),to_account_id.in.(${visibleAccountIds.join(',')})`
-    );
-  } else if (visibleAccountIds) {
-    // tom visible-set: ingen transfers synlige
-    transfersQ = transfersQ.eq('id', '00000000-0000-0000-0000-000000000000');
-  }
-  let accountsQ = p.supabase
-    .from('accounts')
-    .select('id, created_by')
-    .eq('household_id', p.householdId);
-  accountsQ = accountsQ.or(privateAccountFilter(p));
+  const adminSupabase = createAdminClient();
 
   const [transfersRes, accountsRes, familyRes, graphData] = await Promise.all([
-    transfersQ,
-    accountsQ,
+    p.supabase
+      .from('transfers')
+      .select('from_account_id, to_account_id, amount, recurrence')
+      .eq('household_id', p.householdId)
+      .neq('recurrence', 'once'),
+    adminSupabase
+      .from('accounts')
+      .select('id, created_by')
+      .eq('household_id', p.householdId),
     p.supabase
       .from('family_members')
       .select('id, name, email, user_id')

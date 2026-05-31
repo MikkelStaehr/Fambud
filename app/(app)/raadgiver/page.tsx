@@ -30,13 +30,20 @@ export default async function RaadgiverPage() {
     plan.bufferMonthlyContribution
   );
   // Buffer + husholdning indgår nu i fordelings-tabellen som separate
-  // dimensioner: udgifter (Budget+andet), husholdning (kind=household
-  // monthly_budget), opsparing (Buffer recommendedMonthly). Total
-  // "betaler til fælles" matcher "alt der bør gå ind på fælleskonti".
+  // dimensioner. For opsparing bruger vi den FAKTISKE nuværende rate
+  // (bufferMonthlyContribution) som basis - hvis 0, falder vi tilbage
+  // til recommendedMonthly. Det undgår den vildledende "I skal øge
+  // markant" når brugeren faktisk har sat en realistisk rate. Den
+  // anbefalede rate vises stadig i Buffer-sektionen som aspirational
+  // mål.
+  const bufferSplitBasis =
+    plan.bufferMonthlyContribution > 0
+      ? plan.bufferMonthlyContribution
+      : buffer.recommendedMonthly;
   const split = splitFaellesExpenses(
     plan.members,
     plan.faellesMonthlyExpense,
-    buffer.recommendedMonthly,
+    bufferSplitBasis,
     plan.husholdningMonthly
   );
   const bufferOnTrack =

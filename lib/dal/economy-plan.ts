@@ -6,9 +6,9 @@
 import { monthlyEquivalent } from '@/lib/format';
 import { computePrivatFaelles } from '@/lib/cashflow-analysis';
 import { getPerspective } from './auth';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getCashflowGraph } from './cashflow';
 import { getAdvisorContext } from './advisor';
-import { getAccounts } from './accounts';
 import { getFamilyMembers, getOtherMembersOnboardingStatus } from './family';
 import { getPrimaryIncomeForecast } from './income';
 import { getHouseholdFinancialSummary } from './dashboard';
@@ -98,11 +98,20 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   const p = await getPerspective();
   const perspectiveUserId = p.perspectiveUserId;
 
+  // HOUSEHOLD-WIDE accounts via admin-client: rådgiveren skal kunne mappe
+  // hver bidragyder til DERES lønkonto for at foreslå korrekt fra-konto
+  // i CTAerne ("Mikkel overfører fra Lønkonto", "Louise overfører fra
+  // Lønkonto"). Uden dette ser Mikkel "Louise mangler en lønkonto"
+  // selv om hun har en privat lønkonto (filtreret væk fra hans perspective).
+  // Privacy: vi henter accounts-metadata (id, name, kind, etc.) men
+  // hverken transaktioner eller balance. Tilsvarende info eksponeres
+  // allerede til dashboardets per-medlem-panels.
+  const householdAccountsClient = createAdminClient();
   const [
     familyMembers,
     graph,
     ctx,
-    accounts,
+    accountsRes,
     financial,
     loans,
     expenseGroups,
@@ -111,12 +120,19 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     getFamilyMembers(),
     getCashflowGraph(),
     getAdvisorContext(),
-    getAccounts(),
+    householdAccountsClient
+      .from('accounts')
+      .select('*')
+      .eq('household_id', p.householdId)
+      .eq('archived', false)
+      .order('created_at', { ascending: true }),
     getHouseholdFinancialSummary(),
     getLoans(),
     getMonthlyExpensesByGroup(),
     getOtherMembersOnboardingStatus(),
   ]);
+  if (accountsRes.error) throw accountsRes.error;
+  const accounts = accountsRes.data ?? [];
 
   // Bidragydere = voksne der enten er logget ind eller pre-godkendt via
   // email. Børn (begge null) bidrager ikke økonomisk og udelades.

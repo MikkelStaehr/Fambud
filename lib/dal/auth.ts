@@ -158,6 +158,50 @@ export const getVisibleAccountIds = cache(async (): Promise<string[]> => {
   return (data ?? []).map((r) => r.id);
 });
 
+// Owner-dropdown-kontekst: navne + user-ids til AccountSelectGrouped så
+// dropdowns kan vise "Mikkel" / "Louise" / "Fælles" i stedet for generiske
+// "Dig" / "Partner". Henter family_members.name fra DB og bruger
+// perspective-state til at bestemme hvem der er "current" vs "partner".
+//
+// Brug i form-pages: const ownerCtx = await getOwnerDropdownContext();
+// og spread til AccountSelectGrouped/TransferForm/etc.
+export type OwnerDropdownCtx = {
+  currentUserId: string;
+  currentLabel: string;
+  partnerUserId?: string;
+  partnerLabel?: string;
+};
+
+export const getOwnerDropdownContext = cache(
+  async (): Promise<OwnerDropdownCtx> => {
+    const p = await getPerspective();
+    const firstName = (full: string | null | undefined, fallback: string) =>
+      full?.split(' ')[0]?.trim() || fallback;
+    const userIds = p.isProxyActive
+      ? [p.authUserId, p.perspectiveUserId]
+      : [p.authUserId];
+    const { data: members } = await p.supabase
+      .from('family_members')
+      .select('user_id, name')
+      .in('user_id', userIds);
+    const nameFor = (id: string) =>
+      members?.find((m) => m.user_id === id)?.name ?? null;
+
+    if (!p.isProxyActive) {
+      return {
+        currentUserId: p.authUserId,
+        currentLabel: firstName(nameFor(p.authUserId), 'Dig'),
+      };
+    }
+    return {
+      currentUserId: p.perspectiveUserId,
+      currentLabel: firstName(p.grantorName ?? nameFor(p.perspectiveUserId), 'Partner'),
+      partnerUserId: p.authUserId,
+      partnerLabel: firstName(nameFor(p.authUserId), 'Dig'),
+    };
+  }
+);
+
 // Perspective-aware action-kontekst: returnerer den supabase-klient som
 // skal bruges til skrivninger PLUS de samme felter som getPerspective().
 // I proxy-mode: hvis accountId er angivet, valideres den findes i

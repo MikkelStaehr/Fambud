@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getAccounts, getFamilyMembers, getIncomeById } from '@/lib/dal';
+import {
+  getAccounts,
+  getFamilyMembers,
+  getIncomeById,
+  getOwnerDropdownContext,
+} from '@/lib/dal';
 import { IncomeForm } from '../_components/IncomeForm';
 import { updateIncome } from '../actions';
 
@@ -14,10 +19,11 @@ export default async function EditIndkomstPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [income, accounts, familyMembers] = await Promise.all([
+  const [income, accounts, familyMembers, ownerCtx] = await Promise.all([
     getIncomeById(id),
     getAccounts({ includeArchived: true }),
     getFamilyMembers(),
+    getOwnerDropdownContext(),
   ]);
 
   const action = updateIncome.bind(null, id);
@@ -43,6 +49,7 @@ export default async function EditIndkomstPage({
           action={action}
           accounts={accounts}
           familyMembers={familyMembers}
+          {...ownerCtx}
           defaultValues={{
             family_member_id: income.family_member_id,
             account_id: income.account_id,

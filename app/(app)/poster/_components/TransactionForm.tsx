@@ -8,7 +8,11 @@ import type { Account, Category, RecurrenceFreq } from '@/lib/database.types';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
-  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name'>[];
+  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name' | 'created_by' | 'editable_by_all'>[];
+  currentUserId?: string;
+  currentLabel?: string;
+  partnerUserId?: string;
+  partnerLabel?: string;
   categories: Pick<Category, 'id' | 'name' | 'kind' | 'archived'>[];
   defaultValues?: {
     account_id?: string;
@@ -37,6 +41,10 @@ export function TransactionForm({
   action,
   accounts,
   categories,
+  currentUserId,
+  currentLabel,
+  partnerUserId,
+  partnerLabel,
   defaultValues = {},
   submitLabel,
   cancelHref,
@@ -64,6 +72,10 @@ export function TransactionForm({
             className={fieldClass}
             accounts={visibleAccounts}
             defaultValue={dv.account_id ?? ''}
+            currentUserId={currentUserId}
+            currentLabel={currentLabel}
+            partnerUserId={partnerUserId}
+            partnerLabel={partnerLabel}
           />
         </div>
 

@@ -1,11 +1,12 @@
 // Dropdown der grupperer konti efter ejer via <optgroup>. Bruges i forms
-// hvor brugeren skal v&aelig;lge en konto - is&aelig;r relevant i proxy-mode
-// hvor b&aring;de Mikkels og Louises konti er synlige og man hurtigt skal
-// kunne sk&aelig;lne hvis er hvis.
+// hvor brugeren skal vælge en konto - især relevant i proxy-mode hvor
+// både Mikkels og Louises konti er synlige og man hurtigt skal kunne
+// skelne hvis er hvis.
 //
-// Gruppering bygger p&aring; owner_name (free-text felt brugeren selv s&aelig;tter
-// p&aring; kontoen). Tomme/null owner_name f&aring;r label "F&aelig;lles". F&aelig;lles vises altid
-// f&oslash;rst; resten alfabetisk dansk.
+// Gruppering PRIMÆRT efter created_by (når currentUserId er sat): din
+// egen konto havner i "Dig"/dit-navn-gruppen selv hvis owner_name
+// fejlagtigt er sat til "Fælles". Falder tilbage til owner_name som
+// label-kilde for andre.
 
 'use client';
 
@@ -14,23 +15,61 @@ type GroupableAccount = {
   name: string;
   archived?: boolean;
   owner_name?: string | null;
+  created_by?: string | null;
+  editable_by_all?: boolean;
 };
 
+type OwnerCtx = {
+  currentUserId?: string;
+  currentLabel?: string;  // default "Dig"
+  partnerUserId?: string;
+  partnerLabel?: string;
+};
+
+function ownerLabelFor<T extends GroupableAccount>(
+  a: T,
+  ctx: OwnerCtx
+): string {
+  // created_by vinder over owner_name - en konto du oprettede er DIN
+  // selv hvis labels er rodede.
+  if (ctx.currentUserId && a.created_by === ctx.currentUserId) {
+    return ctx.currentLabel ?? 'Dig';
+  }
+  if (ctx.partnerUserId && a.created_by === ctx.partnerUserId) {
+    return ctx.partnerLabel ?? 'Partner';
+  }
+  if (a.editable_by_all || a.owner_name === 'Fælles') {
+    return 'Fælles';
+  }
+  const owner = a.owner_name?.trim();
+  return owner && owner.length > 0 ? owner : 'Fælles';
+}
+
 export function groupAccountsByOwner<T extends GroupableAccount>(
-  accounts: T[]
+  accounts: T[],
+  ctx: OwnerCtx = {}
 ): { label: string; accounts: T[] }[] {
   const groups = new Map<string, T[]>();
   for (const a of accounts) {
-    const owner = a.owner_name?.trim();
-    const label = owner && owner.length > 0 ? owner : 'Fælles';
+    const label = ownerLabelFor(a, ctx);
     const arr = groups.get(label) ?? [];
     arr.push(a);
     groups.set(label, arr);
   }
+  const currentLabel = ctx.currentLabel ?? 'Dig';
+  const partnerLabel = ctx.partnerLabel ?? 'Partner';
+  // Sortering: Dig -> Partner -> Fælles -> alfabetisk
+  const weight = (l: string) => {
+    if (l === currentLabel) return 0;
+    if (l === partnerLabel) return 1;
+    if (l === 'Fælles') return 2;
+    return 3;
+  };
   return Array.from(groups.entries())
     .sort(([a], [b]) => {
-      if (a === 'Fælles') return -1;
-      if (b === 'Fælles') return 1;
+      const wa = weight(a);
+      const wb = weight(b);
+      if (wa !== wb) return wa - wb;
       return a.localeCompare(b, 'da');
     })
     .map(([label, accs]) => ({ label, accounts: accs }));
@@ -46,9 +85,14 @@ type Props<T extends GroupableAccount> = {
   value?: string;
   onChange?: (id: string) => void;
   emptyOption?: string;
-  // Hvis sat: kun grupp&eacute;r n&aring;r der er konti fra mere end &eacute;n ejer.
-  // Med &eacute;n ejer er det st&oslash;j; med to+ er det skelnen-v&aelig;rdi.
   smartGrouping?: boolean;
+  // Identitets-kontekst: bruges til at klassificere konti efter created_by
+  // i stedet for blot owner_name. Optional for bagudkompatibilitet -
+  // uden den falder vi tilbage til owner_name-only.
+  currentUserId?: string;
+  currentLabel?: string;
+  partnerUserId?: string;
+  partnerLabel?: string;
 };
 
 export function AccountSelectGrouped<T extends GroupableAccount>({
@@ -62,8 +106,17 @@ export function AccountSelectGrouped<T extends GroupableAccount>({
   onChange,
   emptyOption = 'Vælg konto',
   smartGrouping = true,
+  currentUserId,
+  currentLabel,
+  partnerUserId,
+  partnerLabel,
 }: Props<T>) {
-  const groups = groupAccountsByOwner(accounts);
+  const groups = groupAccountsByOwner(accounts, {
+    currentUserId,
+    currentLabel,
+    partnerUserId,
+    partnerLabel,
+  });
   const useGrouping = !smartGrouping || groups.length > 1;
 
   const controlled = value !== undefined;

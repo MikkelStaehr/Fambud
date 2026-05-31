@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { ArrowLeft, Goal, Wand2 } from 'lucide-react';
-import { getAccounts, getLifeEventById } from '@/lib/dal';
+import {
+  getAccounts,
+  getLifeEventById,
+  getOwnerDropdownContext,
+} from '@/lib/dal';
 import { TransferForm } from '../_components/TransferForm';
 import { createTransfer } from '../actions';
 import { parseAmountToOere } from '@/lib/format';
@@ -63,7 +67,10 @@ export default async function NyOverforselPage({
   }>;
 }) {
   const sp = await searchParams;
-  const accounts = await getAccounts();
+  const [accounts, ownerCtx] = await Promise.all([
+    getAccounts(),
+    getOwnerDropdownContext(),
+  ]);
 
   const validIds = new Set(accounts.map((a) => a.id));
   const prefill = readPrefill(sp, validIds);
@@ -133,6 +140,7 @@ export default async function NyOverforselPage({
             <TransferForm
               action={createTransfer}
               accounts={accounts}
+              {...ownerCtx}
               defaultValues={{
                 from_account_id: prefill.from,
                 to_account_id: prefill.to,

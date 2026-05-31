@@ -12,7 +12,11 @@ import type { FamilyMemberRow } from '@/lib/dal';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
-  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name'>[];
+  accounts: Pick<Account, 'id' | 'name' | 'archived' | 'owner_name' | 'created_by' | 'editable_by_all'>[];
+  currentUserId?: string;
+  currentLabel?: string;
+  partnerUserId?: string;
+  partnerLabel?: string;
   familyMembers: FamilyMemberRow[];
   defaultValues?: {
     family_member_id?: string | null;
@@ -83,6 +87,10 @@ export function IncomeForm({
   action,
   accounts,
   familyMembers,
+  currentUserId,
+  currentLabel,
+  partnerUserId,
+  partnerLabel,
   defaultValues = {},
   submitLabel,
   cancelHref,
@@ -221,6 +229,10 @@ export function IncomeForm({
             className={fieldClass}
             accounts={visibleAccounts}
             defaultValue={dv.account_id ?? ''}
+            currentUserId={currentUserId}
+            currentLabel={currentLabel}
+            partnerUserId={partnerUserId}
+            partnerLabel={partnerLabel}
           />
         </div>
       </div>

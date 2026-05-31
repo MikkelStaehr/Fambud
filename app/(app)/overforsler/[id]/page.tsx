@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getAccounts, getTransferById } from '@/lib/dal';
+import { getAccounts, getOwnerDropdownContext, getTransferById } from '@/lib/dal';
 import { TransferForm } from '../_components/TransferForm';
 import { updateTransfer } from '../actions';
 
@@ -14,9 +14,10 @@ export default async function EditOverforselPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [transfer, accounts] = await Promise.all([
+  const [transfer, accounts, ownerCtx] = await Promise.all([
     getTransferById(id),
     getAccounts({ includeArchived: true }),
+    getOwnerDropdownContext(),
   ]);
 
   const action = updateTransfer.bind(null, id);
@@ -41,6 +42,7 @@ export default async function EditOverforselPage({
         <TransferForm
           action={action}
           accounts={accounts}
+          {...ownerCtx}
           defaultValues={{
             from_account_id: transfer.from_account_id,
             to_account_id: transfer.to_account_id,

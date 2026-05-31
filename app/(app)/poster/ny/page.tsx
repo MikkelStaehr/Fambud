@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getAccounts, getCategories } from '@/lib/dal';
+import { getAccounts, getCategories, getOwnerDropdownContext } from '@/lib/dal';
 import { TransactionForm } from '../_components/TransactionForm';
 import { createTransaction } from '../actions';
 
@@ -10,9 +10,10 @@ export default async function NyPostPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, ownerCtx] = await Promise.all([
     getAccounts(),
     getCategories(),
+    getOwnerDropdownContext(),
   ]);
 
   return (
@@ -50,6 +51,7 @@ export default async function NyPostPage({
             action={createTransaction}
             accounts={accounts}
             categories={categories}
+            {...ownerCtx}
             submitLabel="Opret post"
             cancelHref="/poster"
             error={error}

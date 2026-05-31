@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { getAccounts, getCategories, getTransactionById } from '@/lib/dal';
+import {
+  getAccounts,
+  getCategories,
+  getOwnerDropdownContext,
+  getTransactionById,
+} from '@/lib/dal';
 import { TransactionForm } from '../_components/TransactionForm';
 import { updateTransaction } from '../actions';
 
@@ -14,11 +19,12 @@ export default async function EditPostPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [transaction, accounts, categories] = await Promise.all([
+  const [transaction, accounts, categories, ownerCtx] = await Promise.all([
     getTransactionById(id),
     // Include archived so the dropdown can render the row's existing values.
     getAccounts({ includeArchived: true }),
     getCategories({ includeArchived: true }),
+    getOwnerDropdownContext(),
   ]);
 
   const action = updateTransaction.bind(null, id);
@@ -42,6 +48,7 @@ export default async function EditPostPage({
           action={action}
           accounts={accounts}
           categories={categories}
+          {...ownerCtx}
           defaultValues={{
             account_id: transaction.account_id,
             category_id: transaction.category_id,

@@ -5,6 +5,7 @@ import {
   getFamilyMembers,
   getIncomeById,
   getMostRecentPaycheck,
+  getOwnerDropdownContext,
 } from '@/lib/dal';
 import { IncomeForm } from '../_components/IncomeForm';
 import { createIncome } from '../actions';
@@ -45,9 +46,10 @@ export default async function NyIndkomstPage({
   }>;
 }) {
   const sp = await searchParams;
-  const [accounts, familyMembers] = await Promise.all([
+  const [accounts, familyMembers, ownerCtx] = await Promise.all([
     getAccounts(),
     getFamilyMembers(),
+    getOwnerDropdownContext(),
   ]);
 
   // Duplikér-flow: hvis brugeren klikkede "Duplikér" på en eksisterende post,
@@ -165,6 +167,7 @@ export default async function NyIndkomstPage({
             action={createIncome}
             accounts={accounts}
             familyMembers={familyMembers}
+            {...ownerCtx}
             variant={isBenefitFlow ? 'benefit' : 'salary'}
             defaultValues={{
               family_member_id: memberId ?? undefined,

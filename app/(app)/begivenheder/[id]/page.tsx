@@ -18,7 +18,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
+  getAccounts,
   getAdvisorContext,
+  getFamilyMembers,
   getLifeEventById,
 } from '@/lib/dal';
 import {
@@ -60,7 +62,8 @@ function buildSetupTransferHref(
   eventId: string,
   monthlyTarget: number | null,
   numContributors: number,
-  eventName: string
+  eventName: string,
+  fromAccountId?: string
 ): string {
   const params = new URLSearchParams({
     life_event_id: eventId,
@@ -71,8 +74,21 @@ function buildSetupTransferHref(
     const share = Math.ceil(monthlyTarget / Math.max(1, numContributors));
     params.set('amount', formatOereForInput(share));
   }
+  if (fromAccountId) params.set('from', fromAccountId);
   return `/overforsler/ny?${params.toString()}`;
 }
+
+// Per-member setup-option: én CTA per bidragyder med pre-fyldt from-konto
+// (deres egen lønkonto). Lader Mikkel hjælpe Louise med at sætte HENDES
+// bidrag op uden at skulle vælge konto manuelt i form'en. Hvis et medlem
+// mangler lønkonto, vises optionen med disabled-flag + henvisning.
+type SetupOption = {
+  memberId: string;
+  memberName: string;
+  href: string;
+  hasLonkonto: boolean;
+  shareKr: string | null;
+};
 
 export default async function EventDetailPage({
   params,
@@ -84,9 +100,11 @@ export default async function EventDetailPage({
   const { id } = await params;
   const { error } = await searchParams;
 
-  const [event, advisorCtx] = await Promise.all([
+  const [event, advisorCtx, familyMembers, accounts] = await Promise.all([
     getLifeEventById(id),
     getAdvisorContext(),
+    getFamilyMembers(),
+    getAccounts(),
   ]);
 
   const updateAction = updateLifeEvent.bind(null, id);
@@ -111,6 +129,38 @@ export default async function EventDetailPage({
     advisorCtx.numContributors,
     event.name
   );
+
+  // Per-bidragyder setup-options: én CTA per voksen med deres lønkonto
+  // pre-udfyldt. Når der er 2+ bidragydere viser EventOverview disse i
+  // stedet for den generiske CTA, så Mikkel under proxy let kan sætte
+  // BÅDE sit eget og Louises bidrag op uden at vælge konto manuelt.
+  const contributors = familyMembers.filter(
+    (m) => m.user_id != null || m.email != null
+  );
+  const sharePerMember =
+    monthlyTarget != null
+      ? Math.ceil(monthlyTarget / Math.max(1, advisorCtx.numContributors))
+      : null;
+  const setupOptions: SetupOption[] = contributors.map((m) => {
+    const lonkonto = m.user_id
+      ? accounts.find(
+          (a) => a.kind === 'checking' && a.created_by === m.user_id && !a.archived
+        )
+      : undefined;
+    return {
+      memberId: m.id,
+      memberName: m.name,
+      href: buildSetupTransferHref(
+        event.id,
+        monthlyTarget,
+        advisorCtx.numContributors,
+        event.name,
+        lonkonto?.id
+      ),
+      hasLonkonto: lonkonto != null,
+      shareKr: sharePerMember != null ? formatOereForInput(sharePerMember) : null,
+    };
+  });
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
@@ -149,6 +199,7 @@ export default async function EventDetailPage({
         monthlyTarget={monthlyTarget}
         alert={alert}
         setupTransferHref={setupTransferHref}
+        setupOptions={setupOptions}
       />
 
       {/* Status-actions: terminale skift (Aflys / Markér gennemført) +

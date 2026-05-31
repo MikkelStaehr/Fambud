@@ -33,6 +33,16 @@ type Props = {
   // så CTA'en på no_active_transfer-alerten er ét klik væk fra at
   // oprette overførslen.
   setupTransferHref: string;
+  // Per-bidragyder CTAs: med 2+ bidragydere viser vi én knap per person
+  // med deres lønkonto pre-udfyldt. Under proxy lader det Mikkel sætte
+  // Louises bidrag op uden at vælge konto manuelt.
+  setupOptions?: {
+    memberId: string;
+    memberName: string;
+    href: string;
+    hasLonkonto: boolean;
+    shareKr: string | null;
+  }[];
 };
 
 export function EventOverview({
@@ -42,6 +52,7 @@ export function EventOverview({
   monthlyTarget,
   alert,
   setupTransferHref,
+  setupOptions = [],
 }: Props) {
   // Aggreger transfer-info: hvis alle transfers peger på samme to_account,
   // vis det som "Tilknyttet X". Hvis flere konti, vis "fordelt på N konti".
@@ -193,13 +204,38 @@ export function EventOverview({
                   )}
                   .
                 </span>
-                <Link
-                  href={setupTransferHref}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-900"
-                >
-                  Opsæt overførsel
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
+                {setupOptions.length >= 2 ? (
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {setupOptions.map((opt) =>
+                      opt.hasLonkonto ? (
+                        <Link
+                          key={opt.memberId}
+                          href={opt.href}
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-900"
+                        >
+                          Opsæt for {opt.memberName}
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      ) : (
+                        <span
+                          key={opt.memberId}
+                          title={`${opt.memberName} mangler en lønkonto`}
+                          className="inline-flex items-center gap-1 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-400"
+                        >
+                          {opt.memberName} mangler lønkonto
+                        </span>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <Link
+                    href={setupTransferHref}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-900"
+                  >
+                    Opsæt overførsel
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                )}
               </div>
             )}
             {alert.kind === 'underfunded' && (

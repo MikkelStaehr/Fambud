@@ -23,12 +23,19 @@ import type { Account, RecurrenceFreq } from '@/lib/database.types';
 // dem også. Begge kalde-sites har allerede full Account fra getAccounts().
 type FormAccount = Pick<
   Account,
-  'id' | 'name' | 'archived' | 'kind' | 'investment_type' | 'owner_name'
+  'id' | 'name' | 'archived' | 'kind' | 'investment_type' | 'owner_name' | 'created_by' | 'editable_by_all'
 >;
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
   accounts: FormAccount[];
+  // Identitets-kontekst til dropdown-gruppering. currentUserId er den
+  // perspective-bruger der "ejer" valg-flowet (Mikkel normalt; Louise
+  // under proxy). partner sætter "Mikkel"-gruppen op når Mikkel hjælper.
+  currentUserId?: string;
+  currentLabel?: string;
+  partnerUserId?: string;
+  partnerLabel?: string;
   defaultValues?: {
     from_account_id?: string;
     to_account_id?: string;
@@ -59,6 +66,10 @@ function todayISO(): string {
 export function TransferForm({
   action,
   accounts,
+  currentUserId,
+  currentLabel,
+  partnerUserId,
+  partnerLabel,
   defaultValues = {},
   submitLabel,
   cancelHref,
@@ -128,6 +139,10 @@ export function TransferForm({
             className={fieldClass}
             accounts={visibleAccounts(dv.from_account_id)}
             defaultValue={dv.from_account_id ?? ''}
+            currentUserId={currentUserId}
+            currentLabel={currentLabel}
+            partnerUserId={partnerUserId}
+            partnerLabel={partnerLabel}
           />
         </div>
 
@@ -141,6 +156,10 @@ export function TransferForm({
             accounts={visibleAccounts(toAccountId)}
             value={toAccountId}
             onChange={setToAccountId}
+            currentUserId={currentUserId}
+            currentLabel={currentLabel}
+            partnerUserId={partnerUserId}
+            partnerLabel={partnerLabel}
           />
         </div>
       </div>

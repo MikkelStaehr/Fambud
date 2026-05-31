@@ -79,6 +79,15 @@ export type EconomyPlanData = {
   // husholdning, så første tilgængelige. null hvis der ingen fælleskonti er.
   primaryFaellesAccountId: string | null;
   primaryFaellesAccountName: string | null;
+  // Husholdnings-konto (fælles kind='household'): adskilt fra Budget fordi
+  // den modtager sin egen månedlige overførsel til daglig forbrug.
+  // Rådgiveren viser separat "TIL HUSHOLDNING"-CTA per person.
+  husholdningAccountId: string | null;
+  husholdningAccountName: string | null;
+  // Husholdningens månedlige obligation: helst monthly_budget hvis sat
+  // (bevidst intent), ellers faktiske expenses som fallback. Splittes
+  // mellem bidragydere via samme model som udgifter.
+  husholdningMonthly: number;
   currentUserId: string;
 };
 
@@ -136,10 +145,21 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     null;
 
   // Samlede fælles udgifter + indgående overførsler fra cashflow-grafen.
+  // Husholdning splittes ud separat (egen overførsel-anbefaling) så vi
+  // ikke pretender at Budget hub'er den.
   let faellesMonthlyExpense = 0;
   let faellesCurrentInflow = 0;
+  let husholdningMonthly = 0;
+  let husholdningAccount: typeof faellesAccountList[number] | undefined;
   for (const a of faellesAccountList) {
     const d = graph.perAccount.get(a.id);
+    if (a.kind === 'household') {
+      husholdningAccount = a;
+      // monthly_budget = intent (hvad husstanden gerne vil bruge per md).
+      // Hvis ikke sat, fald tilbage til faktiske expenses som proxy.
+      husholdningMonthly = a.monthly_budget ?? (d?.expense ?? 0);
+      continue;  // husholdning indgår ikke i faellesMonthlyExpense
+    }
     if (!d) continue;
     faellesMonthlyExpense += d.expense;
     faellesCurrentInflow += d.transfersIn;
@@ -149,10 +169,19 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   // (grupperet via from-kontoens creator i advisor-context). Splittes
   // efter destinations-kontotype så rådgiveren kan vise "udgifter" vs
   // "opsparing" som apples-to-apples med de splittede anbefalinger.
+  // 3 buckets: expense (Budget+andet), husholdning (household), savings.
   const expenseFaellesIds = new Set(
     faellesAccountList
-      .filter((a) => a.kind !== 'savings' && a.kind !== 'investment')
+      .filter(
+        (a) =>
+          a.kind !== 'savings' &&
+          a.kind !== 'investment' &&
+          a.kind !== 'household'
+      )
       .map((a) => a.id)
+  );
+  const husholdningFaellesIds = new Set(
+    faellesAccountList.filter((a) => a.kind === 'household').map((a) => a.id)
   );
   const savingsFaellesIds = new Set(
     faellesAccountList
@@ -161,10 +190,20 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   );
   const contributionByUser = new Map<
     string,
-    { total: number; expense: number; savings: number }
+    { total: number; expense: number; husholdning: number; savings: number }
   >();
-  const bumpUser = (userId: string, bucket: 'expense' | 'savings', amount: number) => {
-    const prev = contributionByUser.get(userId) ?? { total: 0, expense: 0, savings: 0 };
+  const bumpUser = (
+    userId: string,
+    bucket: 'expense' | 'husholdning' | 'savings',
+    amount: number
+  ) => {
+    const prev =
+      contributionByUser.get(userId) ?? {
+        total: 0,
+        expense: 0,
+        husholdning: 0,
+        savings: 0,
+      };
     prev.total += amount;
     prev[bucket] += amount;
     contributionByUser.set(userId, prev);
@@ -173,6 +212,8 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     if (t.creatorUserId == null) continue;
     if (expenseFaellesIds.has(t.toAccountId)) {
       bumpUser(t.creatorUserId, 'expense', t.monthly);
+    } else if (husholdningFaellesIds.has(t.toAccountId)) {
+      bumpUser(t.creatorUserId, 'husholdning', t.monthly);
     } else if (savingsFaellesIds.has(t.toAccountId)) {
       bumpUser(t.creatorUserId, 'savings', t.monthly);
     }
@@ -207,6 +248,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       incomeComplete: f.status === 'ready',
       currentContribution: contrib?.total ?? 0,
       currentToExpenseAccounts: contrib?.expense ?? 0,
+      currentToHusholdningAccounts: contrib?.husholdning ?? 0,
       currentToSavingsAccounts: contrib?.savings ?? 0,
       lonkontoId: memberLonkonto?.id ?? null,
       lonkontoName: memberLonkonto?.name ?? null,
@@ -318,6 +360,9 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     faellesAccounts: faellesAccountList.map((a) => ({ id: a.id, name: a.name })),
     primaryFaellesAccountId: primaryFaelles?.id ?? null,
     primaryFaellesAccountName: primaryFaelles?.name ?? null,
+    husholdningAccountId: husholdningAccount?.id ?? null,
+    husholdningAccountName: husholdningAccount?.name ?? null,
+    husholdningMonthly,
     currentUserId: perspectiveUserId,
   };
 }

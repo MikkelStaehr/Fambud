@@ -29,13 +29,15 @@ export default async function RaadgiverPage() {
     plan.monthlyFixedExpenses,
     plan.bufferMonthlyContribution
   );
-  // Buffer-andelen indgår nu i fordelings-tabellen som anden underkolonne
-  // ved hver beløbs-celle, så total "betaler til fælles" matcher "alt der
-  // bør gå ind på fælleskonti" (udgifter + opsparing).
+  // Buffer + husholdning indgår nu i fordelings-tabellen som separate
+  // dimensioner: udgifter (Budget+andet), husholdning (kind=household
+  // monthly_budget), opsparing (Buffer recommendedMonthly). Total
+  // "betaler til fælles" matcher "alt der bør gå ind på fælleskonti".
   const split = splitFaellesExpenses(
     plan.members,
     plan.faellesMonthlyExpense,
-    buffer.recommendedMonthly
+    buffer.recommendedMonthly,
+    plan.husholdningMonthly
   );
   const bufferOnTrack =
     buffer.monthsAtCurrentRate != null &&
@@ -113,6 +115,8 @@ export default async function RaadgiverPage() {
           primaryFaellesAccountName={plan.primaryFaellesAccountName}
           bufferAccountId={plan.bufferAccountId}
           bufferAccountName={plan.bufferAccountName}
+          husholdningAccountId={plan.husholdningAccountId}
+          husholdningAccountName={plan.husholdningAccountName}
         />
       </section>
 

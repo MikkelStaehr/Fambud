@@ -23,13 +23,16 @@ export type PlanMember = {
   userId: string | null;
   monthlyIncome: number;        // forecast netto/md, eller bedste skøn
   incomeComplete: boolean;      // 3+ lønsedler registreret (ellers usikkert)
-  currentContribution: number;  // total = expense + savings (bagudkomp.)
-  // Split af currentContribution efter destinations-kontotype så
-  // "Bidrager nu" i rådgiveren kan vise apples-to-apples med
-  // "Betaler til" der også er splittet i udgifter vs opsparing.
-  // Udgifter = transfers til budget/household/checking; Opsparing =
-  // transfers til kind=savings/investment fælleskonti.
+  currentContribution: number;  // total = expense + husholdning + savings
+  // Split af currentContribution efter destinations-kontotype. Tre buckets:
+  //   - Expense: transfers til kind in {budget, checking, other} fælleskonti
+  //     (faste udgifter til Budget-hub)
+  //   - Husholdning: transfers til kind=household fælleskonti (daglige
+  //     udgifter - splittet ud så Budget ikke pretender at hub'e Husholdning)
+  //   - Savings: transfers til kind in {savings, investment} fælleskonti
+  //     (Buffer, ferieopsparing)
   currentToExpenseAccounts: number;
+  currentToHusholdningAccounts: number;
   currentToSavingsAccounts: number;
   // Medlemmets egen lønkonto - kilde til foreslået "Opret overførsel"-CTA.
   // null hvis vedkommende ikke har oprettet en endnu (så viser vi i stedet
@@ -43,94 +46,104 @@ export type MemberShare = {
   proportional: number;    // anbefalet andel - indkomst-proportional
   equal: number;           // anbefalet andel - 50/50
   equalRemaining: number;  // anbefalet andel - så alle ender med samme rådighed
-  current: number;         // total nuværende bidrag (expense + savings)
+  current: number;         // total nuværende bidrag (alle 3 buckets)
   // Anbefalet andel til opsparing (Buffer) - splittet efter samme model
-  // som udgifter. Total opsparingsbidrag fra alle medlemmer summer til
-  // bufferRecommendedMonthly. Vises som anden underkolonne i rådgiveren.
+  // som udgifter. Total opsparingsbidrag summer til bufferRecommendedMonthly.
   savingsProportional: number;
   savingsEqual: number;
   savingsEqualRemaining: number;
+  // Anbefalet andel til husholdning (daglig forbrug) - splittet efter
+  // samme model. Total summer til husholdning monthly_budget (eller faktiske
+  // expenses som fallback). Vises som 3. obligatorisk overførsel.
+  husholdningProportional: number;
+  husholdningEqual: number;
+  husholdningEqualRemaining: number;
 };
 
 export type FaellesSplit = {
-  total: number;          // samlede fælles udgifter/md
+  total: number;          // samlede fælles udgifter/md (excl. husholdning)
   totalIncome: number;    // sum af bidragydernes indkomst
   members: MemberShare[];
   equalRemainingTarget: number;
   hasIncompleteIncome: boolean;
-  // Anbefalet samlet månedlig opsparing til fælles buffer (kilde:
-  // bufferRecommendation længere nede). Fordeles per medlem via samme
-  // model som udgifter; vises som second-pair underkolonne.
+  // Anbefalet samlet månedlig opsparing til fælles buffer.
   savingsTotal: number;
+  // Husholdnings månedlige obligation (monthly_budget eller faktiske
+  // expenses). Splittes per medlem via samme model.
+  husholdningTotal: number;
 };
 
 export function splitFaellesExpenses(
   members: PlanMember[],
   total: number,
   // Den anbefalede samlede buffer-opsparingsrate per måned. Defaultet til
-  // 0 så eksisterende callers (uden buffer-info) ikke breaker - de får
-  // bare nul-savings-kolonner.
-  savingsTotal: number = 0
+  // 0 så eksisterende callers (uden buffer-info) ikke breaker.
+  savingsTotal: number = 0,
+  // Husholdnings månedlige obligation (monthly_budget eller faktiske
+  // expenses). Splittes per medlem - 3. obligatorisk overførsel.
+  husholdningTotal: number = 0
 ): FaellesSplit {
   const totalIncome = members.reduce((s, m) => s + m.monthlyIncome, 0);
   const n = Math.max(1, members.length);
   const equalShare = Math.round(total / n);
   const equalSavings = Math.round(savingsTotal / n);
+  const equalHusholdning = Math.round(husholdningTotal / n);
 
   // "Lige rådighed": hver beholder samme beløb R = (indkomst - total cost)/n.
-  // Total cost = udgifter + opsparing - så det "rest"-beløb hver tager hjem
-  // er ægte fri rådighed efter både udgifter OG opsparingsmål.
-  const totalCost = total + savingsTotal;
+  // Total cost inkluderer nu ALLE tre obligationer.
+  const totalCost = total + savingsTotal + husholdningTotal;
   const equalRemainingTarget = Math.round((totalIncome - totalCost) / n);
+
+  // Hjælper: beregn proportional + equal-remaining for én obligation type.
+  // Tager medlemmets indkomst eksplicit ind så den er pure (ikke closure).
+  const splitFor = (
+    income: number,
+    obligationTotal: number,
+    equalForObligation: number
+  ) => ({
+    proportional:
+      totalIncome > 0
+        ? Math.round(obligationTotal * (income / totalIncome))
+        : equalForObligation,
+    equalRemaining:
+      totalIncome > 0
+        ? Math.max(
+            0,
+            Math.round(
+              (income - equalRemainingTarget) *
+                (totalCost > 0 ? obligationTotal / totalCost : 0)
+            )
+          )
+        : equalForObligation,
+  });
 
   return {
     total,
     totalIncome,
     equalRemainingTarget,
     savingsTotal,
+    husholdningTotal,
     hasIncompleteIncome: members.some((m) => !m.incomeComplete),
     members: members.map((m) => {
-      // Udgifter-fordelingen (samme logik som før).
-      const proportional =
-        totalIncome > 0
-          ? Math.round(total * (m.monthlyIncome / totalIncome))
-          : equalShare;
-      const equalRemainingExpense =
-        totalIncome > 0
-          ? Math.max(
-              0,
-              // Andel af total cost (udgifter+opsparing) der hører til
-              // udgifter. Det er totalCost-share gange (udgifter/total).
-              Math.round(
-                (m.monthlyIncome - equalRemainingTarget) *
-                  (totalCost > 0 ? total / totalCost : 1)
-              )
-            )
-          : equalShare;
-      // Opsparing-fordelingen følger samme model.
-      const savingsProportional =
-        totalIncome > 0
-          ? Math.round(savingsTotal * (m.monthlyIncome / totalIncome))
-          : equalSavings;
-      const savingsEqualRemaining =
-        totalIncome > 0
-          ? Math.max(
-              0,
-              Math.round(
-                (m.monthlyIncome - equalRemainingTarget) *
-                  (totalCost > 0 ? savingsTotal / totalCost : 0)
-              )
-            )
-          : equalSavings;
+      const expenseShare = splitFor(m.monthlyIncome, total, equalShare);
+      const savingsShare = splitFor(m.monthlyIncome, savingsTotal, equalSavings);
+      const husholdningShare = splitFor(
+        m.monthlyIncome,
+        husholdningTotal,
+        equalHusholdning
+      );
       return {
         member: m,
-        proportional,
+        proportional: expenseShare.proportional,
         equal: equalShare,
-        equalRemaining: equalRemainingExpense,
+        equalRemaining: expenseShare.equalRemaining,
         current: m.currentContribution,
-        savingsProportional,
+        savingsProportional: savingsShare.proportional,
         savingsEqual: equalSavings,
-        savingsEqualRemaining,
+        savingsEqualRemaining: savingsShare.equalRemaining,
+        husholdningProportional: husholdningShare.proportional,
+        husholdningEqual: equalHusholdning,
+        husholdningEqualRemaining: husholdningShare.equalRemaining,
       };
     }),
   };

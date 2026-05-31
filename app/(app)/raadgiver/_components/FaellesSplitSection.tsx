@@ -36,6 +36,10 @@ type Props = {
   // en note om at oprette en buffer-konto i stedet for selve CTAen.
   bufferAccountId: string | null;
   bufferAccountName: string | null;
+  // Husholdnings-konto: destination for husholdnings-overførsler (3.
+  // obligatoriske). Hvis null vises som "opret en fælles husholdningskonto".
+  husholdningAccountId: string | null;
+  husholdningAccountName: string | null;
 };
 
 export function FaellesSplitSection({
@@ -46,6 +50,8 @@ export function FaellesSplitSection({
   primaryFaellesAccountName,
   bufferAccountId,
   bufferAccountName,
+  husholdningAccountId,
+  husholdningAccountName,
 }: Props) {
   const [model, setModel] = useState<Model>('proportional');
 
@@ -61,15 +67,27 @@ export function FaellesSplitSection({
       : model === 'equal'
         ? m.savingsEqual
         : m.savingsEqualRemaining;
-  const totalShareOf = (m: FaellesSplit['members'][number]) =>
-    shareOf(m) + savingsShareOf(m);
+  const husholdningShareOf = (m: FaellesSplit['members'][number]) =>
+    model === 'proportional'
+      ? m.husholdningProportional
+      : model === 'equal'
+        ? m.husholdningEqual
+        : m.husholdningEqualRemaining;
 
   const totalShare = split.members.reduce((s, m) => s + shareOf(m), 0);
   const totalSavings = split.members.reduce((s, m) => s + savingsShareOf(m), 0);
+  const totalHusholdning = split.members.reduce(
+    (s, m) => s + husholdningShareOf(m),
+    0
+  );
   const totalIncome = split.totalIncome;
-  const totalRemaining = totalIncome - totalShare - totalSavings;
+  const totalRemaining = totalIncome - totalShare - totalSavings - totalHusholdning;
   const totalCurrentExpense = split.members.reduce(
     (s, m) => s + m.member.currentToExpenseAccounts,
+    0
+  );
+  const totalCurrentHusholdning = split.members.reduce(
+    (s, m) => s + m.member.currentToHusholdningAccounts,
     0
   );
   const totalCurrentSavings = split.members.reduce(
@@ -77,6 +95,7 @@ export function FaellesSplitSection({
     0
   );
   const hasSavings = split.savingsTotal > 0;
+  const hasHusholdning = split.husholdningTotal > 0;
 
   const me = split.members.find((m) => m.member.userId === currentUserId);
 
@@ -92,16 +111,27 @@ export function FaellesSplitSection({
   return (
     <>
       <p className="mb-3 max-w-2xl text-sm text-neutral-600">
-        Jeres fælles udgifter er{' '}
+        Jeres fælles forpligtelser:{' '}
         <span className="tabnum font-mono font-semibold text-neutral-900">
           {formatAmount(faellesMonthlyExpense)} kr/md
-        </span>
+        </span>{' '}
+        i faste udgifter
+        {hasHusholdning && (
+          <>
+            ,{' '}
+            <span className="tabnum font-mono font-semibold text-neutral-900">
+              {formatAmount(split.husholdningTotal)} kr/md
+            </span>{' '}
+            til husholdning
+          </>
+        )}
         {hasSavings && (
           <>
-            , og anbefalet buffer-opsparing{' '}
+            , og{' '}
             <span className="tabnum font-mono font-semibold text-neutral-900">
               {formatAmount(split.savingsTotal)} kr/md
-            </span>
+            </span>{' '}
+            til buffer-opsparing
           </>
         )}
         . Vælg en fordelingsmodel og se hvad hver har tilbage bagefter:
@@ -163,9 +193,9 @@ export function FaellesSplitSection({
               <th className="px-4 py-2.5 text-right font-medium">Indkomst</th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Betaler til fælles
-                {hasSavings && (
+                {(hasSavings || hasHusholdning) && (
                   <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
-                    udgifter / opsparing
+                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}
                   </div>
                 )}
               </th>
@@ -174,9 +204,9 @@ export function FaellesSplitSection({
               </th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Bidrager nu
-                {hasSavings && (
+                {(hasSavings || hasHusholdning) && (
                   <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
-                    udgifter / opsparing
+                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}
                   </div>
                 )}
               </th>
@@ -186,10 +216,12 @@ export function FaellesSplitSection({
             {split.members.map((m) => {
               const share = shareOf(m);
               const savingsShare = savingsShareOf(m);
-              const totalThisRow = share + savingsShare;
+              const husholdningShare = husholdningShareOf(m);
+              const totalThisRow = share + savingsShare + husholdningShare;
               const remaining = m.member.monthlyIncome - totalThisRow;
               const currentTotal =
                 m.member.currentToExpenseAccounts +
+                m.member.currentToHusholdningAccounts +
                 m.member.currentToSavingsAccounts;
               return (
                 <tr key={m.member.id}>
@@ -206,6 +238,11 @@ export function FaellesSplitSection({
                   </td>
                   <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-neutral-900">
                     {formatAmount(share)}
+                    {hasHusholdning && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(husholdningShare)} hus.
+                      </div>
+                    )}
                     {hasSavings && (
                       <div className="tabnum text-[11px] font-normal text-neutral-500">
                         + {formatAmount(savingsShare)} ops.
@@ -221,6 +258,11 @@ export function FaellesSplitSection({
                     }`}
                   >
                     {formatAmount(m.member.currentToExpenseAccounts)}
+                    {hasHusholdning && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(m.member.currentToHusholdningAccounts)} hus.
+                      </div>
+                    )}
                     {hasSavings && (
                       <div className="tabnum text-[11px] font-normal text-neutral-500">
                         + {formatAmount(m.member.currentToSavingsAccounts)} ops.
@@ -239,6 +281,11 @@ export function FaellesSplitSection({
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalShare)}
+                {hasHusholdning && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalHusholdning)} hus.
+                  </div>
+                )}
                 {hasSavings && (
                   <div className="tabnum text-[11px] font-normal text-neutral-500">
                     + {formatAmount(totalSavings)} ops.
@@ -250,6 +297,11 @@ export function FaellesSplitSection({
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalCurrentExpense)}
+                {hasHusholdning && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalCurrentHusholdning)} hus.
+                  </div>
+                )}
                 {hasSavings && (
                   <div className="tabnum text-[11px] font-normal text-neutral-500">
                     + {formatAmount(totalCurrentSavings)} ops.
@@ -275,11 +327,20 @@ export function FaellesSplitSection({
           denne model:{' '}
           <span className="tabnum font-mono font-semibold">
             {formatAmount(shareOf(me))} kr
-          </span>
+          </span>{' '}
+          udgifter
+          {hasHusholdning && (
+            <>
+              {' '}+{' '}
+              <span className="tabnum font-mono font-semibold">
+                {formatAmount(husholdningShareOf(me))} kr
+              </span>{' '}
+              husholdning
+            </>
+          )}
           {hasSavings && (
             <>
-              {' '}
-              udgifter +{' '}
+              {' '}+{' '}
               <span className="tabnum font-mono font-semibold">
                 {formatAmount(savingsShareOf(me))} kr
               </span>{' '}
@@ -291,18 +352,32 @@ export function FaellesSplitSection({
             {formatAmount(me.member.currentToExpenseAccounts)} kr
           </span>{' '}
           til udgifter
+          {hasHusholdning && (
+            <>
+              {' '}+{' '}
+              <span className="tabnum font-mono">
+                {formatAmount(me.member.currentToHusholdningAccounts)} kr
+              </span>{' '}
+              husholdning
+            </>
+          )}
           {hasSavings && (
             <>
               {' '}+{' '}
               <span className="tabnum font-mono">
                 {formatAmount(me.member.currentToSavingsAccounts)} kr
               </span>{' '}
-              til opsparing
+              opsparing
             </>
           )}{' '}
           i dag, og ville have{' '}
           <span className="tabnum font-mono font-semibold text-emerald-800">
-            {formatAmount(me.member.monthlyIncome - shareOf(me) - savingsShareOf(me))} kr
+            {formatAmount(
+              me.member.monthlyIncome -
+                shareOf(me) -
+                savingsShareOf(me) -
+                husholdningShareOf(me)
+            )} kr
           </span>{' '}
           tilbage til dig selv.
         </div>
@@ -312,11 +387,15 @@ export function FaellesSplitSection({
         members={split.members}
         shareOf={shareOf}
         savingsShareOf={savingsShareOf}
+        husholdningShareOf={husholdningShareOf}
         primaryFaellesAccountId={primaryFaellesAccountId}
         primaryFaellesAccountName={primaryFaellesAccountName}
         bufferAccountId={bufferAccountId}
         bufferAccountName={bufferAccountName}
+        husholdningAccountId={husholdningAccountId}
+        husholdningAccountName={husholdningAccountName}
         hasSavings={hasSavings}
+        hasHusholdning={hasHusholdning}
       />
     </>
   );
@@ -338,20 +417,28 @@ function TransferRecommendations({
   members,
   shareOf,
   savingsShareOf,
+  husholdningShareOf,
   primaryFaellesAccountId,
   primaryFaellesAccountName,
   bufferAccountId,
   bufferAccountName,
+  husholdningAccountId,
+  husholdningAccountName,
   hasSavings,
+  hasHusholdning,
 }: {
   members: FaellesSplitMember[];
   shareOf: (m: FaellesSplitMember) => number;
   savingsShareOf: (m: FaellesSplitMember) => number;
+  husholdningShareOf: (m: FaellesSplitMember) => number;
   primaryFaellesAccountId: string | null;
   primaryFaellesAccountName: string | null;
   bufferAccountId: string | null;
   bufferAccountName: string | null;
+  husholdningAccountId: string | null;
+  husholdningAccountName: string | null;
   hasSavings: boolean;
+  hasHusholdning: boolean;
 }) {
   if (!primaryFaellesAccountId || !primaryFaellesAccountName) {
     return (
@@ -379,12 +466,16 @@ function TransferRecommendations({
             key={m.member.id}
             member={m}
             expenseShare={shareOf(m)}
+            husholdningShare={husholdningShareOf(m)}
             savingsShare={savingsShareOf(m)}
             faellesAccountId={primaryFaellesAccountId}
             faellesAccountName={primaryFaellesAccountName}
             bufferAccountId={bufferAccountId}
             bufferAccountName={bufferAccountName}
+            husholdningAccountId={husholdningAccountId}
+            husholdningAccountName={husholdningAccountName}
             showSavingsRow={hasSavings}
+            showHusholdningRow={hasHusholdning}
           />
         ))}
       </div>
@@ -395,21 +486,29 @@ function TransferRecommendations({
 function PersonRecommendationBlock({
   member: m,
   expenseShare,
+  husholdningShare,
   savingsShare,
   faellesAccountId,
   faellesAccountName,
   bufferAccountId,
   bufferAccountName,
+  husholdningAccountId,
+  husholdningAccountName,
   showSavingsRow,
+  showHusholdningRow,
 }: {
   member: FaellesSplitMember;
   expenseShare: number;
+  husholdningShare: number;
   savingsShare: number;
   faellesAccountId: string;
   faellesAccountName: string;
   bufferAccountId: string | null;
   bufferAccountName: string | null;
+  husholdningAccountId: string | null;
+  husholdningAccountName: string | null;
   showSavingsRow: boolean;
+  showHusholdningRow: boolean;
 }) {
   const { member } = m;
   return (
@@ -432,8 +531,34 @@ function PersonRecommendationBlock({
           targetAccountName={faellesAccountName}
           recommendedAmount={expenseShare}
           currentAmount={member.currentToExpenseAccounts}
-          description="Fælles bidrag"
+          description="Fælles udgifter"
         />
+        {showHusholdningRow && husholdningShare > 0 && (
+          husholdningAccountId && husholdningAccountName ? (
+            <RecommendationRow
+              kind="husholdning"
+              memberName={member.name}
+              lonkontoId={member.lonkontoId}
+              lonkontoName={member.lonkontoName}
+              targetAccountId={husholdningAccountId}
+              targetAccountName={husholdningAccountName}
+              recommendedAmount={husholdningShare}
+              currentAmount={member.currentToHusholdningAccounts}
+              description="Husholdning"
+            />
+          ) : (
+            <div className="px-4 py-3 text-xs text-amber-700">
+              Husstanden mangler en husholdnings-konto. {' '}
+              <Link
+                href="/konti/ny"
+                className="font-medium text-amber-900 underline hover:text-amber-700"
+              >
+                Opret en fælles husholdningskonto
+              </Link>
+              {' '} så kan jeg foreslå den månedlige overførsel.
+            </div>
+          )
+        )}
         {showSavingsRow && savingsShare > 0 && (
           bufferAccountId && bufferAccountName ? (
             <RecommendationRow
@@ -476,7 +601,7 @@ function RecommendationRow({
   currentAmount,
   description,
 }: {
-  kind: 'udgifter' | 'opsparing';
+  kind: 'udgifter' | 'husholdning' | 'opsparing';
   memberName: string;
   lonkontoId: string | null;
   lonkontoName: string | null;
@@ -495,11 +620,18 @@ function RecommendationRow({
     ? `/overforsler/ny?from=${encodeURIComponent(lonkontoId)}&to=${encodeURIComponent(targetAccountId)}&amount=${encodeURIComponent(formatOereForInput(recommendedAmount))}&recurrence=monthly&description=${encodeURIComponent(description)}`
     : null;
 
-  const kindLabel = kind === 'udgifter' ? 'Til udgifter' : 'Til opsparing';
+  const kindLabel =
+    kind === 'udgifter'
+      ? 'Til udgifter'
+      : kind === 'husholdning'
+        ? 'Til husholdning'
+        : 'Til opsparing';
   const kindBadgeClass =
     kind === 'udgifter'
       ? 'bg-amber-100 text-amber-900'
-      : 'bg-emerald-100 text-emerald-900';
+      : kind === 'husholdning'
+        ? 'bg-sky-100 text-sky-900'
+        : 'bg-emerald-100 text-emerald-900';
 
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

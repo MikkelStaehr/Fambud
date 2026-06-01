@@ -205,6 +205,7 @@ export type Database = {
           payment_afdrag: number | null;
           payment_bidrag: number | null;
           payment_rabat: number | null;
+          balance_as_of_date: string | null;
           investment_type: InvestmentType | null;
           monthly_budget: number | null;
           savings_purposes: SavingsPurpose[] | null;
@@ -233,6 +234,7 @@ export type Database = {
           payment_afdrag?: number | null;
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
+          balance_as_of_date?: string | null;
           investment_type?: InvestmentType | null;
           monthly_budget?: number | null;
           savings_purposes?: SavingsPurpose[] | null;
@@ -261,6 +263,7 @@ export type Database = {
           payment_afdrag?: number | null;
           payment_bidrag?: number | null;
           payment_rabat?: number | null;
+          balance_as_of_date?: string | null;
           investment_type?: InvestmentType | null;
           monthly_budget?: number | null;
           savings_purposes?: SavingsPurpose[] | null;

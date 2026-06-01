@@ -30,6 +30,14 @@ function parsePct(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// YYYY-MM-DD i lokaltid - bruges som anker for auto-amortisering. Hver gang
+// brugeren sætter et nyt opening_balance er det "nu" i bankens øjne, og
+// auto-decrement skal starte derfra.
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 type ParsedLoan = {
   name: string;
   owner_name: string | null;
@@ -178,6 +186,9 @@ export async function createLoan(formData: FormData) {
     kind: 'credit',
     editable_by_all: true,
     created_by: user.id,
+    // Anker auto-amortiseringen til "nu" - vi har lige fået det aktuelle
+    // tal fra brugeren. Auto-decrement starter klokken denne dato.
+    balance_as_of_date: todayIso(),
     ...parsed.data,
   });
   if (error) {
@@ -198,9 +209,26 @@ export async function updateLoan(id: string, formData: FormData) {
   }
 
   const { supabase, householdId } = await getHouseholdContext();
+
+  // Re-anker auto-amortiseringen KUN hvis brugeren har ændret opening_balance.
+  // Gemmes formularen uden at røre restgælden, skal vi bevare det eksisterende
+  // anker - ellers ville hver redigering nulstille auto-decrement til nul.
+  const { data: existing } = await supabase
+    .from('accounts')
+    .select('opening_balance')
+    .eq('id', id)
+    .eq('household_id', householdId)
+    .eq('kind', 'credit')
+    .single();
+  const balanceChanged =
+    existing != null && existing.opening_balance !== parsed.data.opening_balance;
+  const update = balanceChanged
+    ? { ...parsed.data, balance_as_of_date: todayIso() }
+    : parsed.data;
+
   const { error } = await supabase
     .from('accounts')
-    .update(parsed.data)
+    .update(update)
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) {

@@ -9,6 +9,7 @@ import {
   monthlyEquivalent,
   nextOccurrenceAfter,
 } from '@/lib/format';
+import { currentLoanBalance } from '@/lib/loan-balance';
 import { deleteLoan } from './actions';
 import type { LoanType } from '@/lib/database.types';
 
@@ -27,10 +28,12 @@ export default async function LaanPage() {
   ]);
 
   // Sum gæld and monthly burden - gives a single-glance picture of the
-  // household's debt situation. abs() so positive-saved rows still count.
+  // household's debt situation. currentLoanBalance auto-amortiserer fra
+  // balance_as_of_date + payment_afdrag, så summen reflekterer i-dag, ikke
+  // det sidste manuelle snapshot.
   // payment_amount is per payment_interval, so normalise to /md before summing.
   const totalDebt = loans.reduce(
-    (sum, l) => sum + Math.abs(l.opening_balance),
+    (sum, l) => sum + currentLoanBalance(l),
     0
   );
   const monthlyBurden = loans.reduce(
@@ -84,10 +87,11 @@ export default async function LaanPage() {
       ) : (
         <div data-tour="laan-list" className="mt-6 grid gap-3">
           {loans.map((l) => {
-            // abs() keeps the display sane regardless of which sign convention
-            // the row was saved with - older rows or manual SQL edits may have
-            // positive values. The form auto-negates new saves.
-            const debt = Math.abs(l.opening_balance);
+            // currentLoanBalance bygger oven på abs(opening_balance) men
+            // trækker payment_afdrag fra pr. afsluttet betalingsperiode siden
+            // balance_as_of_date. Hvis afdrag/anker ikke er sat, falder den
+            // tilbage til den rå opening_balance.
+            const debt = currentLoanBalance(l);
             const principal = l.original_principal ?? 0;
             const paid = principal > 0 ? Math.max(0, principal - debt) : 0;
             const paidPct = principal > 0 ? Math.round((paid / principal) * 100) : null;
@@ -166,6 +170,11 @@ export default async function LaanPage() {
                     <dd className="font-mono tabnum text-sm font-semibold text-neutral-900">
                       {formatAmount(debt)} kr
                     </dd>
+                    {l.balance_as_of_date && (
+                      <div className="mt-0.5 text-[10px] text-neutral-400">
+                        anker {formatShortDateDA(l.balance_as_of_date)}
+                      </div>
+                    )}
                   </div>
                   {l.original_principal != null && (
                     <div>

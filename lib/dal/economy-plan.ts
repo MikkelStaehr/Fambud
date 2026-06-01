@@ -15,6 +15,7 @@ import { getHouseholdFinancialSummary } from './dashboard';
 import { getLoans } from './loans';
 import { getLifeEvents } from './life-events';
 import { getMonthlyExpensesByGroup } from './expenses-by-category';
+import { currentLoanBalance } from '@/lib/loan-balance';
 import type { PlanMember, MemberSetupStatus } from '@/lib/economy-plan';
 import type { CategoryGroup } from '@/lib/categories';
 
@@ -362,7 +363,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       mostExpensiveLoan = {
         name: l.name,
         rate,
-        balance: Math.abs(l.opening_balance),
+        balance: currentLoanBalance(l),
         monthlyPayment: l.payment_amount
           ? monthlyEquivalent(l.payment_amount, l.payment_interval)
           : 0,

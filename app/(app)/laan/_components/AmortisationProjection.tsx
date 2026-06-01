@@ -7,6 +7,7 @@ import {
   projectAmortisation,
   pickMilestones,
 } from '@/lib/loan-projection';
+import { currentLoanBalance } from '@/lib/loan-balance';
 import { formatAmount, RECURRENCE_LABEL_DA } from '@/lib/format';
 import type { Account } from '@/lib/database.types';
 
@@ -19,14 +20,15 @@ type Props = {
     | 'payment_afdrag'
     | 'payment_bidrag'
     | 'payment_rabat'
+    | 'balance_as_of_date'
   >;
 };
 
 export function AmortisationProjection({ loan }: Props) {
   // Need a non-zero debt and at least rente + afdrag to project anything.
-  // opening_balance is stored negative for debt - convert to positive principal.
-  const remainingPrincipal =
-    loan.opening_balance < 0 ? -loan.opening_balance : 0;
+  // Start fra current restgæld (anker + auto-afdrag siden), så projektionen
+  // siger "fra i dag og frem" - ikke "fra det sidste manuelle snapshot".
+  const remainingPrincipal = currentLoanBalance(loan);
   if (
     remainingPrincipal === 0 ||
     loan.payment_rente == null ||

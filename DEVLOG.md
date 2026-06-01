@@ -5602,3 +5602,172 @@ aggregering, er detaljer stadig perspective-filtered:
 - Migration 0068 + 0069 shipped (constraints + RLS-cutover step 1+2)
 - Step 3 (fjern admin-client) + integration-test-suite for actions er
   P-items
+
+---
+
+# Devlog - 1. juni 2026 (lån-auto-decrement, duplikat-detect, begivenheds-meter, mobile-audit)
+
+Fem features og en bred audit på én dag. Temaet er polish + fjerne
+manuelle skridt der ikke burde være der: lån der ikke tæller ned,
+Rådgiverens CTA der lavede duplikater, begivenheder uden anker
+mellem budget og poster, og tabeller der tvang vandret scroll på
+mobil.
+
+## 1. Lån auto-amortiserer over tid
+
+**Migration:** [0070_loan_balance_as_of_date.sql](supabase/migrations/0070_loan_balance_as_of_date.sql)
+
+Restgælden på et lån var en statisk DB-værdi der krævede manuel
+opdatering. Med `payment_afdrag` + `payment_interval` allerede sat på de
+fleste lån, var det bare regnemaskine-arbejde at tælle ned automatisk.
+
+Ny kolonne `balance_as_of_date date` på `accounts` = anker for hvornår
+`opening_balance` sidst blev sat. Backfill til `current_date` for
+eksisterende credit-konti (vi har ingen historisk "hvornår blev tallet
+sat"-information, så nulstillingen tilsigtet starter klokken nu i stedet
+for at regne forkert tilbage i tiden).
+
+**Helper:** [lib/loan-balance.ts](lib/loan-balance.ts) -
+`currentLoanBalance(loan, today?)` trækker
+`payment_afdrag × fulde-perioder-siden-anker` fra. Aldrig under 0. Falder
+tilbage til rå opening_balance hvis afdrag/anker mangler. Annuitet-
+nøjagtighed bevidst fravalgt - simpel linear deduction "rettes ind" når
+brugeren næste gang opdaterer fra bankens egen opgørelse.
+
+**Wired ind i:**
+- `/laan` oversigt: totalDebt + per-lån debt bruger currentLoanBalance,
+  hver række viser "anker DD.MM" som transparens
+- AmortisationProjection: projektion starter fra current restgæld, så
+  "betalt om X år" forbliver retvisende efter måneder
+- `lib/dal/economy-plan.ts`: `mostExpensiveLoan.balance` bruger samme
+- `app/(app)/laan/actions.ts`: createLoan sætter anker = i dag.
+  updateLoan re-ankrer KUN hvis opening_balance faktisk ændres (ellers
+  nulstilles decrement ved hver redigering)
+
+## 2. Detect duplikater på "Opsæt overførsel"
+
+Rådgiverens "Opsæt overførsel"-CTA linkede tidligere altid til
+`/overforsler/ny` og oprettede en helt ny række - også når der allerede
+stod en månedlig overførsel i samme retning. Resultatet: dobbelt-cashflow
+på samme konto. I konkret test havde Mikkel 2 transfers fra lønkonto →
+Budgetkonto (16.908,94 + 15.060). Rådgiver foreslog 16.908,94 og "Opsæt"-
+CTA gav ham en TREDJE.
+
+**DAL:** [lib/dal/transfers.ts](lib/dal/transfers.ts) - ny
+`getMatchingActiveTransfers(fromAccountId, toAccountId)` returnerer
+aktive ikke-engangs-overførsler i samme retning (recurrence != 'once'
+AND recurrence_until null eller i fremtiden).
+
+**UI:** [TransferForm](app/(app)/overforsler/_components/TransferForm.tsx)
+fik en `matchingExisting` prop. Når sat, vises et amber-banner med:
+- Liste af eksisterende overførsler (beløb / hyppighed / beskrivelse)
+- Sum kr/md i alt
+- Checkbox "Erstat de eksisterende" - **default ON**
+- Hvis ON: hidden `replace_ids` inputs med UUID per match
+- Hvis OFF: explicit advarsel "Hvis du ikke erstatter, lægges den nye
+  OVENI - du vil have N+1 overførsler i samme retning"
+
+**Action:** `createTransfer` læser `replace_ids[]`, validerer hver id
+matcher household + den from→to-retning brugeren netop har valgt før
+delete, så et tilfældigt UUID i en kopi-URL ikke kan slette en
+uvedkommende overførsel. Delete kører før insert; fejler delete, falder
+vi tilbage til "lad de gamle stå + opret den nye" frem for at blokere.
+
+## 3. Begivenheds-budget-meter: anker mellem totalbudget og poster
+
+Brugerens spørgsmål: "Jeg har indsat flybillet pris, men hvordan bruger
+vi poster som en del af siden? Skal det være 'Foreløbig budget' under
+'Planlagt budget'?"
+
+Eksisterende model havde `total_budget` (manuelt loft) og `items` (linje-
+poster) med en `use_items_for_budget`-flag der bare flipper hvilken kilde
+der TÆLLER. Posterne stod uden visuelt anker til loftet, så det var
+uklart hvordan de spillede sammen.
+
+**Ny komponent:** [ItemBudgetMeter](app/(app)/begivenheder/_components/ItemBudgetMeter.tsx)
+ovenfor ItemList. Viser progress = items_sum / total_budget med farve-
+logik (grøn under 90%, amber 90-100%, rød over). Under bar'en: status-
+fordeling (planlagt/booket/betalt) som farve-dots. Over budget viser
+"X kr over budgettet. Justér budgettet op, eller skær en post."
+
+**Genbrugelig bar:** [EventProgressBar](app/(app)/begivenheder/_components/EventProgressBar.tsx)
+ekstraheret med en compact-variant til mindre kort. Nu vist 3 steder:
+- `/begivenheder/[id]` detalje (fuld variant med status-dots)
+- `/begivenheder` liste-kort (compact under stat-grid)
+- Dashboard `LifeEventsWidget` (compact under meta-linjen)
+
+**Copy-fix på feedback:** "Bogført" lød som om pengene var brugt.
+Item-summen er reelt planlagt allokering, ikke bogføring. Skiftet til
+"Planlagt på poster". Status-pille `planlagt` på item-niveau lever
+videre - kontekst (uppercase header vs. lowercase pille) holder de to
+brug adskilt.
+
+## 4. Mobile-first audit på tværs af alle sider
+
+Brugerens prompt: "gennemgå alle siderne, tjekke at alt er mobile first,
+helst ikke nogle tabeller man skal scrolle til siden i og lignende".
+
+**Audit-værktøjer:** Grep efter `overflow-x-auto`, `min-w-\[` og
+`flex items-center justify-between border-b border-neutral-200 pb-6`.
+
+**Identificerede 4 scroll-tabeller:**
+
+| Side | Problem | Fix |
+|---|---|---|
+| [Rådgiver fælles-split](app/(app)/raadgiver/_components/FaellesSplitSection.tsx) | 5-kolonne tabel min-w-[560px] | Mobile: kort per person med stablede metrics; desktop: bevaret tabel via sm:hidden/hidden sm:block |
+| [Rådgiver lån-tabel](app/(app)/raadgiver/_components/LaaneoptimeringSection.tsx) | 4-kolonne tabel min-w-[480px] | Mobile: kort per lån |
+| [Budget](app/(app)/budget/_components/BudgetTable.tsx) | Alle 5 kolonner viste på mobil | Skjult Interval + Konto + Andel; metadata inlinet under navn (samme mønster som PosterTable allerede brugte) |
+| [Amortisering](app/(app)/laan/_components/AmortisationProjection.tsx) | 5-kolonne forecast | Mobile: kort per milestone med 3-col mini-grid (Rente/Afdrag/Bidrag) + restgæld som hoved-tal |
+
+**3 page-headers fixed:** /laan, /begivenheder, /konti havde
+`flex items-center justify-between` der pressede subtitle ("X lån · Y kr
+i gæld · Z kr/md ydelser") + CTA-knap ud over viewport på små skærme.
+Skiftet til `flex flex-wrap items-center justify-between gap-3 + min-w-0
+flex-1` så CTAen wrapper under når der ikke er plads.
+
+**Allerede OK (tjekket men ikke ændret):**
+- PosterTable brugte allerede `hidden sm:table-cell` + inline metadata
+- CashflowGraph er `hidden md:block` (intentionel desktop-only)
+- /poster, /budget, /faste-udgifter, /overforsler, /indkomst,
+  /husholdning brugte allerede `flex-col sm:flex-row` eller `flex-wrap`
+- /rapport havde allerede `items-start gap-3`
+
+## Læringspunkter
+
+1. **Status-tal der ikke opdaterer er gift for tillid**: restgælden på
+   billånet stod på 50% afdraget i flere uger fordi opening_balance var
+   sidste opgørelse. Brugeren spurgte direkte "vil den tælle ned når en
+   ny måned starter?". Når app'en kender alle ingredienserne (afdrag,
+   interval, datoer), er manuel opdatering en bug, ikke en feature.
+
+2. **CTAer der ikke checker eksisterende state laver duplikater**:
+   Rådgiverens "Opsæt overførsel" var fire ugers gammel feature - aldrig
+   blevet brugt på en konto der allerede HAVDE en transfer i samme
+   retning. Default-ON checkbox + UUID-direction-validering = brugeren
+   gør det rigtige uden at miste muligheden for at lægge ekstra ovenpå.
+
+3. **Copy-valg signalerer mental model**: "Bogført" = penge ud af døren.
+   "Planlagt" = aftalt allokering. Forskellen er ord-niveau men bestemmer
+   om brugeren stoler på tallet. Værd at få ret før det breder sig til
+   mere copy.
+
+4. **Mobile-first audit er en periodisk øvelse, ikke en éngangs-fix**:
+   tre uger siden var Rådgiveren mobile-fin. Siden da blev to nye sektion-
+   tabeller tilføjet (FaellesSplit udvidet med events-kolonne,
+   Laaneoptimering hele sektionen). Audit pr. 3-4 uger fanger drift.
+
+5. **Hidden-column-pattern slår dual-render**: PosterTable bruger
+   `hidden sm:table-cell` på kolonner + inline metadata-linje under
+   titel-cellen. Samme DOM, ingen dobbelt-render, naturlig SSR. Det blev
+   templaten for BudgetTable og ItemBudgetMeter's mobile cards.
+
+## Status efter 1. juni
+
+- 24 unit-tests (uændret antal)
+- CI: alle gates aktive
+- Migration 0070 shipped (auto-decrement anker)
+- 4 nye komponenter: `currentLoanBalance`, `getMatchingActiveTransfers`,
+  `ItemBudgetMeter`, `EventProgressBar`
+- 4 tabeller mobile-first (Rådgiver x2, Budget, Amortisation)
+- Pre-existing lint-fejl i BudgetTour.tsx (unescaped quotes) ikke rørt -
+  ikke en mobile-issue

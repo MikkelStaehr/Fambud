@@ -374,6 +374,72 @@ export async function getSubscriptionCandidates(
   return candidates;
 }
 
+// Måned-mod-måned-trend for variabelt forbrug (Spiir-style "udgiver du mere
+// end normalt?"). Vi bruger ALLE once-expense-transactions i vinduet, så
+// det er det FAKTISK BOGFØRTE forbrug pr. måned - ikke et steady-state-
+// forecast. Det matcher hvad /poster viser, og afspejler reelle udsving.
+//
+// Recurring expenses (faste regninger) udelades bevidst: de er stabile fra
+// måned til måned og ville bare flade trenden ud. Brugeren får mere
+// indsigt i hvad der VARIERER ved kun at se de variable poster.
+export type MonthlyExpenseTrendPoint = {
+  yearMonth: string;   // 'YYYY-MM'
+  monthLabel: string;  // 'jan', 'feb', ... (forkortet, lowercased)
+  total: number;       // øre
+};
+
+export async function getMonthlyExpenseTrend(
+  monthsBack = 6
+): Promise<MonthlyExpenseTrendPoint[]> {
+  const p = await getPerspective();
+  const visibleAccountIds = await getVisibleAccountIds();
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  // Vinduet: nu og N-1 måneder tilbage. Vi vil ALTID returnere N punkter
+  // selv hvis nogle måneder er tomme - så trenden læses uden huller.
+  const now = new Date();
+  const points: MonthlyExpenseTrendPoint[] = [];
+  const monthLabelsDa = [
+    'jan', 'feb', 'mar', 'apr', 'maj', 'jun',
+    'jul', 'aug', 'sep', 'okt', 'nov', 'dec',
+  ];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    points.push({ yearMonth, monthLabel: monthLabelsDa[d.getMonth()], total: 0 });
+  }
+
+  const earliest = points[0]!.yearMonth + '-01';
+
+  let q = p.supabase
+    .from('transactions')
+    .select('amount, occurs_on, category:categories(kind)')
+    .eq('household_id', p.householdId)
+    .eq('recurrence', 'once')
+    .gte('occurs_on', earliest);
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  type Row = {
+    amount: number;
+    occurs_on: string;
+    category: { kind: 'income' | 'expense' } | null;
+  };
+  const { data, error } = await q.returns<Row[]>();
+  if (error) throw error;
+
+  const totalsByMonth = new Map<string, number>();
+  for (const t of data ?? []) {
+    if (t.category?.kind !== 'expense') continue;
+    const ym = t.occurs_on.slice(0, 7);
+    totalsByMonth.set(ym, (totalsByMonth.get(ym) ?? 0) + t.amount);
+  }
+
+  for (const point of points) {
+    point.total = totalsByMonth.get(point.yearMonth) ?? 0;
+  }
+
+  return points;
+}
+
 // Onboarding-progress: hvilke fundamentale trin har brugeren udført siden
 // wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
 // er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.

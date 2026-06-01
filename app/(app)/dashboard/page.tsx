@@ -5,6 +5,7 @@ import {
   getCurrentMemberFirstName,
   getDashboardData,
   getLifeEvents,
+  getMonthlyExpenseTrend,
   getMonthlyExpensesByGroup,
   getOnboardingProgress,
   getOtherMembersOnboardingStatus,
@@ -33,6 +34,7 @@ import { FamilyStatus } from './_components/FamilyStatus';
 import { PrivatFaellesOverview } from './_components/PrivatFaellesOverview';
 import { IncomeForecastBanner } from './_components/IncomeForecastBanner';
 import { LifeEventsWidget } from './_components/LifeEventsWidget';
+import { MonthlyTrendWidget } from './_components/MonthlyTrendWidget';
 import { OnboardingChecklist } from './_components/OnboardingChecklist';
 import { NextStepsCard } from './_components/NextStepsCard';
 import { UpcomingEvents } from './_components/UpcomingEvents';
@@ -63,6 +65,7 @@ export default async function DashboardPage() {
     upcomingEvents,
     otherMembersStatus,
     lifeEvents,
+    monthlyTrend,
     shouldAutoStartTour,
     proxyCtx,
   ] = await Promise.all([
@@ -76,6 +79,7 @@ export default async function DashboardPage() {
     getUpcomingEvents(),
     getOtherMembersOnboardingStatus(),
     getLifeEvents(),
+    getMonthlyExpenseTrend(),
     shouldShowTour('dashboard'),
     getActiveProxyContext(),
   ]);
@@ -198,6 +202,13 @@ export default async function DashboardPage() {
           privateGroups={expenseGroups.private}
           sharedGroups={expenseGroups.shared}
         />
+      </div>
+
+      {/* Måned-mod-måned-trend for variabelt forbrug. Spiir-style at-a-glance
+          "udgiver du mere end normalt?". Faste regninger udelades så vi kun
+          ser det der reelt VARIERER fra måned til måned. */}
+      <div className="mt-8">
+        <MonthlyTrendWidget points={monthlyTrend} />
       </div>
 
       {/* Begivenheder-widget: 1-3 nærmeste planlagte/aktive begivenheder

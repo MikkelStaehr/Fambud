@@ -61,9 +61,45 @@ export function LaaneoptimeringSection({ loans }: { loans: LoanInfo[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Lån-tabel (sorteret efter rente, dyreste øverst) */}
-      <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
-        <table className="w-full min-w-[480px] text-sm">
+      {/* Mobil: kort-liste der staker tallene under navnet, ingen vandret
+          scroll. Desktop (sm+): klassisk tabel sorteret efter rente. */}
+      <div className="rounded-lg border border-amber-200 bg-white">
+        <ul className="divide-y divide-amber-100 sm:hidden">
+          {sorted.map((l) => (
+            <li key={l.id} className="px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-neutral-900">{l.name}</span>
+                {avalanche && l.id === avalanche.id && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                    dyreste
+                  </span>
+                )}
+              </div>
+              <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
+                <div>
+                  <dt className="text-neutral-500">Restgæld</dt>
+                  <dd className="tabnum mt-0.5 font-mono font-semibold text-neutral-900">
+                    {formatAmount(l.balance)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-500">Rente</dt>
+                  <dd className="tabnum mt-0.5 font-mono text-neutral-700">
+                    {l.rate != null ? `${l.rate}%` : '–'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-neutral-500">Ydelse/md</dt>
+                  <dd className="tabnum mt-0.5 font-mono text-neutral-600">
+                    {l.monthlyPayment > 0 ? formatAmount(l.monthlyPayment) : '–'}
+                  </dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+
+        <table className="hidden w-full text-sm sm:table">
           <thead>
             <tr className="border-b border-amber-100 bg-amber-50/60 text-left text-[11px] font-medium uppercase tracking-wider text-neutral-500">
               <th className="px-4 py-2.5 font-medium">Lån</th>

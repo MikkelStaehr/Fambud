@@ -48,8 +48,8 @@ export default async function LaanPage() {
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <LaanTour autoStart={autoStartTour} />
-      <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
-        <div>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-6">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xs font-medium uppercase tracking-wider text-neutral-500">
             Lån
           </h1>

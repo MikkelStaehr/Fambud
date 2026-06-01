@@ -92,7 +92,36 @@ export function AmortisationProjection({ loan }: Props) {
             </div>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          {/* Mobil: kort per milestone, ingen vandret scroll. Desktop: tabel. */}
+          <div className="mt-4 space-y-2 sm:hidden">
+            <MobileMilestoneCard
+              when="Nu"
+              rente={loan.payment_rente!}
+              afdrag={loan.payment_afdrag!}
+              bidrag={loan.payment_bidrag ?? 0}
+              remaining={remainingPrincipal}
+              highlight
+            />
+            {pickMilestones(result.periods).map((p, i, arr) => {
+              const isLast = i === arr.length - 1 && p.remaining === 0;
+              const when = isLast
+                ? `Slut (~${p.yearAfter.toFixed(1)} år)`
+                : `Om ${p.yearAfter < 1 ? `${Math.round(p.yearAfter * 12)} mdr` : `${Math.round(p.yearAfter)} år`}`;
+              return (
+                <MobileMilestoneCard
+                  key={p.periodIndex}
+                  when={when}
+                  rente={p.rente}
+                  afdrag={p.afdrag}
+                  bidrag={p.bidrag}
+                  remaining={p.remaining}
+                  highlight={isLast}
+                />
+              );
+            })}
+          </div>
+
+          <div className="mt-4 hidden sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-xs font-medium uppercase tracking-wider text-neutral-500">
@@ -149,5 +178,60 @@ export function AmortisationProjection({ loan }: Props) {
         </>
       )}
     </section>
+  );
+}
+
+function MobileMilestoneCard({
+  when,
+  rente,
+  afdrag,
+  bidrag,
+  remaining,
+  highlight = false,
+}: {
+  when: string;
+  rente: number;
+  afdrag: number;
+  bidrag: number;
+  remaining: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-md border px-3 py-2.5 ${
+        highlight
+          ? 'border-neutral-300 bg-neutral-50'
+          : 'border-neutral-200 bg-white'
+      }`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+          {when}
+        </span>
+        <span className="tabnum font-mono text-sm font-semibold text-neutral-900">
+          {formatAmount(remaining)} kr
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-3 gap-x-3 text-[11px]">
+        <div>
+          <dt className="text-neutral-500">Rente</dt>
+          <dd className="tabnum mt-0.5 font-mono text-neutral-700">
+            {formatAmount(rente)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-neutral-500">Afdrag</dt>
+          <dd className="tabnum mt-0.5 font-mono text-neutral-700">
+            {formatAmount(afdrag)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-neutral-500">Bidrag</dt>
+          <dd className="tabnum mt-0.5 font-mono text-neutral-700">
+            {formatAmount(bidrag)}
+          </dd>
+        </div>
+      </div>
+    </div>
   );
 }

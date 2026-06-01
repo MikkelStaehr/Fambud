@@ -385,10 +385,15 @@ export function BudgetTable({ rows }: Props) {
                 <Th
                   onClick={() => toggleSort('recurrence')}
                   indicator={sortIndicator('recurrence')}
+                  hideOnMobile
                 >
                   Interval
                 </Th>
-                <Th onClick={() => toggleSort('account')} indicator={sortIndicator('account')}>
+                <Th
+                  onClick={() => toggleSort('account')}
+                  indicator={sortIndicator('account')}
+                  hideOnMobile
+                >
                   Konto
                 </Th>
                 <Th
@@ -398,7 +403,7 @@ export function BudgetTable({ rows }: Props) {
                 >
                   Beløb / {periodShort}
                 </Th>
-                <th scope="col" className="px-4 py-2.5 text-right">
+                <th scope="col" className="hidden px-4 py-2.5 text-right sm:table-cell">
                   <span className="font-medium uppercase tracking-wider text-neutral-500">
                     Andel
                   </span>
@@ -450,14 +455,14 @@ export function BudgetTable({ rows }: Props) {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5" />
-                      <td className="px-4 py-2.5" />
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="hidden px-4 py-2.5 sm:table-cell" />
+                      <td className="hidden px-4 py-2.5 sm:table-cell" />
+                      <td className="px-3 py-2.5 text-right sm:px-4">
                         <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
                           {formatAmount(g.total * mult)} kr
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="hidden px-4 py-2.5 text-right sm:table-cell">
                         <div className="tabnum font-mono text-xs font-medium text-neutral-500">
                           {sharePct(g.total)}
                         </div>
@@ -468,7 +473,7 @@ export function BudgetTable({ rows }: Props) {
                     {open &&
                       g.items.map((r) => (
                         <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                          <td className="px-4 py-2 pl-12">
+                          <td className="px-3 py-2 pl-8 sm:px-4 sm:pl-12">
                             <Link
                               href={`/faste-udgifter/${r.accountId}#expense-${r.id}`}
                               className="block truncate text-neutral-900 hover:underline"
@@ -478,14 +483,19 @@ export function BudgetTable({ rows }: Props) {
                             <div className="truncate text-[11px] text-neutral-500">
                               {r.categoryName}
                             </div>
+                            {/* På mobil vises interval + konto her som
+                                metadata - kolonnerne er hidden under sm. */}
+                            <div className="mt-0.5 truncate text-[11px] text-neutral-400 sm:hidden">
+                              {RECURRENCE_LABEL_DA[r.recurrence]} · {r.accountName}
+                            </div>
                           </td>
-                          <td className="px-4 py-2 text-xs text-neutral-600">
+                          <td className="hidden px-4 py-2 text-xs text-neutral-600 sm:table-cell">
                             {RECURRENCE_LABEL_DA[r.recurrence]}
                           </td>
-                          <td className="px-4 py-2 text-neutral-900">
+                          <td className="hidden px-4 py-2 text-neutral-900 sm:table-cell">
                             {r.accountName}
                           </td>
-                          <td className="px-4 py-2 text-right">
+                          <td className="px-3 py-2 text-right sm:px-4">
                             <div className="tabnum font-mono text-sm font-medium text-neutral-900">
                               {formatAmount(r.monthly * mult)} kr
                             </div>
@@ -495,7 +505,7 @@ export function BudgetTable({ rows }: Props) {
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-right">
+                          <td className="hidden px-4 py-2 text-right sm:table-cell">
                             <div className="tabnum font-mono text-xs text-neutral-500">
                               {sharePct(r.monthly)}
                             </div>
@@ -509,15 +519,17 @@ export function BudgetTable({ rows }: Props) {
             {grouped.length > 0 && (
               <tfoot className="border-t-2 border-neutral-200 bg-neutral-50">
                 <tr>
-                  <td colSpan={3} className="px-4 py-2.5 text-xs font-medium text-neutral-600">
+                  <td className="px-4 py-2.5 text-xs font-medium text-neutral-600">
                     {totalCount} {totalCount === 1 ? 'udgift' : 'udgifter'} i alt
                   </td>
+                  <td className="hidden px-4 py-2.5 sm:table-cell" />
+                  <td className="hidden px-4 py-2.5 sm:table-cell" />
                   <td className="px-4 py-2.5 text-right">
                     <div className="tabnum font-mono text-sm font-semibold text-neutral-900">
                       {formatAmount(totalMonthly * mult)} kr/{periodShort}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="hidden px-4 py-2.5 text-right sm:table-cell">
                     <div className="tabnum font-mono text-xs font-medium text-neutral-500">
                       {sharePct(totalMonthly)}
                     </div>
@@ -537,16 +549,20 @@ function Th({
   onClick,
   indicator,
   align = 'left',
+  hideOnMobile = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   indicator: string;
   align?: 'left' | 'right';
+  hideOnMobile?: boolean;
 }) {
   return (
     <th
       scope="col"
-      className={`px-4 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`px-4 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'} ${
+        hideOnMobile ? 'hidden sm:table-cell' : ''
+      }`}
     >
       <button
         type="button"

@@ -110,8 +110,8 @@ export default async function KontiPage({
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <KontiTour autoStart={autoStartTour} />
-      <header className="flex items-center justify-between border-b border-neutral-200 pb-6">
-        <div>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-6">
+        <div className="min-w-0 flex-1">
           <h1 className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-neutral-500">
             Konti
             <InfoTooltip>

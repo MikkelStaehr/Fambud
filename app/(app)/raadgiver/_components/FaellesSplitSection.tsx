@@ -245,8 +245,105 @@ export function FaellesSplitSection({
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
-        <table className="w-full min-w-[560px] text-sm">
+      {/* Mobil: kort per person, ingen vandret scroll. Desktop: tabel. */}
+      <div className="rounded-lg border border-amber-200 bg-white sm:hidden">
+        <ul className="divide-y divide-amber-100">
+          {split.members.map((m) => {
+            const share = shareOf(m);
+            const savingsShare = savingsShareOf(m);
+            const husholdningShare = husholdningShareOf(m);
+            const eventShare = eventShareTotalFor(m);
+            const totalThisRow =
+              share + savingsShare + husholdningShare + eventShare;
+            const remaining = m.member.monthlyIncome - totalThisRow;
+            const currentTotal =
+              m.member.currentToExpenseAccounts +
+              m.member.currentToHusholdningAccounts +
+              m.member.currentToSavingsAccounts +
+              m.member.currentToEventAccounts;
+            return (
+              <li key={m.member.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-neutral-900">
+                    {m.member.name}
+                  </span>
+                  {!m.member.incomeComplete && (
+                    <span className="text-[10px] text-amber-700">
+                      (indkomst ufuldstændig)
+                    </span>
+                  )}
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                  <div>
+                    <dt className="text-neutral-500">Indkomst</dt>
+                    <dd className="tabnum mt-0.5 font-mono text-neutral-700">
+                      {formatAmount(m.member.monthlyIncome)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Betaler til fælles</dt>
+                    <dd className="tabnum mt-0.5 font-mono font-semibold text-neutral-900">
+                      {formatAmount(totalThisRow)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Tilbage til sig selv</dt>
+                    <dd className="tabnum mt-0.5 font-mono font-semibold text-emerald-800">
+                      {formatAmount(remaining)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Bidrager nu</dt>
+                    <dd
+                      className={`tabnum mt-0.5 font-mono ${currentTotal >= totalThisRow ? 'text-emerald-700' : 'text-amber-700'}`}
+                    >
+                      {formatAmount(currentTotal)}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-3 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold uppercase tracking-wider text-neutral-600">
+              I alt
+            </span>
+            <span className="tabnum font-mono text-neutral-700">
+              {formatAmount(totalIncome)} indkomst
+            </span>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-neutral-500">Betaler til fælles</span>
+            <span className="tabnum font-mono font-semibold text-neutral-900">
+              {formatAmount(
+                totalShare + totalHusholdning + totalSavings + totalEvents
+              )}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-neutral-500">Tilbage til sig selv</span>
+            <span className="tabnum font-mono font-semibold text-emerald-800">
+              {formatAmount(totalRemaining)}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-neutral-500">Bidrager nu</span>
+            <span className="tabnum font-mono">
+              {formatAmount(
+                totalCurrentExpense +
+                  totalCurrentHusholdning +
+                  totalCurrentSavings +
+                  totalCurrentEvents
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden rounded-lg border border-amber-200 bg-white sm:block">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-amber-100 bg-amber-50/60 text-left text-[11px] font-medium uppercase tracking-wider text-neutral-500">
               <th className="px-4 py-2.5 font-medium">Person</th>

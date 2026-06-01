@@ -3,8 +3,14 @@
 // kolonnenavn fremfor constraint-navn (mere robust mod auto-genererede
 // Postgres-navne).
 
-import type { Account, RecurrenceFreq, Transfer } from '@/lib/database.types';
+import type {
+  Account,
+  AccountKind,
+  RecurrenceFreq,
+  Transfer,
+} from '@/lib/database.types';
 import { monthBounds, monthlyEquivalent } from '@/lib/format';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
   getPerspective,
   privateAccountFilter,
@@ -91,16 +97,32 @@ type TransferEdge = {
   }[];
 };
 
+// Minimal ejer-metadata for ALLE husstandens konti (incl. dem der er
+// RLS-skjult fra perspectiv'et). Bruges af /overforsler til at vise
+// "Fra Louise" på partnerens private lønkonto i stedet for "Fra Ukendt".
+// Kun metadata - ingen balance eller transaktioner.
+export type TransferAccountOwner = {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  owner_name: string | null;
+  created_by: string | null;
+  editable_by_all: boolean;
+};
+
 type TransferGraphData = {
   accounts: Account[];
   edges: TransferEdge[];
+  // Hus-bredt ejer-lookup. Brug accountOwners.get(id) som fallback når
+  // accounts-listen mangler en konto (typisk partnerens private lønkonto).
+  accountOwners: Map<string, TransferAccountOwner>;
 };
 
 export async function getTransferGraph(): Promise<TransferGraphData> {
   const p = await getPerspective();
   const visibleAccountIds = await getVisibleAccountIds();
   if (visibleAccountIds && visibleAccountIds.length === 0) {
-    return { accounts: [], edges: [] };
+    return { accounts: [], edges: [], accountOwners: new Map() };
   }
 
   let accountsQ = p.supabase
@@ -120,13 +142,55 @@ export async function getTransferGraph(): Promise<TransferGraphData> {
     );
   }
 
-  const [accountsRes, transfersRes] = await Promise.all([
-    accountsQ.order('created_at', { ascending: true }),
-    transfersQ.order('occurs_on', { ascending: false }),
-  ]);
+  // Hus-bred ejer-metadata via admin-client: vi har brug for at klassificere
+  // from-konti der er RLS-skjult fra perspectiv'et (typisk partnerens private
+  // lønkonto). Privacy-safe: kun id/name/kind + owner-felter - ingen balance
+  // eller transaktioner. Samme mønster som getEconomyPlanData bruger til
+  // memberLonkonto-lookup.
+  const adminClient = createAdminClient();
+  const [accountsRes, transfersRes, allAccountsRes, familyMembersRes] =
+    await Promise.all([
+      accountsQ.order('created_at', { ascending: true }),
+      transfersQ.order('occurs_on', { ascending: false }),
+      adminClient
+        .from('accounts')
+        .select('id, name, kind, owner_name, created_by, editable_by_all')
+        .eq('household_id', p.householdId)
+        .eq('archived', false),
+      adminClient
+        .from('family_members')
+        .select('user_id, name')
+        .eq('household_id', p.householdId)
+        .not('user_id', 'is', null),
+    ]);
 
   if (accountsRes.error) throw accountsRes.error;
   if (transfersRes.error) throw transfersRes.error;
+  if (allAccountsRes.error) throw allAccountsRes.error;
+  if (familyMembersRes.error) throw familyMembersRes.error;
+
+  // Map user_id → family member-navn så vi kan resolve owner_name=null
+  // til partnerens navn (fx Louises lønkonto har owner_name=null, men
+  // created_by peger på Louises auth-user, og vi vil vise "Louise" som ejer).
+  const memberNameByUserId = new Map<string, string>();
+  for (const fm of familyMembersRes.data ?? []) {
+    if (fm.user_id) memberNameByUserId.set(fm.user_id, fm.name);
+  }
+
+  const accountOwners = new Map<string, TransferAccountOwner>();
+  for (const a of allAccountsRes.data ?? []) {
+    const memberName = a.created_by
+      ? memberNameByUserId.get(a.created_by) ?? null
+      : null;
+    accountOwners.set(a.id, {
+      id: a.id,
+      name: a.name,
+      kind: a.kind,
+      owner_name: a.owner_name ?? memberName,
+      created_by: a.created_by,
+      editable_by_all: a.editable_by_all ?? false,
+    });
+  }
 
   // Samle alle transfers under deres (from, to)-par. monthlyEquivalent giver
   // 0 for 'once', så engangs-overførsler bidrager ikke til kant-tykkelsen
@@ -158,5 +222,6 @@ export async function getTransferGraph(): Promise<TransferGraphData> {
   return {
     accounts: accountsRes.data ?? [],
     edges: Array.from(byPair.values()),
+    accountOwners,
   };
 }

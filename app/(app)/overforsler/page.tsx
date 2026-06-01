@@ -135,10 +135,34 @@ export default async function OverforslerPage({
 
   const accountById = new Map(graph.accounts.map((a) => [a.id, a]));
 
+  // Resolv from-konti der er RLS-skjult (typisk partnerens private lønkonto)
+  // via accountOwners-mappet. Returnerer minimal-feltsæt der dækker både
+  // ownership-klassifikation OG UI-rendering (id/name/kind/owner_name).
+  const resolveFromAccount = (
+    fromId: string
+  ): Pick<Account, 'id' | 'name' | 'kind' | 'owner_name' | 'created_by' | 'editable_by_all'> | undefined => {
+    const visible = accountById.get(fromId);
+    if (visible) return visible;
+    const owner = graph.accountOwners.get(fromId);
+    if (!owner) return undefined;
+    return {
+      id: owner.id,
+      name: owner.name,
+      kind: owner.kind,
+      owner_name: owner.owner_name,
+      created_by: owner.created_by,
+      editable_by_all: owner.editable_by_all,
+    };
+  };
+
   // Klassificér transfers via den fælles ownership-helper. Delegering sikrer
   // at /overforsler, /konti, AccountSelectGrouped og dashboard alle bruger
   // præcis samme regler om "hvis konto er det her?".
-  const classifyOwner = (from: Account | undefined): { track: OwnerTrack; label: string } => {
+  const classifyOwner = (
+    from:
+      | Pick<Account, 'owner_name' | 'created_by' | 'editable_by_all'>
+      | undefined
+  ): { track: OwnerTrack; label: string } => {
     if (!from) return { track: 'other', label: 'Ukendt' };
     const result = classifyAccountOwnership(from, {
       currentUserId,
@@ -152,7 +176,7 @@ export default async function OverforslerPage({
   // Flatten recurring transfers - vi smider engangs ud her, de hører til
   // i deres egen sektion nederst.
   const recurring: EnrichedTransfer[] = graph.edges.flatMap((edge) => {
-    const fromAcc = accountById.get(edge.from);
+    const fromAcc = resolveFromAccount(edge.from);
     const owner = classifyOwner(fromAcc);
     return edge.transfers
       .filter((t) => t.recurrence !== 'once')

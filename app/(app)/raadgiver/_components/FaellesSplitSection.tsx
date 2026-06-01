@@ -751,7 +751,7 @@ function RecommendationRow({
                   {formatAmount(Math.abs(diff))} kr
                 </span>
               ) : (
-                <span className="text-neutral-600">
+                <span className="text-amber-700">
                   I dag: {formatAmount(currentAmount)} kr. Reducér med{' '}
                   {formatAmount(Math.abs(diff))} kr
                 </span>

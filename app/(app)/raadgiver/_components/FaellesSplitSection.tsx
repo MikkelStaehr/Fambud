@@ -40,6 +40,18 @@ type Props = {
   // obligatoriske). Hvis null vises som "opret en fælles husholdningskonto".
   husholdningAccountId: string | null;
   husholdningAccountName: string | null;
+  // Begivenheder som FRIVILLIGE obligationer (ferie, bryllup, bil osv.). Hver
+  // begivenhed bliver en ekstra overførsels-række pr. person under de tre
+  // obligatoriske. Tomt array hvis husstanden ingen aktive events har.
+  eventObligations: EventObligation[];
+};
+
+export type EventObligation = {
+  id: string;
+  name: string;
+  monthly: number;
+  targetAccountId: string;
+  targetAccountName: string;
 };
 
 export function FaellesSplitSection({
@@ -52,6 +64,7 @@ export function FaellesSplitSection({
   bufferAccountName,
   husholdningAccountId,
   husholdningAccountName,
+  eventObligations,
 }: Props) {
   const [model, setModel] = useState<Model>('proportional');
 
@@ -73,6 +86,22 @@ export function FaellesSplitSection({
       : model === 'equal'
         ? m.husholdningEqual
         : m.husholdningEqualRemaining;
+
+  // Per-event split: events er FRIVILLIGE obligationer (begivenheder) der
+  // splittes efter samme model som de tre obligatoriske. Equal-remaining
+  // er ikke meningsfuld pr. event uden re-fordeling af alle obligationer,
+  // så vi falder tilbage til equal for den model. Acceptabelt v1; senere
+  // refactor til array-baseret obligation-model kan håndtere det rigtigt.
+  const eventShareFor = (
+    m: FaellesSplit['members'][number],
+    monthly: number
+  ): number => {
+    if (split.members.length === 0) return 0;
+    if (model === 'proportional' && split.totalIncome > 0) {
+      return Math.round((monthly * m.member.monthlyIncome) / split.totalIncome);
+    }
+    return Math.round(monthly / split.members.length);
+  };
 
   const totalShare = split.members.reduce((s, m) => s + shareOf(m), 0);
   const totalSavings = split.members.reduce((s, m) => s + savingsShareOf(m), 0);
@@ -388,12 +417,14 @@ export function FaellesSplitSection({
         shareOf={shareOf}
         savingsShareOf={savingsShareOf}
         husholdningShareOf={husholdningShareOf}
+        eventShareFor={eventShareFor}
         primaryFaellesAccountId={primaryFaellesAccountId}
         primaryFaellesAccountName={primaryFaellesAccountName}
         bufferAccountId={bufferAccountId}
         bufferAccountName={bufferAccountName}
         husholdningAccountId={husholdningAccountId}
         husholdningAccountName={husholdningAccountName}
+        eventObligations={eventObligations}
         hasSavings={hasSavings}
         hasHusholdning={hasHusholdning}
       />
@@ -418,12 +449,14 @@ function TransferRecommendations({
   shareOf,
   savingsShareOf,
   husholdningShareOf,
+  eventShareFor,
   primaryFaellesAccountId,
   primaryFaellesAccountName,
   bufferAccountId,
   bufferAccountName,
   husholdningAccountId,
   husholdningAccountName,
+  eventObligations,
   hasSavings,
   hasHusholdning,
 }: {
@@ -431,12 +464,14 @@ function TransferRecommendations({
   shareOf: (m: FaellesSplitMember) => number;
   savingsShareOf: (m: FaellesSplitMember) => number;
   husholdningShareOf: (m: FaellesSplitMember) => number;
+  eventShareFor: (m: FaellesSplitMember, monthly: number) => number;
   primaryFaellesAccountId: string | null;
   primaryFaellesAccountName: string | null;
   bufferAccountId: string | null;
   bufferAccountName: string | null;
   husholdningAccountId: string | null;
   husholdningAccountName: string | null;
+  eventObligations: EventObligation[];
   hasSavings: boolean;
   hasHusholdning: boolean;
 }) {
@@ -468,6 +503,10 @@ function TransferRecommendations({
             expenseShare={shareOf(m)}
             husholdningShare={husholdningShareOf(m)}
             savingsShare={savingsShareOf(m)}
+            eventShares={eventObligations.map((e) => ({
+              event: e,
+              share: eventShareFor(m, e.monthly),
+            }))}
             faellesAccountId={primaryFaellesAccountId}
             faellesAccountName={primaryFaellesAccountName}
             bufferAccountId={bufferAccountId}
@@ -488,6 +527,7 @@ function PersonRecommendationBlock({
   expenseShare,
   husholdningShare,
   savingsShare,
+  eventShares,
   faellesAccountId,
   faellesAccountName,
   bufferAccountId,
@@ -501,6 +541,7 @@ function PersonRecommendationBlock({
   expenseShare: number;
   husholdningShare: number;
   savingsShare: number;
+  eventShares: { event: EventObligation; share: number }[];
   faellesAccountId: string;
   faellesAccountName: string;
   bufferAccountId: string | null;
@@ -585,6 +626,25 @@ function PersonRecommendationBlock({
             </div>
           )
         )}
+        {eventShares.map(({ event, share }) =>
+          share > 0 ? (
+            <RecommendationRow
+              key={event.id}
+              kind="event"
+              memberName={member.name}
+              lonkontoId={member.lonkontoId}
+              lonkontoName={member.lonkontoName}
+              targetAccountId={event.targetAccountId}
+              targetAccountName={event.targetAccountName}
+              recommendedAmount={share}
+              currentAmount={0}
+              description={event.name}
+              eventLabel={event.name}
+              lifeEventId={event.id}
+              hideCurrent
+            />
+          ) : null
+        )}
       </div>
     </div>
   );
@@ -600,8 +660,11 @@ function RecommendationRow({
   recommendedAmount,
   currentAmount,
   description,
+  eventLabel,
+  lifeEventId,
+  hideCurrent = false,
 }: {
-  kind: 'udgifter' | 'husholdning' | 'opsparing';
+  kind: 'udgifter' | 'husholdning' | 'opsparing' | 'event';
   memberName: string;
   lonkontoId: string | null;
   lonkontoName: string | null;
@@ -610,6 +673,13 @@ function RecommendationRow({
   recommendedAmount: number;
   currentAmount: number;
   description: string;
+  // Begivenheds-titel til badge ("Til Ferie 2026" frem for "Til begivenhed").
+  eventLabel?: string;
+  // Linker overførslen til en begivenhed i transfer-formularens prefill.
+  lifeEventId?: string;
+  // Skjul "I dag: X kr. Øg/Reducér med Y"-linjen. Bruges for events hvor vi
+  // (v1) ikke har per-medlem-current-data.
+  hideCurrent?: boolean;
 }) {
   const diff = recommendedAmount - currentAmount;
   const onTarget = Math.abs(diff) < 5000;
@@ -617,7 +687,7 @@ function RecommendationRow({
 
   const hasLonkonto = lonkontoId != null;
   const prefillUrl = hasLonkonto
-    ? `/overforsler/ny?from=${encodeURIComponent(lonkontoId)}&to=${encodeURIComponent(targetAccountId)}&amount=${encodeURIComponent(formatOereForInput(recommendedAmount))}&recurrence=monthly&description=${encodeURIComponent(description)}`
+    ? `/overforsler/ny?from=${encodeURIComponent(lonkontoId)}&to=${encodeURIComponent(targetAccountId)}&amount=${encodeURIComponent(formatOereForInput(recommendedAmount))}&recurrence=monthly&description=${encodeURIComponent(description)}${lifeEventId ? `&life_event_id=${encodeURIComponent(lifeEventId)}` : ''}`
     : null;
 
   const kindLabel =
@@ -625,13 +695,17 @@ function RecommendationRow({
       ? 'Til udgifter'
       : kind === 'husholdning'
         ? 'Til husholdning'
-        : 'Til opsparing';
+        : kind === 'opsparing'
+          ? 'Til opsparing'
+          : `Til ${eventLabel ?? 'begivenhed'}`;
   const kindBadgeClass =
     kind === 'udgifter'
       ? 'bg-amber-100 text-amber-900'
       : kind === 'husholdning'
         ? 'bg-sky-100 text-sky-900'
-        : 'bg-emerald-100 text-emerald-900';
+        : kind === 'opsparing'
+          ? 'bg-emerald-100 text-emerald-900'
+          : 'bg-violet-100 text-violet-900';
 
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -654,25 +728,29 @@ function RecommendationRow({
           ) : (
             <span className="text-amber-700">{memberName} mangler en lønkonto</span>
           )}
-          <span className="text-neutral-300">·</span>
-          {onTarget ? (
-            <span className="text-emerald-700">
-              På mål ({formatAmount(currentAmount)} kr/md i dag)
-            </span>
-          ) : needsIncrease ? (
-            <span className="text-amber-700">
-              I dag: {formatAmount(currentAmount)} kr. Øg med{' '}
-              {formatAmount(Math.abs(diff))} kr
-            </span>
-          ) : (
-            <span className="text-neutral-600">
-              I dag: {formatAmount(currentAmount)} kr. Reducér med{' '}
-              {formatAmount(Math.abs(diff))} kr
-            </span>
+          {!hideCurrent && (
+            <>
+              <span className="text-neutral-300">·</span>
+              {onTarget ? (
+                <span className="text-emerald-700">
+                  På mål ({formatAmount(currentAmount)} kr/md i dag)
+                </span>
+              ) : needsIncrease ? (
+                <span className="text-amber-700">
+                  I dag: {formatAmount(currentAmount)} kr. Øg med{' '}
+                  {formatAmount(Math.abs(diff))} kr
+                </span>
+              ) : (
+                <span className="text-neutral-600">
+                  I dag: {formatAmount(currentAmount)} kr. Reducér med{' '}
+                  {formatAmount(Math.abs(diff))} kr
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
-      {prefillUrl && !onTarget && (
+      {prefillUrl && (hideCurrent || !onTarget) && (
         <Link
           href={prefillUrl}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-900 transition hover:border-emerald-700 hover:bg-emerald-50 hover:text-emerald-900"

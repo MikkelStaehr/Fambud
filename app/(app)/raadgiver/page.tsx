@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { getEconomyPlanData, shouldShowTour } from '@/lib/dal';
+import { getEconomyPlanData, getLifeEvents, shouldShowTour } from '@/lib/dal';
 import {
   splitFaellesExpenses,
   bufferRecommendation,
@@ -21,10 +21,26 @@ import { RaadgiverTour } from './_components/RaadgiverTour';
 // mål, manglende opsætning og Opret-handlinger følger.
 
 export default async function RaadgiverPage() {
-  const [plan, autoStartTour] = await Promise.all([
+  const [plan, lifeEvents, autoStartTour] = await Promise.all([
     getEconomyPlanData(),
+    getLifeEvents(),
     shouldShowTour('raadgiver'),
   ]);
+
+  // Begivenheder som ekstra (frivillige) overførsels-obligationer. Vi tager
+  // kun aktive/planlagte events der har mindst én eksisterende overførsel -
+  // så vi kender destinations-kontoen og kan foreslå en split mellem
+  // bidragyderne uden at brugeren skal vælge konto først.
+  const eventObligations = lifeEvents
+    .filter((e) => e.status === 'planning' || e.status === 'active')
+    .filter((e) => e.transfers.length > 0 && e.monthlyTotal > 0)
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      monthly: e.monthlyTotal,
+      targetAccountId: e.transfers[0].to_account_id,
+      targetAccountName: e.transfers[0].to_account_name,
+    }));
   const buffer = bufferRecommendation(
     plan.monthlyFixedExpenses,
     plan.bufferMonthlyContribution
@@ -124,6 +140,7 @@ export default async function RaadgiverPage() {
           bufferAccountName={plan.bufferAccountName}
           husholdningAccountId={plan.husholdningAccountId}
           husholdningAccountName={plan.husholdningAccountName}
+          eventObligations={eventObligations}
         />
       </section>
 

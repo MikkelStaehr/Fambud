@@ -35,6 +35,7 @@ import {
 } from '@/lib/format';
 import { EventForm } from '../_components/EventForm';
 import { EventOverview } from '../_components/EventOverview';
+import { ItemBudgetMeter } from '../_components/ItemBudgetMeter';
 import { ItemList } from '../_components/ItemList';
 import {
   addLifeEventItem,
@@ -274,10 +275,15 @@ export default async function EventDetailPage({
           Poster
         </h2>
         <p className="mb-3 text-sm text-neutral-500">
-          Brug poster til at bryde budgettet ned (lokale, mad, foto, …). Når
-          budget-mode er sat til &quot;Sum af poster&quot; på detaljerne
-          ovenfor, udgør summen her det samlede totalbudget.
+          Bryd budgettet ned i konkrete poster (flybillet, hotel, mad, …)
+          for at se hvor stor en del af det planlagte loft I har bogført.
+          Markér posterne som planlagt, booket eller betalt mens I går.
         </p>
+        <ItemBudgetMeter
+          totalBudget={event.total_budget}
+          useItemsForBudget={event.use_items_for_budget}
+          items={event.items}
+        />
         <ItemList
           eventId={event.id}
           items={event.items}

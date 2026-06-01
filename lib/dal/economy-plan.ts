@@ -13,6 +13,7 @@ import { getFamilyMembers, getOtherMembersOnboardingStatus } from './family';
 import { getPrimaryIncomeForecast } from './income';
 import { getHouseholdFinancialSummary } from './dashboard';
 import { getLoans } from './loans';
+import { getLifeEvents } from './life-events';
 import { getMonthlyExpensesByGroup } from './expenses-by-category';
 import type { PlanMember, MemberSetupStatus } from '@/lib/economy-plan';
 import type { CategoryGroup } from '@/lib/categories';
@@ -116,6 +117,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     loans,
     expenseGroups,
     memberStatuses,
+    lifeEventsForBucketing,
   ] = await Promise.all([
     getFamilyMembers(),
     getCashflowGraph(),
@@ -130,9 +132,23 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
     getLoans(),
     getMonthlyExpensesByGroup(),
     getOtherMembersOnboardingStatus(),
+    getLifeEvents(),
   ]);
   if (accountsRes.error) throw accountsRes.error;
   const accounts = accountsRes.data ?? [];
+
+  // Event-konti = destinationer for begivenheds-overførsler. Vi splitter dem
+  // ud af savings-bucketten så Buffer-anbefalingen ikke fejlagtigt forventer
+  // at hub'e ferie-opsparing, og så Rådgiveren kan vise events som deres egen
+  // obligation i "Betaler til fælles". Ellers ville Mikkels Thailand-bidrag
+  // dukke op både i "ops." sub-linjen OG som CTA-række - misvisende.
+  const eventAccountIds = new Set<string>();
+  for (const e of lifeEventsForBucketing) {
+    if (e.status === 'cancelled' || e.status === 'completed') continue;
+    for (const tr of e.transfers) {
+      eventAccountIds.add(tr.to_account_id);
+    }
+  }
 
   // Bidragydere = voksne der enten er logget ind eller pre-godkendt via
   // email. Børn (begge null) bidrager ikke økonomisk og udelades.
@@ -157,8 +173,6 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       !a.archived &&
       a.kind !== 'credit'
   );
-  const faellesAccountIds = new Set(faellesAccountList.map((a) => a.id));
-
   // Primær destination til fælles-bidrags-overførsler. Budget-kontoen er
   // standardvalget (det er hvor de faste regninger trækkes); ellers
   // husholdning; ellers første fælleskonto.
@@ -193,7 +207,8 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   // (grupperet via from-kontoens creator i advisor-context). Splittes
   // efter destinations-kontotype så rådgiveren kan vise "udgifter" vs
   // "opsparing" som apples-to-apples med de splittede anbefalinger.
-  // 3 buckets: expense (Budget+andet), husholdning (household), savings.
+  // 4 buckets: expense (Budget+andet), husholdning (household), savings
+  // (Buffer/ikke-event), events (ferieopsparing m.fl.).
   const expenseFaellesIds = new Set(
     faellesAccountList
       .filter(
@@ -214,11 +229,17 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   );
   const contributionByUser = new Map<
     string,
-    { total: number; expense: number; husholdning: number; savings: number }
+    {
+      total: number;
+      expense: number;
+      husholdning: number;
+      savings: number;
+      events: number;
+    }
   >();
   const bumpUser = (
     userId: string,
-    bucket: 'expense' | 'husholdning' | 'savings',
+    bucket: 'expense' | 'husholdning' | 'savings' | 'events',
     amount: number
   ) => {
     const prev =
@@ -227,6 +248,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
         expense: 0,
         husholdning: 0,
         savings: 0,
+        events: 0,
       };
     prev.total += amount;
     prev[bucket] += amount;
@@ -234,7 +256,12 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   };
   for (const t of ctx.transfersByCreator) {
     if (t.creatorUserId == null) continue;
-    if (expenseFaellesIds.has(t.toAccountId)) {
+    // Events checkes FØRST: en savings-konto der modtager event-overførsler
+    // hører i events-bucketen, ikke savings - så Buffer-anbefalingen ikke
+    // dobbelt-tæller ferie-opsparing.
+    if (eventAccountIds.has(t.toAccountId)) {
+      bumpUser(t.creatorUserId, 'events', t.monthly);
+    } else if (expenseFaellesIds.has(t.toAccountId)) {
       bumpUser(t.creatorUserId, 'expense', t.monthly);
     } else if (husholdningFaellesIds.has(t.toAccountId)) {
       bumpUser(t.creatorUserId, 'husholdning', t.monthly);
@@ -274,6 +301,7 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
       currentToExpenseAccounts: contrib?.expense ?? 0,
       currentToHusholdningAccounts: contrib?.husholdning ?? 0,
       currentToSavingsAccounts: contrib?.savings ?? 0,
+      currentToEventAccounts: contrib?.events ?? 0,
       lonkontoId: memberLonkonto?.id ?? null,
       lonkontoName: memberLonkonto?.name ?? null,
     };

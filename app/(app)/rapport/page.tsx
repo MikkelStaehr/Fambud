@@ -19,7 +19,11 @@
 //   - Låneydelser er bogført som "Bolig & lån"-udgifter; vi trækker låne-
 //     andelen ud så de står som en egen post (ikke dobbelt).
 //   - Husholdning = fælles forbrug på husholdnings-/kontantkonti.
-//   - Opsparing = faste overførsler ind på opsparings-/investeringskonti.
+//   - Opsparing = faste overførsler ind på opsparings-/investeringskonti
+//     der IKKE er event-destinationer.
+//   - Begivenheder = faste overførsler ind på konti der modtager begivenheds-
+//     overførsler (ferie, bryllup osv.). Splittet ud af Opsparing så vi ikke
+//     dobbelt-tæller dem - samme 4-bucket-rød-tråd som Rådgiveren bruger.
 //   - Private udgifter udelades: en bank vurderer husstandens fælles
 //     forpligtelser, ikke den enkeltes private forbrug.
 
@@ -32,6 +36,7 @@ import {
   getHouseholdName,
   getFamilyMembers,
   getPrimaryIncomeForecast,
+  getLifeEvents,
 } from '@/lib/dal';
 import {
   formatAmount,
@@ -46,7 +51,7 @@ import { FambudMark } from '@/app/_components/FambudMark';
 import { PrintButton } from './_components/PrintButton';
 
 export default async function RapportPage() {
-  const [plan, graph, accounts, budgetAccounts, householdName, familyMembers] =
+  const [plan, graph, accounts, budgetAccounts, householdName, familyMembers, lifeEvents] =
     await Promise.all([
       getEconomyPlanData(),
       getCashflowGraph(),
@@ -54,7 +59,17 @@ export default async function RapportPage() {
       getBudgetAccounts(),
       getHouseholdName(),
       getFamilyMembers(),
+      getLifeEvents(),
     ]);
+
+  // Event-konti (destinationer for begivenheds-overførsler) skal trækkes ud
+  // af savings-bucketten så waterfall'en viser opsparing og begivenheder
+  // hver for sig - matcher Rådgiverens 4-bucket-model (rød tråd).
+  const eventAccountIds = new Set<string>();
+  for (const e of lifeEvents) {
+    if (e.status === 'cancelled' || e.status === 'completed') continue;
+    for (const tr of e.transfers) eventAccountIds.add(tr.to_account_id);
+  }
 
   // Husstandens samlede månedlige indkomst.
   let householdIncome = 0;
@@ -91,14 +106,22 @@ export default async function RapportPage() {
   const fixedExpensesExclLoans = fasteGroups.reduce((s, g) => s + g.monthly, 0);
 
   // Husholdning (fælles dagligt forbrug) + opsparing (faste overførsler ind
-  // på opsparings-/investeringskonti) fra cashflow-grafen.
+  // på opsparings-/investeringskonti) + begivenheder (transfers til event-
+  // konti, splittet ud så de ikke dobbelt-tælles i opsparing).
   let householdSpend = 0;
   const savingsAccounts: { id: string; name: string; monthly: number }[] = [];
+  const eventAccountsFlow: { id: string; name: string; monthly: number }[] = [];
   for (const a of accounts) {
     if (a.archived) continue;
     const d = graph.perAccount.get(a.id);
     if (!d) continue;
-    if (a.kind === 'savings' || a.kind === 'investment') {
+    // Events checkes FØRST: en savings-konto der ER en event-destination
+    // hører i Begivenheder, ikke Opsparing - så waterfall'en ikke
+    // dobbelt-tæller ferie-overførsler.
+    if (eventAccountIds.has(a.id)) {
+      if (d.transfersIn > 0)
+        eventAccountsFlow.push({ id: a.id, name: a.name, monthly: d.transfersIn });
+    } else if (a.kind === 'savings' || a.kind === 'investment') {
       if (d.transfersIn > 0)
         savingsAccounts.push({ id: a.id, name: a.name, monthly: d.transfersIn });
     } else if (
@@ -109,14 +132,17 @@ export default async function RapportPage() {
     }
   }
   savingsAccounts.sort((a, b) => b.monthly - a.monthly);
+  eventAccountsFlow.sort((a, b) => b.monthly - a.monthly);
   const savingsContrib = savingsAccounts.reduce((s, a) => s + a.monthly, 0);
+  const eventsContrib = eventAccountsFlow.reduce((s, a) => s + a.monthly, 0);
 
   const raadighed =
     householdIncome -
     fixedExpensesExclLoans -
     loanPaymentTotal -
     householdSpend -
-    savingsContrib;
+    savingsContrib -
+    eventsContrib;
 
   const gaeldTotal = plan.loans.reduce((s, l) => s + l.balance, 0);
   const annualNetIncome = householdIncome * 12;
@@ -259,12 +285,16 @@ export default async function RapportPage() {
             {savingsContrib > 0 && (
               <FlowRow label="Opsparing" amount={savingsContrib} sign="−" />
             )}
+            {eventsContrib > 0 && (
+              <FlowRow label="Begivenheder" amount={eventsContrib} sign="−" />
+            )}
             <FlowRow label="Rådighedsbeløb" amount={raadighed} sign="=" total />
           </ul>
           {friAndelPct != null && (
             <p className="mt-2 text-xs text-neutral-500">
               Rådighedsbeløbet er det reelt frie hver måned ({friAndelPct}% af
-              indkomsten) - efter faste udgifter, lån, husholdning og opsparing.
+              indkomsten) - efter faste udgifter, lån, husholdning, opsparing
+              {eventsContrib > 0 ? ' og begivenheder' : ''}.
             </p>
           )}
         </section>
@@ -315,7 +345,9 @@ export default async function RapportPage() {
           )}
         </section>
 
-        {/* Opsparing - faste overførsler til opsparings-/investeringskonti */}
+        {/* Opsparing - faste overførsler til opsparings-/investeringskonti
+            (eksl. konti der modtager begivenheds-overførsler - de står i
+            Begivenheder-sektionen nedenfor). */}
         <section className="mt-8 break-inside-avoid">
           <SectionTitle>Opsparing</SectionTitle>
           {savingsAccounts.length === 0 ? (
@@ -325,7 +357,8 @@ export default async function RapportPage() {
           ) : (
             <>
               <p className="mb-2 text-xs text-neutral-500">
-                Faste månedlige overførsler til opsparings- og investeringskonti.
+                Faste månedlige overførsler til opsparings- og investeringskonti
+                (Buffer m.fl.). Begivenheder står som egen post nedenfor.
               </p>
               <ul className="text-sm">
                 {savingsAccounts.map((s) => (
@@ -336,6 +369,28 @@ export default async function RapportPage() {
             </>
           )}
         </section>
+
+        {/* Begivenheder - faste overførsler til event-konti (ferie, bryllup
+            osv.). Trækkes ud af Opsparing så waterfall'en viser dem separat. */}
+        {eventAccountsFlow.length > 0 && (
+          <section className="mt-8 break-inside-avoid">
+            <SectionTitle>Begivenheder</SectionTitle>
+            <p className="mb-2 text-xs text-neutral-500">
+              Faste månedlige overførsler til opsparings-konti knyttet til
+              begivenheder (ferie, bryllup osv.).
+            </p>
+            <ul className="text-sm">
+              {eventAccountsFlow.map((s) => (
+                <ReportRow key={s.id} label={s.name} value={formatAmount(s.monthly)} />
+              ))}
+              <ReportRow
+                label="Begivenheder i alt"
+                value={formatAmount(eventsContrib)}
+                total
+              />
+            </ul>
+          </section>
+        )}
 
         {/* Lån - gældsoversigt */}
         <section className="mt-8 break-inside-avoid">
@@ -392,8 +447,9 @@ export default async function RapportPage() {
         <footer className="mt-10 border-t border-neutral-200 pt-4 text-xs text-neutral-400">
           Genereret {formatLongDateDA(new Date())} via FamBud. Et komplet
           månedligt regnskab for husstandens fælles økonomi: indkomst, faste
-          udgifter, lån, husholdning og opsparing. Private udgifter er udeladt.
-          Beløb er månedlige gennemsnit af tilbagevendende poster.
+          udgifter, lån, husholdning, opsparing og begivenheder. Private
+          udgifter er udeladt. Beløb er månedlige gennemsnit af tilbagevendende
+          poster.
         </footer>
       </div>
     </div>

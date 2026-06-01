@@ -109,8 +109,30 @@ export function FaellesSplitSection({
     (s, m) => s + husholdningShareOf(m),
     0
   );
+
+  // Events bidrager til "Betaler til fælles" på samme måde som de tre
+  // obligatoriske. Andelen pr. medlem = sum over alle events af deres andel.
+  // Skal beregnes FØR totalRemaining (som trækker dem fra) så ingen
+  // hoisting-fælder.
+  const eventShareTotalFor = (m: FaellesSplit['members'][number]): number =>
+    eventObligations.reduce((s, e) => s + eventShareFor(m, e.monthly), 0);
+  const eventsMonthlyTotal = eventObligations.reduce((s, e) => s + e.monthly, 0);
+  const totalEvents = split.members.reduce(
+    (s, m) => s + eventShareTotalFor(m),
+    0
+  );
+  const totalCurrentEvents = split.members.reduce(
+    (s, m) => s + m.member.currentToEventAccounts,
+    0
+  );
+  const hasEvents = eventObligations.length > 0;
+
   const totalIncome = split.totalIncome;
-  const totalRemaining = totalIncome - totalShare - totalSavings - totalHusholdning;
+  // Events skal med så "tilbage til sig selv" reflekterer ALLE forpligtede
+  // overførsler, ikke kun de tre obligatoriske. Ellers viser tabellen et
+  // for-højt rådighedsbeløb der ikke matcher dashboardet eller rapporten.
+  const totalRemaining =
+    totalIncome - totalShare - totalSavings - totalHusholdning - totalEvents;
   const totalCurrentExpense = split.members.reduce(
     (s, m) => s + m.member.currentToExpenseAccounts,
     0
@@ -156,11 +178,20 @@ export function FaellesSplitSection({
         )}
         {hasSavings && (
           <>
-            , og{' '}
+            ,{' '}
             <span className="tabnum font-mono font-semibold text-neutral-900">
               {formatAmount(split.savingsTotal)} kr/md
             </span>{' '}
             til buffer-opsparing
+          </>
+        )}
+        {hasEvents && (
+          <>
+            , og{' '}
+            <span className="tabnum font-mono font-semibold text-neutral-900">
+              {formatAmount(eventsMonthlyTotal)} kr/md
+            </span>{' '}
+            til begivenheder
           </>
         )}
         . Vælg en fordelingsmodel og se hvad hver har tilbage bagefter:
@@ -222,9 +253,9 @@ export function FaellesSplitSection({
               <th className="px-4 py-2.5 text-right font-medium">Indkomst</th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Betaler til fælles
-                {(hasSavings || hasHusholdning) && (
+                {(hasSavings || hasHusholdning || hasEvents) && (
                   <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
-                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}
+                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}{hasEvents && ' / beg'}
                   </div>
                 )}
               </th>
@@ -233,9 +264,9 @@ export function FaellesSplitSection({
               </th>
               <th className="px-4 py-2.5 text-right font-medium">
                 Bidrager nu
-                {(hasSavings || hasHusholdning) && (
+                {(hasSavings || hasHusholdning || hasEvents) && (
                   <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-neutral-400">
-                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}
+                    udg{hasHusholdning && ' / hus'}{hasSavings && ' / ops'}{hasEvents && ' / beg'}
                   </div>
                 )}
               </th>
@@ -246,12 +277,15 @@ export function FaellesSplitSection({
               const share = shareOf(m);
               const savingsShare = savingsShareOf(m);
               const husholdningShare = husholdningShareOf(m);
-              const totalThisRow = share + savingsShare + husholdningShare;
+              const eventShare = eventShareTotalFor(m);
+              const totalThisRow =
+                share + savingsShare + husholdningShare + eventShare;
               const remaining = m.member.monthlyIncome - totalThisRow;
               const currentTotal =
                 m.member.currentToExpenseAccounts +
                 m.member.currentToHusholdningAccounts +
-                m.member.currentToSavingsAccounts;
+                m.member.currentToSavingsAccounts +
+                m.member.currentToEventAccounts;
               return (
                 <tr key={m.member.id}>
                   <td className="px-4 py-2.5 font-medium text-neutral-900">
@@ -277,6 +311,11 @@ export function FaellesSplitSection({
                         + {formatAmount(savingsShare)} ops.
                       </div>
                     )}
+                    {hasEvents && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(eventShare)} beg.
+                      </div>
+                    )}
                   </td>
                   <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-emerald-800">
                     {formatAmount(remaining)}
@@ -295,6 +334,11 @@ export function FaellesSplitSection({
                     {hasSavings && (
                       <div className="tabnum text-[11px] font-normal text-neutral-500">
                         + {formatAmount(m.member.currentToSavingsAccounts)} ops.
+                      </div>
+                    )}
+                    {hasEvents && (
+                      <div className="tabnum text-[11px] font-normal text-neutral-500">
+                        + {formatAmount(m.member.currentToEventAccounts)} beg.
                       </div>
                     )}
                   </td>
@@ -320,6 +364,11 @@ export function FaellesSplitSection({
                     + {formatAmount(totalSavings)} ops.
                   </div>
                 )}
+                {hasEvents && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalEvents)} beg.
+                  </div>
+                )}
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalRemaining)}
@@ -334,6 +383,11 @@ export function FaellesSplitSection({
                 {hasSavings && (
                   <div className="tabnum text-[11px] font-normal text-neutral-500">
                     + {formatAmount(totalCurrentSavings)} ops.
+                  </div>
+                )}
+                {hasEvents && (
+                  <div className="tabnum text-[11px] font-normal text-neutral-500">
+                    + {formatAmount(totalCurrentEvents)} beg.
                   </div>
                 )}
               </td>
@@ -376,6 +430,15 @@ export function FaellesSplitSection({
               opsparing
             </>
           )}
+          {hasEvents && (
+            <>
+              {' '}+{' '}
+              <span className="tabnum font-mono font-semibold">
+                {formatAmount(eventShareTotalFor(me))} kr
+              </span>{' '}
+              begivenheder
+            </>
+          )}
           . Du bidrager{' '}
           <span className="tabnum font-mono">
             {formatAmount(me.member.currentToExpenseAccounts)} kr
@@ -398,6 +461,15 @@ export function FaellesSplitSection({
               </span>{' '}
               opsparing
             </>
+          )}
+          {hasEvents && (
+            <>
+              {' '}+{' '}
+              <span className="tabnum font-mono">
+                {formatAmount(me.member.currentToEventAccounts)} kr
+              </span>{' '}
+              begivenheder
+            </>
           )}{' '}
           i dag, og ville have{' '}
           <span className="tabnum font-mono font-semibold text-emerald-800">
@@ -405,7 +477,8 @@ export function FaellesSplitSection({
               me.member.monthlyIncome -
                 shareOf(me) -
                 savingsShareOf(me) -
-                husholdningShareOf(me)
+                husholdningShareOf(me) -
+                eventShareTotalFor(me)
             )} kr
           </span>{' '}
           tilbage til dig selv.

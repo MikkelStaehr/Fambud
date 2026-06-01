@@ -94,7 +94,7 @@ function PartnerPanel({ partner }: { partner: NonNullable<PrivatFaellesSummary['
           <Row label="Privat forbrug" amount={expense} sign="−" tone="negative" />
           <Row
             label="Overført ud"
-            sublabel="til fælles & opsparing"
+            sublabel="til fælles, opsparing & begivenheder"
             amount={transfersOut}
             sign="−"
             tone="muted"
@@ -151,7 +151,7 @@ function PrivatPanel({ privat }: { privat: PrivatFaellesSummary['privat'] }) {
           <Row label="Privat forbrug" amount={expense} sign="−" tone="negative" />
           <Row
             label="Overført ud"
-            sublabel="til fælles & opsparing"
+            sublabel="til fælles, opsparing & begivenheder"
             amount={transfersOut}
             sign="−"
             tone="muted"

@@ -23,17 +23,21 @@ export type PlanMember = {
   userId: string | null;
   monthlyIncome: number;        // forecast netto/md, eller bedste skøn
   incomeComplete: boolean;      // 3+ lønsedler registreret (ellers usikkert)
-  currentContribution: number;  // total = expense + husholdning + savings
-  // Split af currentContribution efter destinations-kontotype. Tre buckets:
+  currentContribution: number;  // total = expense + husholdning + savings + events
+  // Split af currentContribution efter destinations-kontotype. Fire buckets:
   //   - Expense: transfers til kind in {budget, checking, other} fælleskonti
   //     (faste udgifter til Budget-hub)
   //   - Husholdning: transfers til kind=household fælleskonti (daglige
   //     udgifter - splittet ud så Budget ikke pretender at hub'e Husholdning)
   //   - Savings: transfers til kind in {savings, investment} fælleskonti
-  //     (Buffer, ferieopsparing)
+  //     der IKKE er linket til en begivenhed (typisk Buffer)
+  //   - Events: transfers til konti der modtager begivenheds-overførsler
+  //     (Ferie 2027, Bryllup, osv.) - splittet ud så Buffer-anbefalingen
+  //     ikke fejlagtigt forventer at hub'e ferie-opsparing
   currentToExpenseAccounts: number;
   currentToHusholdningAccounts: number;
   currentToSavingsAccounts: number;
+  currentToEventAccounts: number;
   // Medlemmets egen lønkonto - kilde til foreslået "Opret overførsel"-CTA.
   // null hvis vedkommende ikke har oprettet en endnu (så viser vi i stedet
   // en note om at de skal igennem deres egen wizard).

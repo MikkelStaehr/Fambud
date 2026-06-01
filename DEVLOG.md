@@ -5401,3 +5401,204 @@ TIER 4 - Tests via Node `--test` + tsx:
 5. **Klassifikations-logik centraliseres med 1-rygtes-regel**: hvis tre
    call-sites duplikerer samme spørgsmål ("hvem ejer denne konto?") med
    subtle forskelle, opstår der subtle bugs. ÉN funktion + delegering.
+
+---
+
+# Devlog — 31. maj - 1. juni 2026 (v2.3-v2.5: stabilisering, RLS-cutover, husholdning + household-wide views)
+
+Fortsættelse af stabilise-arbejdet fra v2.0-v2.2. Brugerens framing: "Sabilisering 100% vi skal have en 100% stabil applikation". Tre tiers shipped + tre opfølgende bug-fixes på user-reported issues.
+
+## 1. Tier A+B: DB-constraints + cashflow-aggregat tests
+
+**Commit:** `950dffa`
+
+**Migration 0068**: 5 CHECK-constraints på `setup_proxy_grants`:
+- `expires_at > created_at` (fanger past-expiry-bugs)
+- `accepted_at >= created_at` hvis sat
+- `revoked_at >= created_at` hvis sat
+- `array_length(scope, 1) > 0` (helper-funktioner antager non-empty)
+- `revoked_by_user_id IN (grantor, grantee)` (kun parter kan revoke)
+
+Constraint-overskrider eksisterende data: nej, alle eksisterende grants
+overholder dem allerede. Defense-in-depth - app-laget validerer ved
+create men constraint fanger fremtidige UI/action-bugs der opdaterer
+felter til invalid timestamps.
+
+**Tests udvidet 15 → 23**: [lib/cashflow-analysis.test.ts](lib/cashflow-analysis.test.ts) - 8 tests for `computePrivatFaelles` + `classifyAccountTrack`:
+- Delegation-wrapper-test
+- Normal mode 2-panel aggregation
+- Proxy mode 3-panel (incl. partner-panel)
+- REGRESSION: arkiveret/credit-konti ignoreres
+- REGRESSION: proxy bruger `d.income` ikke `d.myIncome`
+- Edge case: partner uden konti, ukendt user-ID
+
+**Bevidst dropped fra Tier A**:
+- Promote Semgrep-regler WARNING→ERROR: for mange legitime undtagelser
+  (cron-jobs, audit-log, accept-proxy-page bruger alle admin-client
+  korrekt uden household_id-filter)
+- Sentry breadcrumbs: kræver bredere init-arbejde end "tilføj breadcrumbs"
+
+## 2. Tier C: RLS-cutover (migration 0069 + DAL always-apply-filter)
+
+**Commit:** `0e7dfc3`
+
+Step 1-2 af 3-trins-cutover beskrevet i [docs/proxy-rls-design.md](docs/proxy-rls-design.md). Step 3 (fjern admin-client) er stadig P-item.
+
+**Migration 0069**: udvider RLS til at honorere active proxy grants:
+- `can_write_account()` får `OR has_active_proxy(...)` clause
+- accounts SELECT/UPDATE/DELETE policies tilsvarende
+- accounts INSERT uændret (kræver kun is_household_member)
+
+Effekt: user-client virker nu for grantee under aktiv grant. admin-client
+bypass er ikke længere strict nødvendig - men beholdes for now.
+
+**DAL always-apply-filter**: 12 DAL-filer opdateret. Pre-migration var
+mønstret `if (p.isProxyActive) q.or(filter)`; post-migration er det
+`q.or(filter)` overalt. Det betyder:
+- Normal mode: filter = "editable_by_all OR created_by = caller" → samme
+  resultat som tidligere RLS-gjort
+- Proxy mode: filter = "editable_by_all OR created_by = grantor OR
+  created_by = caller" → union, samme som admin-client + manual filter
+  gjorde
+
+Side-effekt: admin-client kører nu med samme filter. Ingen funktionel
+change - admin-client bypasser RLS men app-laget filtrerer ens. Defense-
+in-depth: hvis admin-client en dag fjernes, RLS overtager nådigt.
+
+## 3. Husholdning som 3. obligatorisk overførsel
+
+**Commit:** `239e2da`
+
+Brugerrapport: "Vi har jo i teorien tre obligatoriske: Budget, buffer og
+husholdning. Plus frivillige knyttet til begivenheder."
+
+Tidligere pretendede rådgiveren at Budget hub'er Husholdning (alle 39k
+til Budget, brugeren selv skal vide at Husholdning får sin del videre).
+Nu er det 3 separate transfers per person:
+
+- **TIL UDGIFTER** → Budgetkonto (amber badge)
+- **TIL HUSHOLDNING** → Husholdningskonto (sky badge - ny farve)
+- **TIL OPSPARING** → Buffer (emerald badge)
+
+**Data-flow**:
+- `EconomyPlanData.husholdningAccountId/Name + husholdningMonthly`
+- `PlanMember.currentToHusholdningAccounts` (3. bucket separat fra expense + savings)
+- `splitFaellesExpenses` tager `husholdningTotal`-parameter, beregner
+  per-medlem-andel via samme model
+- `equalRemainingTarget` regner nu `(totalIncome - alle 3 obligationer) / n`
+  så "udlignet rådighed" reflekterer ægte fri rådighed
+- Husholdning skæres ud af `faellesMonthlyExpense` så Budget-andelen
+  kun dækker Budget
+
+**Refactor i `splitFaellesExpenses`**: fjernet closure-baseret
+`m_monthlyIncome`-fragility til fordel for pure `splitFor()`-hjælper
+der tager income eksplicit.
+
+**Ude af scope**: begivenheder som "frivillige" overførsler. Eventer er
+per-event så de kræver array-baseret obligation-model (`ObligationGroup[]`)
+snarere end fast 3-dimensional split. Separat opfølgning.
+
+## 4. Brugerrapporterede bugs i hurtig rækkefølge
+
+### 4.1 `faellesAccountList` honorer `editable_by_all`
+
+**Commit:** `995905d`
+
+**Bug**: Louises overførsler til Budget, Buffer og event-konti vistes
+ikke i rådgiverens "Bidrager nu"-kolonne.
+
+**Root cause**: filteret krævede strikt `owner_name === 'Fælles'`.
+Konti med `editable_by_all=true` men anden `owner_name` (fx 'Buffer'
+eller person-navn) faldt ud af bucketing-logikken.
+
+**Fix**: filter ændret til `(editable_by_all || owner_name === 'Fælles')`
+- konsistent med [lib/account-ownership.ts](lib/account-ownership.ts)
+classifier's 'shared'-track-definition.
+
+### 4.2 Tre bugs i én commit
+
+**Commit:** `ee8a4bd`
+
+User-rapport: "Louises overførsler stadig ikke registreret, buffer-
+overførsel er urealistisk, og under Indkomst er Louises løn væk."
+
+**Bug A: /indkomst manglede Louises lønudbetalinger**
+- Migration 0063 (12. maj) tillader allerede household-wide RLS-read af
+  income-transaktioner uafhængigt af konto-privacy
+- Men v2.3's "always apply privateAccountFilter"-sweep tilføjede
+  `.in('account_id', visibleAccountIds)`-filter på `getIncomeTransactions`
+  der RE-IMPOSED kontogrænsen
+- Fix: drop visibleAccountIds-filteret. Trust RLS 0063. Income er ikke
+  privacy-følsomt på samme måde som forbrugsdetaljer.
+
+**Bug B: Rådgiver "Bidrager nu" 0 + "Mangler lønkonto"**
+- (i) `getAdvisorContext` havde stadig `.in()`-filter på transfers-query.
+  RLS fra 0030 tillader allerede read af transfers hvor MINDST én side
+  er writable_to_me - Louises transfer til Budget (shared) ER writable
+  på to-siden. Fix: drop filter, trust RLS.
+- (ii) `getEconomyPlanData` brugte perspective-filtered `getAccounts()`
+  til memberLonkonto-lookup. Louises private lønkonto ikke i Mikkels
+  view → "Mangler lønkonto"-badge. Fix: admin-client til household-wide
+  accounts-read. Privacy-safe: kun metadata (id, name, kind, created_by),
+  ikke transaktioner eller balance.
+
+**Bug C: Buffer-anbefaling urealistisk**
+- `splitFaellesExpenses` fik `buffer.recommendedMonthly` (3-mdr-mål delt
+  over reach-horizon) som basis. Ofte langt over hvad husstanden faktisk
+  indbetaler.
+- Fix: brug `bufferMonthlyContribution` (faktisk nuværende rate) som
+  split-basis hvis > 0, ellers fall-back til recommendedMonthly.
+  Aspirational mål bibeholdes i Buffer-sektionen som "forslag".
+
+## Privacy-model bevaret og dokumenteret
+
+Trods at vi udvidede synlighed til household-wide for income + transfer-
+aggregering, er detaljer stadig perspective-filtered:
+
+- **Income**: synlig på tværs af husstand (per 0063 - partnere skal kende
+  hinandens løn for fælles planlægning)
+- **Transfers til fælleskonti**: synlige (per 0030 - bidrag til fælles
+  er offentligt inden for husstanden)
+- **Transaktions-detaljer på private konti**: stadig private (forbrug skjult)
+- **Account metadata til memberLonkonto-lookup**: kun id/name/kind/
+  created_by - ikke balance eller transaktioner
+
+## Læringspunkter
+
+1. **"100% stabilitet" findes ikke, men gulvet kan løftes dramatisk**:
+   defense-in-depth (CI-Semgrep, app-filter, DB-RLS) + automatiserede
+   tests + dokumentation = hver klasse af bugs har 2-3 fanger-niveauer.
+
+2. **v2.3's "always apply filter" havde uintended consequence**: vi
+   re-imposede konto-grænsen på funktioner der lå på RLS-policies som
+   eksplicit havde lavet exceptions (income, transfers til fælles). En
+   bredere sweep af tilsvarende DAL-funktioner var nødvendig.
+
+3. **Privacy-modeller er ikke binær (privat vs delt)**: nogle felter er
+   inherent dele-værdige (income for fælles planlægning), andre er
+   inherent private (forbrugs-beskrivelser). En enkelt sticky "private
+   konto"-flag dækker ikke nuancen - RLS-exceptions per resource-type
+   er den rette mekanisme.
+
+4. **Klassifikations-konsistens på tværs af layers**: når vi har
+   `classifyAccountOwnership` (lib-laget) der bruger
+   `editable_by_all || owner_name='Fælles'`, men `faellesAccountList`
+   (DAL-laget) bruger kun `owner_name='Fælles'`, opstår mismatch.
+   Begge skal følge samme regel. (4.1 fixet dette i DAL).
+
+5. **Closure-baseret state i pure-functions er bug-magnet**: refactoren
+   af `splitFaellesExpenses` fjernede `m_monthlyIncome` mutation til
+   fordel for eksplicit parameter-passering. Pure-functions skal være
+   pure i ALLE aspekter.
+
+## Status efter v2.5
+
+- 23 unit-tests, alle grøn
+- CI: TypeScript + build + Semgrep + Tests + osv-scanner + secret-scan
+  alle gates aktive
+- 2 nye Semgrep-regler hånd hæver perspective-arkitekturen
+- CLAUDE.md sektion 6 dokumenterer mønstret for nye contributors
+- DEVLOG dækker 30. maj-1. juni kronologisk
+- Migration 0068 + 0069 shipped (constraints + RLS-cutover step 1+2)
+- Step 3 (fjern admin-client) + integration-test-suite for actions er
+  P-items

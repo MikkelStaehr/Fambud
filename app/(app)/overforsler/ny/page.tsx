@@ -4,6 +4,7 @@ import {
   getAccounts,
   getActiveEventsByToAccount,
   getLifeEventById,
+  getMatchingActiveTransfers,
   getOwnerDropdownContext,
 } from '@/lib/dal';
 import { TransferForm } from '../_components/TransferForm';
@@ -85,6 +86,15 @@ export default async function NyOverforselPage({
     ? await getLifeEventById(prefill.life_event_id).catch(() => null)
     : null;
 
+  // Når både from + to er prefilled, kig efter eksisterende månedlige
+  // overførsler i samme retning. Hvis der er match, lader TransferForm
+  // brugeren vælge ERSTAT i stedet for at oprette en duplikat. Ingen
+  // prefill = ingen lookup (formularen er tom = ingen risiko for dup).
+  const matchingExisting =
+    prefill.from && prefill.to
+      ? await getMatchingActiveTransfers(prefill.from, prefill.to)
+      : [];
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       <Link
@@ -144,6 +154,13 @@ export default async function NyOverforselPage({
               accounts={accounts}
               {...ownerCtx}
               eventsByToAccount={eventsByToAccount}
+              matchingExisting={matchingExisting.map((t) => ({
+                id: t.id,
+                amount: t.amount,
+                recurrence: t.recurrence,
+                description: t.description,
+                monthlyEquivalent: t.monthlyEquivalent,
+              }))}
               defaultValues={{
                 from_account_id: prefill.from,
                 to_account_id: prefill.to,

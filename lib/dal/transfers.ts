@@ -225,3 +225,54 @@ export async function getTransferGraph(): Promise<TransferGraphData> {
     accountOwners,
   };
 }
+
+// Aktive tilbagevendende overførsler i samme retning - bruges af
+// /overforsler/ny til at advare brugeren før den opretter en duplikat
+// (typisk når Rådgiverens "Opsæt overførsel" linkes ind, men der
+// allerede er en månedlig overførsel fra samme lønkonto til samme
+// budget/husholdnings/buffer-konto).
+//
+// "Aktiv" = recurrence != 'once' AND (recurrence_until null OR i fremtiden).
+// Engangs-overførsler er ikke duplikat-kandidater - de er per definition
+// historik der ikke gentages.
+export type MatchingActiveTransfer = {
+  id: string;
+  amount: number;
+  recurrence: RecurrenceFreq;
+  recurrence_until: string | null;
+  description: string | null;
+  occurs_on: string;
+  monthlyEquivalent: number;
+};
+
+export async function getMatchingActiveTransfers(
+  fromAccountId: string,
+  toAccountId: string
+): Promise<MatchingActiveTransfer[]> {
+  if (!fromAccountId || !toAccountId || fromAccountId === toAccountId) {
+    return [];
+  }
+  const p = await getPerspective();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data, error } = await p.supabase
+    .from('transfers')
+    .select(
+      'id, amount, recurrence, recurrence_until, description, occurs_on'
+    )
+    .eq('household_id', p.householdId)
+    .eq('from_account_id', fromAccountId)
+    .eq('to_account_id', toAccountId)
+    .neq('recurrence', 'once')
+    .or(`recurrence_until.is.null,recurrence_until.gte.${todayIso}`)
+    .order('occurs_on', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    amount: t.amount,
+    recurrence: t.recurrence,
+    recurrence_until: t.recurrence_until,
+    description: t.description,
+    occurs_on: t.occurs_on,
+    monthlyEquivalent: monthlyEquivalent(t.amount, t.recurrence),
+  }));
+}

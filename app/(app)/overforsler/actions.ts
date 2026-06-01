@@ -123,6 +123,43 @@ export async function createTransfer(formData: FormData) {
     }
   }
 
+  // Erstat-eksisterende: hvis formularen leverer replace_ids[], slet de
+  // overførsler INDEN vi inserter den nye. Vi validerer at hver id matcher
+  // det husstand vi opererer i + den from→to-retning brugeren netop har
+  // valgt - så en CSRF-style URL ikke kan slette en uvedkommende overførsel
+  // ved at sende et tilfældigt id med. Fejler delete'n, falder vi tilbage
+  // til "lad de gamle stå + opret den nye" frem for at blokere flow'et.
+  const replaceIds = formData
+    .getAll('replace_ids')
+    .map((v) => String(v).trim())
+    .filter(
+      (v) => v.length > 0 && /^[0-9a-f-]{36}$/i.test(v)
+    );
+  if (replaceIds.length > 0) {
+    const { data: validIds, error: lookupErr } = await supabase
+      .from('transfers')
+      .select('id')
+      .in('id', replaceIds)
+      .eq('household_id', householdId)
+      .eq('from_account_id', parsed.data.from_account_id)
+      .eq('to_account_id', parsed.data.to_account_id);
+    if (lookupErr) {
+      console.error('createTransfer replace-lookup failed:', lookupErr.message);
+    } else if (validIds && validIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('transfers')
+        .delete()
+        .in(
+          'id',
+          validIds.map((r) => r.id)
+        )
+        .eq('household_id', householdId);
+      if (delErr) {
+        console.error('createTransfer replace-delete failed:', delErr.message);
+      }
+    }
+  }
+
   const { error } = await supabase.from('transfers').insert({
     household_id: householdId,
     ...parsed.data,

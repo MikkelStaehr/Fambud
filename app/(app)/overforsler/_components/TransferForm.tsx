@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { CalendarClock, Wand2 } from 'lucide-react';
+import { CalendarClock, Wand2, AlertTriangle } from 'lucide-react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
@@ -10,6 +10,7 @@ import { AccountSelectGrouped } from '../../_components/AccountSelectGrouped';
 import {
   INVESTMENT_TYPE_ANNUAL_CAP_KR,
   INVESTMENT_TYPE_LABEL_DA,
+  RECURRENCE_LABEL_DA,
   formatAmount,
   formatOereForInput,
   formatShortDateDA,
@@ -42,6 +43,17 @@ type Props = {
   // skal denne overførsel også tælle med?". Frictionless flow når man laver
   // overførsel #2 til samme event-konto (fx Louises bidrag efter Mikkels).
   eventsByToAccount?: Record<string, { id: string; name: string }[]>;
+  // Eksisterende månedlige overførsler i samme retning (fra→til). Når sat,
+  // viser vi en advarsel + checkbox så brugeren kan ERSTATTE dem i stedet
+  // for at ende med duplikater. Typisk udfyldt på /overforsler/ny når
+  // prefill kommer fra Rådgiverens "Opsæt overførsel"-CTA.
+  matchingExisting?: Array<{
+    id: string;
+    amount: number;
+    recurrence: RecurrenceFreq;
+    description: string | null;
+    monthlyEquivalent: number;
+  }>;
   defaultValues?: {
     from_account_id?: string;
     to_account_id?: string;
@@ -77,6 +89,7 @@ export function TransferForm({
   partnerUserId,
   partnerLabel,
   eventsByToAccount = {},
+  matchingExisting = [],
   defaultValues = {},
   submitLabel,
   cancelHref,
@@ -145,6 +158,17 @@ export function TransferForm({
       ? ''
       : linkedEventId || autoSuggestId || '';
 
+  // Duplikat-advarsel: hvis der allerede findes aktive månedlige overførsler
+  // i samme retning, lader vi brugeren vælge ERSTAT i stedet for at få en
+  // tredje række. Default ON når der er match, så Rådgiverens "Opsæt
+  // overførsel" gør det rigtige uden ekstra klik - brugeren kan opt'e ud.
+  const hasMatching = matchingExisting.length > 0;
+  const [replaceExisting, setReplaceExisting] = useState(hasMatching);
+  const existingMonthlyTotal = matchingExisting.reduce(
+    (s, t) => s + t.monthlyEquivalent,
+    0
+  );
+
   return (
     <form action={action} className="space-y-5">
       {/* Skjult input bærer det faktiske life_event_id til server-actionen.
@@ -156,6 +180,77 @@ export function TransferForm({
           value={effectiveLifeEventId}
         />
       )}
+
+      {/* Duplikat-advarsel: vi har detekteret én eller flere eksisterende
+          månedlige overførsler i samme retning. Default'er til "erstat"
+          så Rådgiver-CTAen ikke skaber duplikater. replace_ids[] sendes
+          som hidden inputs så serveren kan slette dem atomisk med oprettelse. */}
+      {hasMatching && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-xs">
+          <div className="inline-flex items-start gap-2 text-amber-900">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">
+                {matchingExisting.length === 1
+                  ? 'Du har allerede en tilbagevendende overførsel mellem disse konti'
+                  : `Du har allerede ${matchingExisting.length} tilbagevendende overførsler mellem disse konti`}
+              </p>
+              <ul className="mt-1.5 space-y-0.5 text-amber-800">
+                {matchingExisting.map((t) => (
+                  <li key={t.id} className="flex items-baseline gap-1.5">
+                    <span className="tabnum font-mono font-semibold">
+                      {formatAmount(t.amount)} kr
+                    </span>
+                    <span className="text-amber-700">
+                      {' / '}
+                      {RECURRENCE_LABEL_DA[t.recurrence]}
+                    </span>
+                    {t.description && (
+                      <span className="truncate text-amber-700">
+                        · {t.description}
+                      </span>
+                    )}
+                  </li>
+                ))}
+                <li className="pt-0.5 text-amber-900">
+                  I alt {formatAmount(existingMonthlyTotal)} kr/md
+                </li>
+              </ul>
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={replaceExisting}
+                  onChange={(e) => setReplaceExisting(e.target.checked)}
+                  className="h-4 w-4 rounded border-amber-400 text-amber-700 focus:ring-amber-600"
+                />
+                <span>
+                  Erstat de{' '}
+                  {matchingExisting.length === 1
+                    ? 'eksisterende'
+                    : matchingExisting.length + ' eksisterende'}{' '}
+                  - slet dem når jeg opretter denne nye
+                </span>
+              </label>
+              {!replaceExisting && (
+                <p className="mt-1 text-amber-700">
+                  Hvis du ikke erstatter, lægges den nye OVENI - du vil have{' '}
+                  {matchingExisting.length + 1} overførsler i samme retning.
+                </p>
+              )}
+            </div>
+          </div>
+          {replaceExisting &&
+            matchingExisting.map((t) => (
+              <input
+                key={t.id}
+                type="hidden"
+                name="replace_ids"
+                value={t.id}
+              />
+            ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="from_account_id" className={labelClass}>Fra konto</label>

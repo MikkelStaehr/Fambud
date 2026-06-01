@@ -100,7 +100,7 @@ export default async function RaadgiverPage() {
 
       {/* Sektion: Manglende opsætning (først - huller her påvirker alt nedenfor) */}
       <section className="mt-8" data-tour="raadgiver-mangler">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-medium text-neutral-900">
             Manglende opsætning
           </h2>
@@ -115,7 +115,7 @@ export default async function RaadgiverPage() {
 
       {/* Sektion: Fordeling af fælles udgifter */}
       <section className="mt-8" data-tour="raadgiver-fordeling">
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
           <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Fælles
           </span>
@@ -146,7 +146,7 @@ export default async function RaadgiverPage() {
 
       {/* Sektion: Buffer & opsparings-mål */}
       <section className="mt-8">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Fælles
           </span>
@@ -170,7 +170,7 @@ export default async function RaadgiverPage() {
 
       {/* Sektion: Allokér dit overskud */}
       <section className="mt-8" data-tour="raadgiver-optimering">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Privat
           </span>
@@ -195,7 +195,7 @@ export default async function RaadgiverPage() {
       {/* Sektion: 50/30/20-budgetmodel */}
       {ftt && (
         <section className="mt-8">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
               Privat
             </span>
@@ -216,7 +216,7 @@ export default async function RaadgiverPage() {
 
       {/* Sektion: Låneoptimering */}
       <section className="mt-8">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded bg-amber-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
             Fælles
           </span>

@@ -62,8 +62,8 @@ export function LaaneoptimeringSection({ loans }: { loans: LoanInfo[] }) {
   return (
     <div className="space-y-3">
       {/* Lån-tabel (sorteret efter rente, dyreste øverst) */}
-      <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
+        <table className="w-full min-w-[480px] text-sm">
           <thead>
             <tr className="border-b border-amber-100 bg-amber-50/60 text-left text-[11px] font-medium uppercase tracking-wider text-neutral-500">
               <th className="px-4 py-2.5 font-medium">Lån</th>

@@ -1,10 +1,15 @@
+'use client';
+
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
 import { AmountInput } from '../../_components/AmountInput';
 import { RecurrenceField } from '../../_components/RecurrenceField';
 import { SubmitButton } from '../../_components/SubmitButton';
 import { AccountSelectGrouped } from '../../_components/AccountSelectGrouped';
 import { formatOereForInput } from '@/lib/format';
 import type { Account, Category, RecurrenceFreq } from '@/lib/database.types';
+import type { DescriptionSuggestion } from '@/lib/dal';
 
 type Props = {
   action: (formData: FormData) => Promise<void>;
@@ -14,6 +19,10 @@ type Props = {
   partnerUserId?: string;
   partnerLabel?: string;
   categories: Pick<Category, 'id' | 'name' | 'kind' | 'archived'>[];
+  // Beskrivelse → mest-brugte-kategori-historik. Bruges til auto-forslag
+  // når brugeren skriver i beskrivelses-feltet. Tom array slår funktionen
+  // fra (fx på en helt frisk konto med ingen tidligere poster).
+  descriptionSuggestions?: DescriptionSuggestion[];
   defaultValues?: {
     account_id?: string;
     category_id?: string | null;
@@ -41,6 +50,7 @@ export function TransactionForm({
   action,
   accounts,
   categories,
+  descriptionSuggestions = [],
   currentUserId,
   currentLabel,
   partnerUserId,
@@ -59,6 +69,53 @@ export function TransactionForm({
   const visibleAccounts = accounts.filter(
     (a) => !a.archived || a.id === dv.account_id
   );
+
+  // Controlled state for auto-suggest: når beskrivelsen ændres, slår vi op
+  // i descriptionSuggestions efter en match og opdaterer kategori-feltet
+  // automatisk - MEN kun hvis brugeren ikke selv har valgt en kategori
+  // manuelt endnu. Det bevarer manuel override som "vinder".
+  const [description, setDescription] = useState(dv.description ?? '');
+  const [categoryId, setCategoryId] = useState(dv.category_id ?? '');
+  // Pre-eksisterende kategori (på edit-flow) tæller som manuelt valg, så
+  // auto-forslag ikke overskriver brugerens eksisterende valg.
+  const [userPickedCategory, setUserPickedCategory] = useState(
+    dv.category_id != null && dv.category_id !== ''
+  );
+
+  // Find bedste match for den nuværende beskrivelse. Eksakt-match først,
+  // ellers prefix-match (oftest brugte først). Returnerer null hvis
+  // beskrivelsen er tom eller ikke matcher noget.
+  const suggestion = useMemo(() => {
+    const desc = description.trim().toLowerCase();
+    if (!desc) return null;
+    const exact = descriptionSuggestions.find((s) => s.description === desc);
+    if (exact) return exact;
+    // Prefix-match: brugeren har skrevet "Net" og vi har "netto" i historikken
+    // - eller omvendt, brugeren skriver længere variant og vi har kortere.
+    const prefixMatches = descriptionSuggestions
+      .filter(
+        (s) => s.description.startsWith(desc) || desc.startsWith(s.description)
+      )
+      .sort((a, b) => b.count - a.count);
+    return prefixMatches[0] ?? null;
+  }, [description, descriptionSuggestions]);
+
+  const suggestedCategory = suggestion
+    ? categories.find((c) => c.id === suggestion.categoryId) ?? null
+    : null;
+
+  // Auto-apply forslag når brugeren IKKE selv har valgt en kategori. Bruges
+  // som derived state: hvis forslaget ændrer sig pga. ny beskrivelse, hopper
+  // dropdownen med - så længe brugeren ikke har overskrevet manuelt.
+  const effectiveCategoryId =
+    !userPickedCategory && suggestion ? suggestion.categoryId : categoryId;
+
+  // Vis et lille "forslag aktiveret"-banner når auto-forslaget styrer
+  // dropdownen. Brugeren kan vælge en anden kategori manuelt for at låse op.
+  const showSuggestionBanner =
+    suggestedCategory != null &&
+    !userPickedCategory &&
+    effectiveCategoryId === suggestion?.categoryId;
 
   return (
     <form action={action} className="space-y-5">
@@ -85,7 +142,11 @@ export function TransactionForm({
             id="category_id"
             name="category_id"
             required
-            defaultValue={dv.category_id ?? ''}
+            value={effectiveCategoryId}
+            onChange={(e) => {
+              setCategoryId(e.target.value);
+              setUserPickedCategory(true);
+            }}
             className={fieldClass}
           >
             <option value="" disabled>Vælg kategori</option>
@@ -104,6 +165,19 @@ export function TransactionForm({
               </optgroup>
             )}
           </select>
+          {showSuggestionBanner && suggestedCategory && suggestion && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-emerald-700">
+              <Sparkles className="h-3 w-3" />
+              <span>
+                Automatisk valgt{' '}
+                <span className="font-medium">{suggestedCategory.name}</span>{' '}
+                baseret på {suggestion.count}{' '}
+                tidligere &ldquo;{suggestion.description}&rdquo;-
+                {suggestion.count === 1 ? 'post' : 'poster'} - du kan ændre
+                den hvis du vil.
+              </span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -140,7 +214,8 @@ export function TransactionForm({
           id="description"
           name="description"
           type="text"
-          defaultValue={dv.description ?? ''}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="F.eks. Netto"
           className={fieldClass}
         />

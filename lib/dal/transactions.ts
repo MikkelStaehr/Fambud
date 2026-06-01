@@ -146,6 +146,66 @@ export async function getDistinctExpenseGroups(): Promise<string[]> {
   return Array.from(seen).sort((a, b) => a.localeCompare(b, 'da'));
 }
 
+// Auto-kategori-forslag: bygger et lookup-table fra "beskrivelse-i-lowercase"
+// til "mest brugte kategori-id" baseret på husstandens tidligere poster.
+// Spiir-style "vi husker hvad du plejer at kategorisere Netto som". Brugeren
+// kan stadig overskrive frit - vi sætter bare en kvalificeret default.
+//
+// Performance: capper til top-N (vægtet efter brug) så client-bundlen ikke
+// vokser ud over kontrol selv for husstande med tusindvis af poster.
+export type DescriptionSuggestion = {
+  description: string;  // lowercased + trimmed
+  categoryId: string;
+  count: number;        // antal historiske poster med dette match
+};
+
+export async function getDescriptionSuggestions(
+  limit = 500
+): Promise<DescriptionSuggestion[]> {
+  const p = await getPerspective();
+  const visibleAccountIds = await getVisibleAccountIds();
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  let q = p.supabase
+    .from('transactions')
+    .select('description, category_id')
+    .eq('household_id', p.householdId)
+    .not('description', 'is', null)
+    .not('category_id', 'is', null);
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  const { data, error } = await q;
+  if (error) throw error;
+
+  // Grupper pr. (description-lowercased, category_id) og tæl forekomster.
+  // Vinderen for hver description er den oftest brugte kategori.
+  const byDesc = new Map<string, Map<string, number>>();
+  for (const t of data ?? []) {
+    if (!t.description || !t.category_id) continue;
+    const key = t.description.trim().toLowerCase();
+    if (!key) continue;
+    const cats = byDesc.get(key) ?? new Map<string, number>();
+    cats.set(t.category_id, (cats.get(t.category_id) ?? 0) + 1);
+    byDesc.set(key, cats);
+  }
+
+  const out: DescriptionSuggestion[] = [];
+  for (const [desc, cats] of byDesc) {
+    let topCat = '';
+    let topCount = 0;
+    for (const [cat, count] of cats) {
+      if (count > topCount) {
+        topCat = cat;
+        topCount = count;
+      }
+    }
+    out.push({ description: desc, categoryId: topCat, count: topCount });
+  }
+
+  // Sorter efter brug (oftest brugte først) og cap.
+  out.sort((a, b) => b.count - a.count);
+  return out.slice(0, limit);
+}
+
 // Onboarding-progress: hvilke fundamentale trin har brugeren udført siden
 // wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
 // er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.

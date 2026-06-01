@@ -32,6 +32,7 @@ import {
   type LifeEventAlert,
 } from '@/lib/format';
 import type { LifeEventWithItems } from '@/lib/dal';
+import { EventProgressBar } from '../../begivenheder/_components/EventProgressBar';
 
 type Props = {
   events: LifeEventWithItems[];
@@ -164,6 +165,13 @@ export function LifeEventsWidget({ events }: Props) {
                         </span>
                       )}
                     </div>
+
+                    <EventProgressBar
+                      items={event.items}
+                      totalBudget={event.total_budget}
+                      useItemsForBudget={event.use_items_for_budget}
+                      compact
+                    />
 
                     {alert && (
                       <div className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">

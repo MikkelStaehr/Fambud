@@ -27,6 +27,7 @@ import {
 } from '@/lib/format';
 import type { LifeEventStatus } from '@/lib/database.types';
 import { EventCardActions } from './_components/EventCardActions';
+import { EventProgressBar } from './_components/EventProgressBar';
 
 // Prefill-href til /overforsler/ny for "Opret overførsel"-knappen. Matcher
 // detalje-sidens buildSetupTransferHref: foreslår den enkelte bidragyders
@@ -208,6 +209,13 @@ export default async function BegivenhederPage() {
                     )}
                   </div>
                 </dl>
+
+                <EventProgressBar
+                  items={event.items}
+                  totalBudget={event.total_budget}
+                  useItemsForBudget={event.use_items_for_budget}
+                  compact
+                />
 
                 {alert && (
                   <div className="mt-3 inline-flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">

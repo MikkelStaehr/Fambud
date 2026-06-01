@@ -29,8 +29,12 @@ export type PlanMember = {
   //     (faste udgifter til Budget-hub)
   //   - Husholdning: transfers til kind=household fælleskonti (daglige
   //     udgifter - splittet ud så Budget ikke pretender at hub'e Husholdning)
-  //   - Savings: transfers til kind in {savings, investment} fælleskonti
-  //     der IKKE er linket til en begivenhed (typisk Buffer)
+  //   - Savings: transfers til BUFFER-kontoen specifikt (den med
+  //     savings_purposes='buffer' eller navn der indeholder "buffer").
+  //     Andre fælles savings (Aldersopsparing, børneopsparing) udelades
+  //     bevidst - de er ikke en del af de 4 strukturerede obligationer
+  //     Rådgiveren styrer omkring, og at lægge dem ind ville lade
+  //     "I dag: X kr" inkludere beløb der ikke matcher Buffer-anbefalingen.
   //   - Events: transfers til konti der modtager begivenheds-overførsler
   //     (Ferie 2027, Bryllup, osv.) - splittet ud så Buffer-anbefalingen
   //     ikke fejlagtigt forventer at hub'e ferie-opsparing

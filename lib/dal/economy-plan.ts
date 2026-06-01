@@ -222,10 +222,29 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   const husholdningFaellesIds = new Set(
     faellesAccountList.filter((a) => a.kind === 'household').map((a) => a.id)
   );
-  const savingsFaellesIds = new Set(
-    faellesAccountList
-      .filter((a) => a.kind === 'savings' || a.kind === 'investment')
-      .map((a) => a.id)
+
+  // Buffer-konto: foretræk savings_purposes='buffer', ellers navn der
+  // indeholder "buffer". Identificeres FØR bucketing fordi savings-bucketten
+  // KUN må indeholde Buffer - ikke andre fælles savings (Aldersopsparing,
+  // børneopsparing osv.). Recommendationen er specifik for Buffer; hvis
+  // savings-bucketten var bredere, ville "I dag: X kr" inkludere transfers
+  // til andre savings-konti og ikke matche Buffer-anbefalingen ("Reducér
+  // med 921 kr" når man faktisk ÆG'er Buffer-bidraget).
+  const bufferAccount =
+    accounts.find(
+      (a) =>
+        a.kind === 'savings' &&
+        !a.archived &&
+        (a.savings_purposes ?? []).includes('buffer')
+    ) ??
+    accounts.find(
+      (a) =>
+        a.kind === 'savings' &&
+        !a.archived &&
+        a.name.toLowerCase().includes('buffer')
+    );
+  const savingsFaellesIds = new Set<string>(
+    bufferAccount ? [bufferAccount.id] : []
   );
   const contributionByUser = new Map<
     string,
@@ -317,21 +336,8 @@ export async function getEconomyPlanData(): Promise<EconomyPlanData> {
   // Den indloggede perspectives egen status (til "manglende opsætning").
   const meMember = members.find((m) => m.userId === perspectiveUserId);
 
-  // Buffer-konto: foretræk savings_purposes='buffer', ellers navn der
-  // indeholder "buffer". Nuværende månedlige indskud = transfersIn (flow).
-  const bufferAccount =
-    accounts.find(
-      (a) =>
-        a.kind === 'savings' &&
-        !a.archived &&
-        (a.savings_purposes ?? []).includes('buffer')
-    ) ??
-    accounts.find(
-      (a) =>
-        a.kind === 'savings' &&
-        !a.archived &&
-        a.name.toLowerCase().includes('buffer')
-    );
+  // bufferAccount identificeret tidligere (før bucketing). Her henter vi
+  // bare flow'et til den.
   const bufferMonthlyContribution = bufferAccount
     ? graph.perAccount.get(bufferAccount.id)?.transfersIn ?? 0
     : 0;

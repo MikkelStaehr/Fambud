@@ -206,6 +206,174 @@ export async function getDescriptionSuggestions(
   return out.slice(0, limit);
 }
 
+// Abonnement-detektor: finder mønstre i tidligere once-poster der LIGNER en
+// fast månedlig udgift som ikke er sat op endnu. Spiir-style "I har betalt
+// 99 kr til Netflix de sidste 5 måneder - skal vi tilføje det som fast
+// udgift?".
+//
+// Detektion (konservativ for at undgå falsk-positive):
+//   - Group transactions efter (lowercased description, account_id).
+//   - Mindst 3 forekomster i mindst 3 DISTINKTE måneder (filtrerer
+//     same-month-duplikater og hyppige men ikke-månedlige som dagligvarer).
+//   - Beløb-spredning < 20% af median (slår fluktuerende varierende
+//     udgifter fra - Netto-køb varierer typisk for meget).
+//   - Findes IKKE allerede som recurring expense på samme konto med
+//     matchende beskrivelse (undgår "du har allerede sat det op").
+export type SubscriptionCandidate = {
+  description: string;        // display-version (oprindelig case fra første post)
+  accountId: string;
+  accountName: string;
+  categoryId: string;
+  categoryName: string;
+  avgAmount: number;          // øre
+  occurrences: number;        // hvor mange gange
+  monthsObserved: number;     // distinkte måneder
+  lastOccursOn: string;       // YYYY-MM-DD, mest recent
+};
+
+export async function getSubscriptionCandidates(
+  monthsBack = 6
+): Promise<SubscriptionCandidate[]> {
+  const p = await getPerspective();
+  const visibleAccountIds = await getVisibleAccountIds();
+  if (visibleAccountIds && visibleAccountIds.length === 0) return [];
+
+  // Cap til de seneste N måneder så detektoren er hurtig selv ved tusindvis
+  // af historiske poster.
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - monthsBack);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  // Hent once-poster med expense-kategori i vinduet.
+  let q = p.supabase
+    .from('transactions')
+    .select(
+      'amount, description, occurs_on, account_id, category_id, account:accounts(name), category:categories(name, kind)'
+    )
+    .eq('household_id', p.householdId)
+    .eq('recurrence', 'once')
+    .gte('occurs_on', cutoffIso)
+    .not('description', 'is', null)
+    .not('category_id', 'is', null);
+  if (visibleAccountIds) q = q.in('account_id', visibleAccountIds);
+  type Row = {
+    amount: number;
+    description: string | null;
+    occurs_on: string;
+    account_id: string;
+    category_id: string;
+    account: { name: string } | null;
+    category: { name: string; kind: 'income' | 'expense' } | null;
+  };
+  const { data, error } = await q.returns<Row[]>();
+  if (error) throw error;
+
+  // Group by (lowercased description, account_id). displayDescription holder
+  // den oprindelige casing fra første post så UI/prefill ikke viser "netto"
+  // når brugeren skrev "Netto".
+  type Bucket = {
+    displayDescription: string;
+    accountId: string;
+    accountName: string;
+    amounts: number[];
+    months: Set<string>;       // YYYY-MM
+    occursDates: string[];
+    categoryCounts: Map<string, { count: number; name: string }>;
+  };
+  const buckets = new Map<string, Bucket>();
+  for (const t of data ?? []) {
+    if (!t.description || !t.category) continue;
+    if (t.category.kind !== 'expense') continue;
+    const original = t.description.trim();
+    if (!original) continue;
+    const desc = original.toLowerCase();
+    const key = `${desc}@${t.account_id}`;
+    const b =
+      buckets.get(key) ?? {
+        displayDescription: original,
+        accountId: t.account_id,
+        accountName: t.account?.name ?? '?',
+        amounts: [],
+        months: new Set<string>(),
+        occursDates: [],
+        categoryCounts: new Map<string, { count: number; name: string }>(),
+      };
+    b.amounts.push(t.amount);
+    b.months.add(t.occurs_on.slice(0, 7));
+    b.occursDates.push(t.occurs_on);
+    const c = b.categoryCounts.get(t.category_id) ?? {
+      count: 0,
+      name: t.category.name,
+    };
+    c.count += 1;
+    b.categoryCounts.set(t.category_id, c);
+    buckets.set(key, b);
+  }
+
+  // Hent eksisterende recurring expenses så vi kan filtrere kandidater fra
+  // der allerede er sat op. Match på (description-lowercased, account_id).
+  const existingRec = await p.supabase
+    .from('transactions')
+    .select('description, account_id')
+    .eq('household_id', p.householdId)
+    .neq('recurrence', 'once')
+    .not('description', 'is', null);
+  if (existingRec.error) throw existingRec.error;
+  const existingKeys = new Set<string>();
+  for (const r of existingRec.data ?? []) {
+    if (!r.description) continue;
+    existingKeys.add(`${r.description.trim().toLowerCase()}@${r.account_id}`);
+  }
+
+  const candidates: SubscriptionCandidate[] = [];
+  for (const [key, b] of buckets) {
+    if (existingKeys.has(key)) continue;
+    if (b.amounts.length < 3) continue;
+    if (b.months.size < 3) continue;
+    // Spredning: forskel mellem max og min må højst være 20% af median.
+    const sorted = [...b.amounts].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    if (median <= 0) continue;
+    const spread = sorted[sorted.length - 1] - sorted[0];
+    if (spread > median * 0.2) continue;
+    const avg = Math.round(
+      b.amounts.reduce((s, a) => s + a, 0) / b.amounts.length
+    );
+    // Mest brugte kategori for bucketten.
+    let topCatId = '';
+    let topCatName = '';
+    let topCnt = 0;
+    for (const [id, c] of b.categoryCounts) {
+      if (c.count > topCnt) {
+        topCnt = c.count;
+        topCatId = id;
+        topCatName = c.name;
+      }
+    }
+    const lastOccurs = b.occursDates
+      .slice()
+      .sort()
+      .pop() as string;
+    candidates.push({
+      description: b.displayDescription,
+      accountId: b.accountId,
+      accountName: b.accountName,
+      categoryId: topCatId,
+      categoryName: topCatName,
+      avgAmount: avg,
+      occurrences: b.amounts.length,
+      monthsObserved: b.months.size,
+      lastOccursOn: lastOccurs,
+    });
+  }
+
+  // Sortér: mest tilbagevendende først, dernæst dyrest.
+  candidates.sort((a, b) =>
+    b.occurrences - a.occurrences || b.avgAmount - a.avgAmount
+  );
+  return candidates;
+}
+
 // Onboarding-progress: hvilke fundamentale trin har brugeren udført siden
 // wizard? Dashboard'et bruger flagene til at vise en checkliste indtil alt
 // er på plads. Vi grupperer i én funktion for at undgå multiple roundtrips.

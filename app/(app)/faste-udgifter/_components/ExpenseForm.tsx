@@ -9,7 +9,7 @@ import {
   CalendarCheck,
 } from 'lucide-react';
 import { AmountInput } from '@/app/(app)/_components/AmountInput';
-import { MONTHS_DA } from '@/lib/format';
+import { MONTHS_DA, formatOereForInput } from '@/lib/format';
 
 const fieldClass =
   'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
@@ -26,6 +26,15 @@ type Props = {
   familyMembers: { id: string; name: string }[];
   resetKey: number;
   error?: string;
+  // Forudfyldte felter (fx fra abonnement-detektoren på /poster). Når sat
+  // bruges de som defaults så brugeren bare behøver bekræfte. Manglende
+  // felter falder tilbage til normale tomme defaults.
+  prefill?: {
+    description?: string;
+    amount?: number;          // øre
+    categoryId?: string;
+    recurrence?: Recurrence;
+  };
 };
 
 const RECURRENCE_CARDS: {
@@ -48,8 +57,11 @@ export function ExpenseForm({
   familyMembers,
   resetKey,
   error,
+  prefill,
 }: Props) {
-  const [recurrence, setRecurrence] = useState<Recurrence>('monthly');
+  const [recurrence, setRecurrence] = useState<Recurrence>(
+    prefill?.recurrence ?? 'monthly'
+  );
   const [dayRule, setDayRule] = useState<DayRule>('fixed');
 
   const isMonthly = recurrence === 'monthly';
@@ -69,6 +81,7 @@ export function ExpenseForm({
           name="description"
           type="text"
           required
+          defaultValue={prefill?.description ?? ''}
           placeholder="F.eks. Husleje, Bilforsikring"
           className={fieldClass}
         />
@@ -79,7 +92,14 @@ export function ExpenseForm({
           <label htmlFor="exp_amount" className={labelClass}>
             Beløb <span className="text-neutral-400">(kr.)</span>
           </label>
-          <AmountInput id="exp_amount" name="amount" required />
+          <AmountInput
+            id="exp_amount"
+            name="amount"
+            required
+            defaultValue={
+              prefill?.amount != null ? formatOereForInput(prefill.amount) : ''
+            }
+          />
         </div>
         <div>
           <label htmlFor="exp_category" className={labelClass}>Kategori</label>
@@ -87,7 +107,7 @@ export function ExpenseForm({
             id="exp_category"
             name="category_id"
             required
-            defaultValue=""
+            defaultValue={prefill?.categoryId ?? ''}
             className={fieldClass}
           >
             <option value="" disabled>Vælg kategori</option>

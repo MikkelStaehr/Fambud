@@ -8,8 +8,12 @@
 // udgifter og netto), og udgifter går i selve tabellen.
 
 import Link from 'next/link';
-import { Plus, Download } from 'lucide-react';
-import { getTransactionsForMonth, shouldShowTour } from '@/lib/dal';
+import { Plus, Download, Sparkles, ArrowRight } from 'lucide-react';
+import {
+  getSubscriptionCandidates,
+  getTransactionsForMonth,
+  shouldShowTour,
+} from '@/lib/dal';
 import { PosterTour } from './_components/PosterTour';
 import {
   CATEGORY_GROUP_COLOR,
@@ -37,8 +41,9 @@ export default async function PosterPage({
 }) {
   const sp = await searchParams;
   const month = normaliseYearMonth(sp.month);
-  const [transactions, autoStartTour] = await Promise.all([
+  const [transactions, subscriptionCandidates, autoStartTour] = await Promise.all([
     getTransactionsForMonth(month),
+    getSubscriptionCandidates(),
     shouldShowTour('poster'),
   ]);
 
@@ -149,6 +154,64 @@ export default async function PosterPage({
           </div>
         </div>
       </section>
+
+      {/* Abonnement-detektor: gentagne poster der ligner abonnementer men
+          ikke er sat op som faste udgifter endnu. Cappet til top 5 så det
+          ikke dominerer siden. */}
+      {subscriptionCandidates.length > 0 && (
+        <section className="mt-8">
+          <div className="mb-2 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-700" />
+            <h2 className="text-sm font-medium text-neutral-900">
+              Vi har spottet mulige abonnementer
+            </h2>
+          </div>
+          <p className="mb-3 max-w-2xl text-xs text-neutral-500">
+            Følgende poster optræder gentagne gange med stabilt beløb. Tilføj
+            dem som faste udgifter så de tæller med i budgettet og rapporten.
+          </p>
+          <ul className="space-y-2">
+            {subscriptionCandidates.slice(0, 5).map((c) => {
+              const url = `/faste-udgifter/${c.accountId}?description=${encodeURIComponent(c.description)}&amount=${encodeURIComponent(String(c.avgAmount))}&category_id=${encodeURIComponent(c.categoryId)}&recurrence=monthly`;
+              return (
+                <li
+                  key={`${c.description}-${c.accountId}`}
+                  className="flex flex-col gap-2 rounded-md border border-emerald-200 bg-emerald-50/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1 text-sm">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium text-neutral-900">
+                        {c.description}
+                      </span>
+                      <span className="tabnum font-mono font-semibold text-neutral-900">
+                        {formatAmount(c.avgAmount)} kr
+                      </span>
+                      <span className="text-xs text-neutral-500">
+                        på {c.accountName}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-neutral-500">
+                      {c.occurrences}{' '}
+                      {c.occurrences === 1 ? 'forekomst' : 'forekomster'} over{' '}
+                      {c.monthsObserved}{' '}
+                      {c.monthsObserved === 1 ? 'måned' : 'måneder'} · foreslået
+                      kategori{' '}
+                      <span className="text-neutral-700">{c.categoryName}</span>
+                    </div>
+                  </div>
+                  <Link
+                    href={url}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-900 transition hover:border-emerald-700 hover:bg-emerald-100"
+                  >
+                    Tilføj som fast udgift
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* Hierarkisk udgifts-tabel med Fælles/Private-tab */}
       <section data-tour="poster-filters" className="mt-8">

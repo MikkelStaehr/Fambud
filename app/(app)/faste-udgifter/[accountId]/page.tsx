@@ -37,10 +37,38 @@ export default async function BudgetAccountPage({
   searchParams,
 }: {
   params: Promise<{ accountId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    description?: string;
+    amount?: string;
+    category_id?: string;
+    recurrence?: string;
+  }>;
 }) {
   const { accountId } = await params;
-  const { error } = await searchParams;
+  const sp = await searchParams;
+  const { error } = sp;
+
+  // Prefill fra abonnement-detektor på /poster ("Tilføj som fast udgift").
+  // Validér recurrence-værdien så vi ikke videresender vilkårligt input.
+  const VALID_RECURRENCES = ['monthly', 'quarterly', 'semiannual', 'yearly'] as const;
+  type ValidRec = (typeof VALID_RECURRENCES)[number];
+  const isValidRec = (v: string): v is ValidRec =>
+    (VALID_RECURRENCES as readonly string[]).includes(v);
+  const prefillAmount = sp.amount ? Number(sp.amount) : undefined;
+  const prefill =
+    sp.description || prefillAmount || sp.category_id || sp.recurrence
+      ? {
+          description: sp.description,
+          amount:
+            prefillAmount != null && Number.isFinite(prefillAmount)
+              ? Math.round(prefillAmount)
+              : undefined,
+          categoryId: sp.category_id,
+          recurrence:
+            sp.recurrence && isValidRec(sp.recurrence) ? sp.recurrence : undefined,
+        }
+      : undefined;
 
   // Make sure the standard categories exist even if the user lands here
   // directly via deep link without hitting /faste-udgifter first.
@@ -219,6 +247,7 @@ export default async function BudgetAccountPage({
             familyMembers={familyMembers}
             resetKey={expenses.length}
             error={error}
+            prefill={prefill}
           />
 
           <p className="mt-3 text-xs text-neutral-500">

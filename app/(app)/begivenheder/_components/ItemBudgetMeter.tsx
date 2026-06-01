@@ -55,14 +55,14 @@ export function ItemBudgetMeter({
       <div className="mb-3 rounded-md border border-neutral-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-            Bogført
+            Planlagt på poster
           </span>
           <span className="font-mono tabnum text-base font-semibold text-neutral-900">
             {formatAmount(itemsSum)} kr
           </span>
         </div>
         <p className="mt-1 text-xs text-neutral-500">
-          Posterne udgør jeres totalbudget - tilføj eller fjern for at
+          Posterne udgør jeres samlede budget - tilføj eller fjern for at
           justere det.
         </p>
         {statusEntries.length > 0 && (
@@ -79,11 +79,11 @@ export function ItemBudgetMeter({
       <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <p>
           <strong className="font-semibold">
-            {formatAmount(itemsSum)} kr bogført
+            {formatAmount(itemsSum)} kr planlagt på poster
           </strong>{' '}
-          - men I har ikke sat et planlagt budget endnu, så vi kan ikke
-          vise jer hvor langt I er. Sæt &quot;Planlagt budget&quot; under
-          Detaljer for at få progress.
+          - men I har ikke sat et budget endnu, så vi kan ikke vise jer
+          hvor langt I er. Sæt &quot;Totalbudget&quot; under Detaljer for
+          at få progress.
         </p>
         {statusEntries.length > 0 && (
           <StatusBreakdown entries={statusEntries} />

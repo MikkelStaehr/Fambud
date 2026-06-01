@@ -56,7 +56,7 @@ export function EventProgressBar({
             <strong className="font-semibold text-neutral-900">
               {formatAmount(itemsSum)} kr
             </strong>{' '}
-            bogført
+            planlagt på poster
           </span>
           <span
             className={
@@ -85,7 +85,7 @@ export function EventProgressBar({
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-          Bogført af planlagt
+          Planlagt på poster
         </span>
         <span className="font-mono tabnum text-sm text-neutral-700">
           <strong className="font-semibold text-neutral-900">
@@ -105,9 +105,9 @@ export function EventProgressBar({
         {overBudget ? (
           <span className="text-red-700">
             <strong className="font-semibold">
-              {formatAmount(overAmount)} kr over loftet.
+              {formatAmount(overAmount)} kr over budgettet.
             </strong>{' '}
-            Justér det planlagte budget op, eller skær en post.
+            Justér budgettet op, eller skær en post.
           </span>
         ) : (
           <span className="text-neutral-500">

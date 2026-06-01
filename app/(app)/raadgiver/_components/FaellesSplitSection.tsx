@@ -299,47 +299,35 @@ export function FaellesSplitSection({
                   <td className="tabnum px-4 py-2.5 text-right font-mono text-neutral-600">
                     {formatAmount(m.member.monthlyIncome)}
                   </td>
-                  <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-neutral-900">
-                    {formatAmount(share)}
-                    {hasHusholdning && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(husholdningShare)} hus.
-                      </div>
-                    )}
-                    {hasSavings && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(savingsShare)} ops.
-                      </div>
-                    )}
-                    {hasEvents && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(eventShare)} beg.
-                      </div>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="tabnum font-mono font-semibold text-neutral-900">
+                      {formatAmount(totalThisRow)}
+                    </div>
+                    {(hasHusholdning || hasSavings || hasEvents) && (
+                      <Breakdown
+                        udg={share}
+                        hus={hasHusholdning ? husholdningShare : null}
+                        ops={hasSavings ? savingsShare : null}
+                        beg={hasEvents ? eventShare : null}
+                      />
                     )}
                   </td>
                   <td className="tabnum px-4 py-2.5 text-right font-mono font-semibold text-emerald-800">
                     {formatAmount(remaining)}
                   </td>
                   <td
-                    className={`tabnum px-4 py-2.5 text-right font-mono ${
+                    className={`px-4 py-2.5 text-right font-mono ${
                       currentTotal >= totalThisRow ? 'text-emerald-700' : 'text-amber-700'
                     }`}
                   >
-                    {formatAmount(m.member.currentToExpenseAccounts)}
-                    {hasHusholdning && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(m.member.currentToHusholdningAccounts)} hus.
-                      </div>
-                    )}
-                    {hasSavings && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(m.member.currentToSavingsAccounts)} ops.
-                      </div>
-                    )}
-                    {hasEvents && (
-                      <div className="tabnum text-[11px] font-normal text-neutral-500">
-                        + {formatAmount(m.member.currentToEventAccounts)} beg.
-                      </div>
+                    <div className="tabnum">{formatAmount(currentTotal)}</div>
+                    {(hasHusholdning || hasSavings || hasEvents) && (
+                      <Breakdown
+                        udg={m.member.currentToExpenseAccounts}
+                        hus={hasHusholdning ? m.member.currentToHusholdningAccounts : null}
+                        ops={hasSavings ? m.member.currentToSavingsAccounts : null}
+                        beg={hasEvents ? m.member.currentToEventAccounts : null}
+                      />
                     )}
                   </td>
                 </tr>
@@ -352,43 +340,40 @@ export function FaellesSplitSection({
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalIncome)}
               </td>
-              <td className="tabnum px-4 py-2.5 text-right font-mono">
-                {formatAmount(totalShare)}
-                {hasHusholdning && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalHusholdning)} hus.
-                  </div>
-                )}
-                {hasSavings && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalSavings)} ops.
-                  </div>
-                )}
-                {hasEvents && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalEvents)} beg.
-                  </div>
+              <td className="px-4 py-2.5 text-right">
+                <div className="tabnum font-mono">
+                  {formatAmount(
+                    totalShare + totalHusholdning + totalSavings + totalEvents
+                  )}
+                </div>
+                {(hasHusholdning || hasSavings || hasEvents) && (
+                  <Breakdown
+                    udg={totalShare}
+                    hus={hasHusholdning ? totalHusholdning : null}
+                    ops={hasSavings ? totalSavings : null}
+                    beg={hasEvents ? totalEvents : null}
+                  />
                 )}
               </td>
               <td className="tabnum px-4 py-2.5 text-right font-mono">
                 {formatAmount(totalRemaining)}
               </td>
-              <td className="tabnum px-4 py-2.5 text-right font-mono">
-                {formatAmount(totalCurrentExpense)}
-                {hasHusholdning && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalCurrentHusholdning)} hus.
-                  </div>
-                )}
-                {hasSavings && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalCurrentSavings)} ops.
-                  </div>
-                )}
-                {hasEvents && (
-                  <div className="tabnum text-[11px] font-normal text-neutral-500">
-                    + {formatAmount(totalCurrentEvents)} beg.
-                  </div>
+              <td className="px-4 py-2.5 text-right">
+                <div className="tabnum font-mono">
+                  {formatAmount(
+                    totalCurrentExpense +
+                      totalCurrentHusholdning +
+                      totalCurrentSavings +
+                      totalCurrentEvents
+                  )}
+                </div>
+                {(hasHusholdning || hasSavings || hasEvents) && (
+                  <Breakdown
+                    udg={totalCurrentExpense}
+                    hus={hasHusholdning ? totalCurrentHusholdning : null}
+                    ops={hasSavings ? totalCurrentSavings : null}
+                    beg={hasEvents ? totalCurrentEvents : null}
+                  />
                 )}
               </td>
             </tr>
@@ -832,6 +817,38 @@ function RecommendationRow({
           <ArrowRight className="h-3 w-3" />
         </Link>
       )}
+    </div>
+  );
+}
+
+// Kompakt opdelings-linje under en celle-headline. Viser hvilke buckets
+// totalbeløbet består af på én linje (udg · hus · ops · beg) i stedet for
+// stak af sub-rækker - holder tabellen renere når der er fire buckets.
+function Breakdown({
+  udg,
+  hus,
+  ops,
+  beg,
+}: {
+  udg: number;
+  hus: number | null;
+  ops: number | null;
+  beg: number | null;
+}) {
+  const segments: { label: string; value: number }[] = [
+    { label: 'udg', value: udg },
+  ];
+  if (hus != null) segments.push({ label: 'hus', value: hus });
+  if (ops != null) segments.push({ label: 'ops', value: ops });
+  if (beg != null) segments.push({ label: 'beg', value: beg });
+  return (
+    <div className="mt-0.5 tabnum font-mono text-[10px] font-normal text-neutral-500">
+      {segments.map((s, i) => (
+        <span key={s.label}>
+          {i > 0 && <span className="mx-1 text-neutral-300">·</span>}
+          <span className="text-neutral-400">{s.label}</span> {formatAmount(s.value)}
+        </span>
+      ))}
     </div>
   );
 }

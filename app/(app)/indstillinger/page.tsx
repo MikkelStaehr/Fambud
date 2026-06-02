@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Pencil, Trash2, Archive, ArchiveRestore } from 'lucide-react';
+import { Pencil, Trash2, Archive, ArchiveRestore, History, ArrowRight } from 'lucide-react';
 import { getSettingsData, getCategories } from '@/lib/dal';
 import { formatShortDateDA } from '@/lib/format';
 import { DawaAddressInput } from '@/app/_components/DawaAddressInput';
@@ -247,6 +247,28 @@ export default async function IndstillingerPage({
             Oprettet {formatShortDateDA(household.created_at.slice(0, 10))}
           </div>
         </div>
+
+        {/* Aktivitets-log: link til /indstillinger/aktivitet hvor brugeren
+            kan se hvem der har rørt hvad. Audit-spor over transaktioner,
+            konti, lån, familie og hjælper-flow. */}
+        <Link
+          href="/indstillinger/aktivitet"
+          className="mt-3 flex items-center justify-between gap-3 rounded-md border border-neutral-200 bg-white px-4 py-3 transition hover:border-emerald-700 hover:bg-emerald-50"
+        >
+          <div className="flex items-start gap-3">
+            <History className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
+            <div>
+              <div className="text-sm font-medium text-neutral-900">
+                Aktivitet i husstanden
+              </div>
+              <div className="mt-0.5 text-xs text-neutral-500">
+                Se hvem der har ændret eller slettet transaktioner, konti,
+                lån eller familie-medlemmer.
+              </div>
+            </div>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
+        </Link>
       </section>
 
       {/* Familie */}

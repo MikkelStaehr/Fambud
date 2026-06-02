@@ -46,6 +46,15 @@ export type AuditAction =
   | 'proxy.revoked'
   | 'proxy.activated'
   | 'proxy.resource_created'
+  // Finansielle UPDATE/DELETE via DB-triggers (migration 0071, P16).
+  // Triggers skrives ikke fra TS, men typen bruges når vi læser back fra
+  // audit_log (admin-dashboard, retention-scripts osv.).
+  | 'transaction.updated'
+  | 'transaction.deleted'
+  | 'account.updated'
+  | 'account.deleted'
+  | 'loan.updated'
+  | 'loan.deleted'
   // Periodic emails / cron jobs
   | 'monthly_summary.sent'
   | 'monthly_summary.failed'

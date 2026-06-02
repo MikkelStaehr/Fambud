@@ -2590,7 +2590,7 @@ verificeret (PII-redaction).
 ### Roadmap
 
 - **P15** — Member-removal audit-log (estimat 1t, deadline 31. maj 2026)
-- **P16** — Financial-events audit-log via DB-triggers (estimat 4-6t, deadline 30. juni 2026)
+- **P16** — Financial-events audit-log via DB-triggers ✅ DONE 2026-06-02 ([migration 0071](supabase/migrations/0071_audit_financial_changes.sql)). Triggers på `transactions` + `accounts` der logger UPDATE (diff af tracked kolonner) og DELETE (snapshot) til `audit_log`. Forgrener på `accounts.kind='credit'` → `loan.*` vs `account.*`. `auth.uid()` bruges som `user_id`; null når admin-client muterer (proxy-mode + background-paths) - dokumenteret begrænsning til v1.
 - **P17** — RLS-denial detection via 0-rows-helper (estimat 2-3t, deadline 31. maj 2026)
 - **P18** — Edge runtime Sentry verifikation (estimat 30 min, defensiv)
 

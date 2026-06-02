@@ -53,12 +53,12 @@ export async function updateMyProfile(formData: FormData) {
     // schema-/constraint-navne der hjælper en angriber).
     console.error('updateMyProfile failed:', error.message);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Profilen kunne ikke gemmes. Prøv igen.')
     );
   }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
   revalidatePath('/dashboard');
 }
 
@@ -92,7 +92,7 @@ export async function createInvite(formData: FormData) {
     { console.error('Could not create invite:', error.message); throw new Error('Could not create invite'); }
   }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 export async function deleteInvite(formData: FormData) {
@@ -108,7 +108,7 @@ export async function deleteInvite(formData: FormData) {
 
   if (error) { console.error('Could not delete invite:', error.message); throw new Error('Could not delete invite'); }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 // ----------------------------------------------------------------------------
@@ -139,7 +139,7 @@ function readCategoryForm(formData: FormData):
 export async function createCategory(formData: FormData) {
   const parsed = readCategoryForm(formData);
   if ('error' in parsed) {
-    redirect('/indstillinger?error=' + encodeURIComponent(parsed.error));
+    redirect('/indstillinger/kategorier?error=' + encodeURIComponent(parsed.error));
   }
 
   const { supabase, householdId } = await getHouseholdContext();
@@ -148,10 +148,10 @@ export async function createCategory(formData: FormData) {
     ...parsed.data,
   });
   if (error) {
-    redirect('/indstillinger?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
+    redirect('/indstillinger/kategorier?error=' + encodeURIComponent('Operationen fejlede - prøv igen'));
   }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 export async function updateCategory(id: string, formData: FormData) {
@@ -177,8 +177,8 @@ export async function updateCategory(id: string, formData: FormData) {
     );
   }
 
-  revalidatePath('/indstillinger');
-  redirect('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
+  redirect('/indstillinger/kategorier');
 }
 
 // Soft-delete: transactions reference categories ON DELETE SET NULL, so a hard
@@ -193,7 +193,7 @@ export async function archiveCategory(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 export async function restoreCategory(formData: FormData) {
@@ -206,7 +206,7 @@ export async function restoreCategory(formData: FormData) {
     .eq('id', id)
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 // ----------------------------------------------------------------------------
@@ -225,14 +225,14 @@ export async function createFamilyMember(formData: FormData) {
   const { membership } = await getMyMembership();
   if (membership?.role !== 'owner') {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Kun ejeren kan tilføje familiemedlemmer')
     );
   }
 
   const name = capLength(String(formData.get('name') ?? '').trim(), TEXT_LIMITS.shortName);
   if (!name) {
-    redirect('/indstillinger?error=' + encodeURIComponent('Navn er påkrævet'));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent('Navn er påkrævet'));
   }
 
   const birthdateRaw = String(formData.get('birthdate') ?? '').trim();
@@ -244,7 +244,7 @@ export async function createFamilyMember(formData: FormData) {
   let email: string | null = null;
   if (emailRaw) {
     if (!EMAIL_RE.test(emailRaw)) {
-      redirect('/indstillinger?error=' + encodeURIComponent('Ugyldig email'));
+      redirect('/indstillinger/husstand?error=' + encodeURIComponent('Ugyldig email'));
     }
     email = emailRaw;
   }
@@ -280,10 +280,10 @@ export async function createFamilyMember(formData: FormData) {
     const msg = error.message.includes('family_members_email')
       ? 'Den email er allerede brugt på et familiemedlem i jeres husstand'
       : 'Familiemedlemmet kunne ikke oprettes - prøv igen';
-    redirect('/indstillinger?error=' + encodeURIComponent(msg));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent(msg));
   }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
   // Faste-udgifter og budget-overblik bruger family list i dropdowns/visning.
   revalidatePath('/faste-udgifter', 'layout');
   revalidatePath('/budget');
@@ -303,7 +303,7 @@ export async function deleteFamilyMember(formData: FormData) {
   const { membership } = await getMyMembership();
   if (membership?.role !== 'owner') {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Kun ejeren kan fjerne familiemedlemmer')
     );
   }
@@ -323,19 +323,19 @@ export async function deleteFamilyMember(formData: FormData) {
     .maybeSingle();
   if (!target) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Familiemedlemmet findes ikke')
     );
   }
   if (target.user_id === user.id) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Du kan ikke fjerne dig selv')
     );
   }
   if (target.user_id != null) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent(
           'Aktive familiemedlemmer kan ikke fjernes herfra - kontakt support'
         )
@@ -351,7 +351,7 @@ export async function deleteFamilyMember(formData: FormData) {
     .eq('household_id', householdId);
   if (error) { console.error('Action error:', error.message); throw new Error('Internal error'); }
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
   revalidatePath('/faste-udgifter', 'layout');
   revalidatePath('/budget');
 }
@@ -386,7 +386,7 @@ export async function deleteMyAccount(formData: FormData) {
     .toLowerCase();
   if (!confirmEmail || confirmEmail !== user.email?.toLowerCase()) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent(
           'Indtast din email præcist for at bekræfte sletningen'
         )
@@ -404,7 +404,7 @@ export async function deleteMyAccount(formData: FormData) {
   if (countErr) {
     console.error('deleteMyAccount count failed:', countErr.message);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Operationen fejlede - prøv igen')
     );
   }
@@ -414,7 +414,7 @@ export async function deleteMyAccount(formData: FormData) {
 
   if (isOwner && hasOtherActiveMembers) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent(
           'Du er ejer af husstanden og kan ikke slette din konto mens andre medlemmer er aktive. Fjern dem først eller kontakt support.'
         )
@@ -428,7 +428,7 @@ export async function deleteMyAccount(formData: FormData) {
   } catch (e) {
     console.error('deleteMyAccount: admin client unavailable', e);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent(
           'Kontosletning er ikke tilgængelig lige nu - kontakt support'
         )
@@ -449,7 +449,7 @@ export async function deleteMyAccount(formData: FormData) {
     if (hhErr) {
       console.error('deleteMyAccount household delete failed:', hhErr.message);
       redirect(
-        '/indstillinger?error=' +
+        '/indstillinger/profil?error=' +
           encodeURIComponent('Kunne ikke slette husstanden - kontakt support')
       );
     }
@@ -465,7 +465,7 @@ export async function deleteMyAccount(formData: FormData) {
     if (fmErr) {
       console.error('deleteMyAccount member delete failed:', fmErr.message);
       redirect(
-        '/indstillinger?error=' +
+        '/indstillinger/profil?error=' +
           encodeURIComponent('Kunne ikke fjerne dig fra husstanden')
       );
     }
@@ -521,12 +521,12 @@ export async function setMonthlySummaryEmail(formData: FormData) {
   if (error) {
     console.error('setMonthlySummaryEmail failed:', error.message);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Indstillingen kunne ikke gemmes - prøv igen.')
     );
   }
-  revalidatePath('/indstillinger');
-  redirect('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
+  redirect('/indstillinger/profil');
 }
 
 // Toggle på de ugentlige betalings-påmindelser. Samme checkbox-mønster som
@@ -542,12 +542,12 @@ export async function setPaymentReminderEmail(formData: FormData) {
   if (error) {
     console.error('setPaymentReminderEmail failed:', error.message);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Indstillingen kunne ikke gemmes - prøv igen.')
     );
   }
-  revalidatePath('/indstillinger');
-  redirect('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
+  redirect('/indstillinger/profil');
 }
 
 // Sender en test-mail til den indloggede bruger med deres egen aktuelle
@@ -568,13 +568,13 @@ export async function sendMyMonthlySummaryTest() {
     .maybeSingle();
   if (meErr || !me) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Kunne ikke finde din profil')
     );
   }
   if (!me.email) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent('Din profil har ingen email - tilføj én først')
     );
   }
@@ -603,12 +603,12 @@ export async function sendMyMonthlySummaryTest() {
   } catch (err) {
     console.error('sendMyMonthlySummaryTest failed:', err);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/profil?error=' +
         encodeURIComponent(
           'Test-mail kunne ikke sendes - tjek Resend-konfig og logs'
         )
     );
   }
 
-  redirect('/indstillinger');
+  redirect('/indstillinger/profil');
 }

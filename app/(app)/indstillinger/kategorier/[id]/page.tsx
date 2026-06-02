@@ -19,19 +19,19 @@ export default async function EditKategoriPage({
     'mt-1.5 block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900';
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
+    <div>
       <Link
-        href="/indstillinger"
+        href="/indstillinger/kategorier"
         className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-900"
       >
         <ArrowLeft className="h-3 w-3" />
-        Tilbage til indstillinger
+        Tilbage til kategorier
       </Link>
 
       <header className="mt-3 border-b border-neutral-200 pb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
+        <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
           Rediger kategori
-        </h1>
+        </h2>
       </header>
 
       <form action={action} className="mt-6 max-w-md space-y-5">
@@ -93,7 +93,7 @@ export default async function EditKategoriPage({
             Gem ændringer
           </button>
           <Link
-            href="/indstillinger"
+            href="/indstillinger/kategorier"
             className="text-sm font-medium text-neutral-500 hover:text-neutral-900"
           >
             Annullér

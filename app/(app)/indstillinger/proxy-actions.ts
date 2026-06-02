@@ -32,7 +32,7 @@ import { logAuditEvent } from '@/lib/audit-log';
 export async function requestSetupProxy(formData: FormData) {
   const targetFamilyMemberId = String(formData.get('family_member_id') ?? '').trim();
   if (!targetFamilyMemberId) {
-    redirect('/indstillinger?error=' + encodeURIComponent('Vælg et familiemedlem'));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent('Vælg et familiemedlem'));
   }
 
   const { supabase, householdId, user } = await getHouseholdContext();
@@ -50,20 +50,20 @@ export async function requestSetupProxy(formData: FormData) {
     .maybeSingle();
 
   if (!target) {
-    redirect('/indstillinger?error=' + encodeURIComponent('Familiemedlemmet findes ikke'));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent('Familiemedlemmet findes ikke'));
   }
   if (!target.user_id) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Det familiemedlem har ikke en aktiv konto endnu - de skal selv signe op først')
     );
   }
   if (target.user_id === user.id) {
-    redirect('/indstillinger?error=' + encodeURIComponent('Du kan ikke anmode dig selv'));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent('Du kan ikke anmode dig selv'));
   }
   if (!target.email) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Vi har ikke en email på dette familiemedlem - de skal opdatere deres profil først')
     );
   }
@@ -81,7 +81,7 @@ export async function requestSetupProxy(formData: FormData) {
 
   if (existing) {
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent(
           existing.accepted_at
             ? 'Du har allerede en aktiv hjælper-adgang til denne person'
@@ -125,7 +125,7 @@ export async function requestSetupProxy(formData: FormData) {
 
   if (insertErr || !grant) {
     console.error('requestSetupProxy: failed to insert grant', insertErr?.message);
-    redirect('/indstillinger?error=' + encodeURIComponent('Kunne ikke oprette anmodningen - prøv igen'));
+    redirect('/indstillinger/husstand?error=' + encodeURIComponent('Kunne ikke oprette anmodningen - prøv igen'));
   }
 
   // Send email til grantor (Louise)
@@ -146,7 +146,7 @@ export async function requestSetupProxy(formData: FormData) {
     console.error('requestSetupProxy: email send failed', err);
     await supabase.from('setup_proxy_grants').delete().eq('id', grant.id);
     redirect(
-      '/indstillinger?error=' +
+      '/indstillinger/husstand?error=' +
         encodeURIComponent('Kunne ikke sende emailen. Tjek at familiemedlemmets email er korrekt.')
     );
   }
@@ -162,9 +162,9 @@ export async function requestSetupProxy(formData: FormData) {
     resource: `setup_proxy_grant:${grant.id}`,
   });
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
   redirect(
-    '/indstillinger?notice=' +
+    '/indstillinger/husstand?notice=' +
       encodeURIComponent(`Anmodning sendt til ${target.name ?? 'familiemedlemmet'}`)
   );
 }
@@ -229,7 +229,7 @@ export async function acceptSetupProxy(formData: FormData) {
     metadata: { grantee_user_id: grant.grantee_user_id },
   });
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
   redirect(
     '/dashboard?notice=' +
       encodeURIComponent('Tak! Adgangen er aktiveret og udløber automatisk efter 7 dage')
@@ -325,7 +325,7 @@ export async function revokeSetupProxy(formData: FormData) {
     },
   });
 
-  revalidatePath('/indstillinger');
+  revalidatePath('/indstillinger', 'layout');
 }
 
 // ============================================================================
@@ -375,7 +375,7 @@ export async function deactivateProxySession() {
   revalidatePath('/', 'layout');
   if (ctx) {
     redirect(
-      '/indstillinger?notice=' +
+      '/indstillinger/husstand?notice=' +
         encodeURIComponent('Tilbage på din egen profil')
     );
   }

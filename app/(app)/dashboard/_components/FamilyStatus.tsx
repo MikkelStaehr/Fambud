@@ -119,7 +119,7 @@ export function FamilyStatus({ members }: Props) {
               </div>
               {s.tone === 'pending' && (
                 <Link
-                  href="/indstillinger"
+                  href="/indstillinger/husstand"
                   className="shrink-0 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
                 >
                   Se invitation

@@ -54,7 +54,7 @@ export function NextStepsCard({ hasEvents, pendingMemberNames }: Props) {
       label: `Få ${names} med`,
       description:
         'De er pre-godkendt men mangler at oprette deres bruger. Del invitationen fra Indstillinger.',
-      href: '/indstillinger',
+      href: '/indstillinger/husstand',
     });
   }
 

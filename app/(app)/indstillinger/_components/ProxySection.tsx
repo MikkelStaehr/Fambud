@@ -110,7 +110,7 @@ export async function ProxySection() {
       </h2>
 
       <p className="mb-3 text-xs text-neutral-500">
-        Sætter du en andens økonomi op for dem? Anmod om "hjælper-adgang", så
+        Sætter du en andens økonomi op for dem? Anmod om &ldquo;hjælper-adgang&rdquo;, så
         de kan godkende via email. Du kan kun <strong>tilføje</strong> nye
         konti, indkomst og udgifter - ikke se eller redigere deres
         eksisterende data. Adgangen udløber automatisk efter 7 dage.

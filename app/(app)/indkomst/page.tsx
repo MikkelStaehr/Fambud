@@ -125,7 +125,7 @@ export default async function IndkomstPage({
         {incomeContributors.length === 0 ? (
           <div className="rounded-md border border-dashed border-neutral-300 bg-white px-4 py-6 text-center text-sm text-neutral-500">
             Tilføj voksne familiemedlemmer på{' '}
-            <Link href="/indstillinger" className="underline hover:text-neutral-900">
+            <Link href="/indstillinger/husstand" className="underline hover:text-neutral-900">
               Indstillinger
             </Link>{' '}
             for at registrere hovedindkomst pr. person.

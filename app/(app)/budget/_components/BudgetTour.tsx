@@ -9,8 +9,8 @@ const steps: TourStep[] = [
     content: (
       <p>
         Flad oversigt over alle jeres faste udgifter på tværs af konti -
-        husleje, abonnementer, forsikringer. Til at se "hvad har vi
-        liggende" i én tabel uden at klikke ind på hver konto.
+        husleje, abonnementer, forsikringer. Til at se &ldquo;hvad har vi
+        liggende&rdquo; i én tabel uden at klikke ind på hver konto.
       </p>
     ),
   },

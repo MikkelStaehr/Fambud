@@ -5771,3 +5771,158 @@ flex-1` så CTAen wrapper under når der ikke er plads.
 - 4 tabeller mobile-first (Rådgiver x2, Budget, Amortisation)
 - Pre-existing lint-fejl i BudgetTour.tsx (unescaped quotes) ikke rørt -
   ikke en mobile-issue
+
+---
+
+# Devlog - 2. juni 2026 (P16: audit-log, husstands-aktivitet, indstillinger-tabs)
+
+Dag dedikeret til security-roadmappens P-items + en oprydning der
+voksede ud af det. P16 fra SECURITY_AUDITS.md var planlagt med
+30. juni-deadline; nu lukket. Som naturlig opfølgning byggede vi en
+slutbruger-facade så husstanden faktisk KAN læse loggen, og det
+afslørede at /indstillinger var blevet en 709-linjers monolit.
+
+## 1. P16: audit-log for finansielle UPDATE/DELETE via DB-triggers
+
+**Migration:** [0071_audit_financial_changes.sql](supabase/migrations/0071_audit_financial_changes.sql)
+
+Roadmap-punkt fra SECURITY_AUDITS.md (#18-#20). To PL/pgSQL trigger-
+funktioner + AFTER UPDATE OR DELETE-triggers på `transactions` og
+`accounts`. INSERT er bevidst ikke tracked - det er for noisy. UPDATE
+fanger felt-ændringer; DELETE fanger snapshot ved sletning.
+
+**log_transaction_change()** diff'er tracked kolonner:
+- `amount, occurs_on, category_id, description, recurrence, account_id`
+- Description trunkeres til 100 tegn så log ikke bloater
+- Hvis ingen tracked-kolonner ændrede sig (kun `updated_at` el. lign.),
+  springes log-insert over
+
+**log_account_change()** forgrener på `kind`:
+- `kind = 'credit'` → `loan.updated` / `loan.deleted`
+- Andre kinds → `account.updated` / `account.deleted`
+- Tracker `name, opening_balance, payment_amount, interest_rate, apr,
+  payment_afdrag, balance_as_of_date, archived`
+
+**Design-valg dokumenteret i migration-header:**
+- `auth.uid()` bruges som `user_id`. Den er null når admin-client
+  muterer (proxy-mode + nogle background-paths). V1-begrænsning;
+  kan udvides via `set_config('app.acting_user_id', …)` senere
+- CASCADE deletes (account → transactions) lader vi fyre trigger
+  per række - det ER det evidens-spor vi vil have
+- `SECURITY DEFINER + set search_path = public, pg_temp` så triggers
+  kan inserte i `audit_log` trods RLS DENY ALL
+
+**Smoke-test:** Mikkel ændrede en transaktion 1.124,25 kr → 1.124,26 kr.
+Trigger fangede præcis det diff, satte korrekt user_id og household_id.
+`acting_user_id = null` og `ip/user_agent = null` er forventet og
+dokumenteret (DB har ingen request-context).
+
+**TS-type:** `AuditAction`-union i `lib/audit-log.ts` udvidet med de 6
+nye action-navne så future kode der læser back fra audit_log er
+typesafe.
+
+## 2. Husstands-aktivitets-side
+
+Audit_log eksisterer kun for Mikkel som operator pr. default - han
+læser via Supabase Dashboard. P16-data tilføjer reel slutbruger-værdi
+(transparens, konflikt-evidens, detect af uautoriseret adgang), så
+samtidig byggede vi en husstands-facade på /indstillinger/aktivitet.
+
+**DAL:** [lib/dal/activity.ts](lib/dal/activity.ts) - `getHouseholdActivity`
+- Læser via admin-client (audit_log har RLS DENY ALL)
+- Filtrerer på household_id + whitelist af visible actions
+  (transaction.*, account.*, loan.*, member.*, invite.*, proxy.*)
+- Login/password/signup-events ligger UDENFOR - de er pre-husstand
+  (failed logins har null user_id) og hører til operator-værktøjs-land
+- Resolv user_id + acting_user_id til family-member-navne via lookup-map
+
+**UI:** [ActivityRow](app/(app)/indstillinger/aktivitet/_components/ActivityRow.tsx)
+har tekst-builder per action-type så hver række renderes som læsbar
+prose: &ldquo;Mikkel ændrede beløb fra 1.124,25 kr til 1.124,26 kr på en
+transaktion&rdquo;. Proxy-tilfælde får &ldquo;X på vegne af Y&rdquo;-prefix.
+Hver række har vis-detaljer-toggle til det rå JSON-metadata.
+
+**P16-DONE-status** dokumenteret i SECURITY_AUDITS.md med link til
+migration + design-noter.
+
+## 3. /indstillinger opdelt i tabs
+
+Aktivitets-siden blev tilføjet som et link-card på den eksisterende
+/indstillinger-side. Det fik brugeren til at observere: hele
+indstillinger-siden er blevet en 709-linjers monolit med fem
+urelaterede sektioner stoplet i ét scroll-spor.
+
+Konsolideret i 4 sub-routes med shared layout:
+
+| Tab | Indhold |
+|---|---|
+| Profil | Min profil + Notifikationer + Slet konto |
+| Husstand | Husstandsnavn + Familie + Proxy + Invitationer |
+| Kategorier | Liste + opret/arkivér (uændret) |
+| Aktivitet | Audit-log (eksisterende side) |
+
+**SettingsTabsNav** ([_components/SettingsTabsNav.tsx](app/(app)/indstillinger/_components/SettingsTabsNav.tsx))
+er en client-component der bruger `usePathname()` til at highlighte
+aktiv tab. Sub-pages som `kategorier/[id]`-edit får også tab-nav med
+Kategorier-fanen highlightet.
+
+**Action-redirects opdateret** så validering-fejl lander på samme tab
+som formularen blev submittet fra. Tidligere redirectede alle actions
+til `/indstillinger?error=...` - efter redirect-chain til `/profil`
+ville query-strengen være væk. Nu peger hver action på
+`/indstillinger/{profil,husstand,kategorier}?error=...` med eksplicit
+sub-route. Husstand + Profil fik også deres egne error/notice-banners
+(kun Kategorier havde det i monoliten).
+
+**revalidatePath('/indstillinger')** → **revalidatePath('/indstillinger',
+'layout')** så cache-invalidering rammer hele sub-tree i stedet for
+kun den (nu redirect-only) landing-route.
+
+**Eksterne links opdateret**: dashboard `FamilyStatus` +
+`NextStepsCard` → /husstand. /indkomst tom-state → /husstand.
+
+Drive-by: ProxySection.tsx havde to pre-existing unescaped quotes som
+CI-lint var ramlet på; rettet.
+
+## Læringspunkter
+
+1. **Triggere er den rette abstraktion til finansielt audit-spor**:
+   vi har mange code-paths der UPDATE'er transactions (poster-form,
+   bulk-recategorize, push-loan-to-budget, …). En central trigger
+   garanterer dækning uden at hver action skal huske at kalde
+   `logAuditEvent()`. Bypass via direkte SQL i Dashboard fanges også.
+
+2. **Slutbruger-facade ovenpå security-data er reel produkt-værdi**:
+   audit_log var planlagt som operator-only. Da vi byggede
+   husstandsfacaden, ramte vi den indsigt at konflikt-evidens
+   (&ldquo;min eks fjernede 30 transaktioner i januar&rdquo;) er en feature
+   der adskiller os fra konkurrenter - ikke en bagside-funktion.
+
+3. **&ldquo;Vise det udenfor login&rdquo; afslører altid nye design-løse ender**:
+   da aktivitets-linket landede på /indstillinger, gjorde det
+   monolit-problemet synligt for første gang. Tabs-refactoren var
+   ikke planlagt - den voksede ud af at se siden i ny kontekst.
+
+4. **Action-redirect-paths har subtilt fail-mode efter redirect-chains**:
+   `redirect('/indstillinger?error=X')` der gennemgår en
+   `redirect('/profil')`-chain mister query-strengen. Fanges først
+   ved manuel test. Eksplicit sub-route per action er sikrere end
+   &ldquo;land på root og lad redirect-loven sortere det&rdquo;.
+
+5. **TypeScript-typer på audit-actions er værdifulde selv når de
+   skrives fra DB**: triggers skriver direkte til audit_log uden om
+   `logAuditEvent()`. TS-laget kender ikke action-navnene fra
+   triggerne. Men når vi LÆSER back (activity-side), kan vi switch'e
+   på `AuditAction`-union exhaustively. Glemmer en fremtidig
+   action-tilføjelse at opdatere union'en, klager TS når vi forsøger
+   at format'tere den.
+
+## Status efter 2. juni
+
+- 24 unit-tests (uændret)
+- CI: alle gates aktive
+- Migration 0070-0071 shipped + kørt på prod
+- P16 DONE - markeret i SECURITY_AUDITS.md
+- /indstillinger refaktoreret fra 709-linjers monolit til 4 sub-pages
+- Næste P-item: P21 (nightly RLS-test) eller P19 (OWASP ZAP) -
+  begge med 30. juni 2026 deadline

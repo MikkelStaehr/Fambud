@@ -28,3 +28,4 @@ export * from './life-events';
 export * from './predictable';
 export * from './economy-plan';
 export * from './activity';
+export * from './famtask';

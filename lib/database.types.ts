@@ -77,6 +77,10 @@ export type LifeEventTimeframe =
   | 'within_5y'
   | 'within_10y';
 export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
+// plan-schemaet (migration 0070, Famtask).
+export type PlanProjectStatus = 'ide' | 'aktiv' | 'pause' | 'faerdig';
+export type PlanStepStatus = 'todo' | 'i_gang' | 'faerdig';
+export type PlanFundingSource = 'overskud' | 'opsparing' | 'spare_op';
 
 export type Database = {
   public: {
@@ -747,6 +751,124 @@ export type Database = {
     };
     CompositeTypes: Record<string, never>;
   };
+  // Famtask (migration 0070). Tilgås via supabase.schema('plan').
+  plan: {
+    Tables: {
+      projects: {
+        Row: {
+          id: string;
+          household_id: string;
+          title: string;
+          purpose: string | null;
+          status: PlanProjectStatus;
+          target_month: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          title: string;
+          purpose?: string | null;
+          status?: PlanProjectStatus;
+          target_month?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          title?: string;
+          purpose?: string | null;
+          status?: PlanProjectStatus;
+          target_month?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      steps: {
+        Row: {
+          id: string;
+          project_id: string;
+          household_id: string;
+          title: string;
+          position: number;
+          status: PlanStepStatus;
+          amount: number | null;
+          month: string | null;
+          funding_source: PlanFundingSource | null;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          household_id: string;
+          title: string;
+          position?: number;
+          status?: PlanStepStatus;
+          amount?: number | null;
+          month?: string | null;
+          funding_source?: PlanFundingSource | null;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          household_id?: string;
+          title?: string;
+          position?: number;
+          status?: PlanStepStatus;
+          amount?: number | null;
+          month?: string | null;
+          funding_source?: PlanFundingSource | null;
+        };
+        Relationships: [];
+      };
+      sparks: {
+        Row: {
+          id: string;
+          household_id: string;
+          title: string;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+          promoted_project_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          title: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          promoted_project_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          title?: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          promoted_project_id?: string | null;
+        };
+        Relationships: [];
+      };
+    };
+    Views: {
+      project_budget: {
+        Row: {
+          project_id: string;
+          household_id: string;
+          total_amount: number;
+        };
+        Relationships: [];
+      };
+    };
+    Functions: Record<string, never>;
+    Enums: {
+      project_status: PlanProjectStatus;
+      step_status: PlanStepStatus;
+      funding_source: PlanFundingSource;
+    };
+    CompositeTypes: Record<string, never>;
+  };
 };
 
 // Convenience row aliases for use throughout the app.
@@ -760,3 +882,6 @@ export type Household = Database['public']['Tables']['households']['Row'];
 export type HouseholdInvite = Database['public']['Tables']['household_invites']['Row'];
 export type LifeEvent = Database['public']['Tables']['life_events']['Row'];
 export type LifeEventItem = Database['public']['Tables']['life_event_items']['Row'];
+export type PlanProject = Database['plan']['Tables']['projects']['Row'];
+export type PlanStep = Database['plan']['Tables']['steps']['Row'];
+export type PlanSpark = Database['plan']['Tables']['sparks']['Row'];

@@ -135,6 +135,8 @@ export function StepList({ parent, steps }: Props) {
 
   const total = optimisticSteps.reduce((sum, s) => sum + (s.amount ?? 0), 0);
   const hasAmounts = optimisticSteps.some((s) => s.amount != null);
+  // Summen er kun hele budgettet, hvis alle skridt har et beløb
+  const unpricedCount = optimisticSteps.filter((s) => s.amount == null).length;
   const doneCount = optimisticSteps.filter((s) => s.status === 'faerdig').length;
 
   return (
@@ -347,8 +349,11 @@ export function StepList({ parent, steps }: Props) {
             {doneCount} af {optimisticSteps.length} færdige
           </span>
           {hasAmounts && (
-            <span className="font-mono tabnum text-sm font-semibold text-neutral-900">
-              {formatAmount(total)} kr
+            <span className="flex flex-wrap items-baseline justify-end gap-x-2">
+              {unpricedCount > 0 && <span>{unpricedCount} skridt uden beløb</span>}
+              <span className="font-mono tabnum text-sm font-semibold text-neutral-900">
+                {formatAmount(total)} kr
+              </span>
             </span>
           )}
         </div>

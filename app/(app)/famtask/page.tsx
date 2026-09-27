@@ -45,6 +45,9 @@ function ActiveProjectCard({ project: p }: { project: FamtaskProjectSummary }) {
       </div>
       <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-neutral-500">
         <span>{progressLabel(p)}</span>
+        {p.totalAmount > 0 && p.unpricedCount > 0 && (
+          <span>{p.unpricedCount} skridt uden beløb</span>
+        )}
         {p.target_month && (
           <span className="first-letter:uppercase">Mål: {formatMonthShortDA(p.target_month)}</span>
         )}

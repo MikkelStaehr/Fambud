@@ -277,6 +277,18 @@ export async function promoteSpark(formData: FormData) {
     redirect(`/famtask/sparks/${sparkId}`);
   }
 
+  // Tjeklisten er opfyldt, så beslutningen er taget: projektet starter som
+  // Aktiv i stedet for DB-default Idé. Kun hvis det stadig er Idé, så et
+  // projekt der allerede fandtes (dobbeltklik) ikke får sin status ændret.
+  // Fejler det, er projektet stadig oprettet; status kan skiftes på siden.
+  const { error: statusErr } = await plan
+    .from('projects')
+    .update({ status: 'aktiv' })
+    .eq('id', projectId)
+    .eq('household_id', householdId)
+    .eq('status', 'ide');
+  if (statusErr) console.error('promoteSpark (status) failed:', statusErr.message);
+
   revalidateFamtask();
   await setFlashCookie('Projekt oprettet');
   redirect(`/famtask/${projectId}`);

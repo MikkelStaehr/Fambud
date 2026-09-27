@@ -1,16 +1,15 @@
 // /famtask/sparks - indbakken. Sparks fanges med Cmd/Ctrl+K eller "Ny
 // spark" og ryddes enten ved at blive til et projekt eller ved at slettes.
+// En spark bliver først til et projekt når tjeklisten er opfyldt (SparkCard).
 
 import Link from 'next/link';
-import { ArrowRight, Trash2 } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { getFamtaskSparks } from '@/lib/dal';
-import { formatCreatedDA } from '@/lib/famtask';
 import { EmptyState } from '../../_components/EmptyState';
-import { SubmitButton } from '../../_components/SubmitButton';
-import { deleteSpark, promoteSpark } from '../actions';
+import { SparkCard } from '../_components/SparkCard';
 
 export default async function FamtaskSparksPage() {
-  const { open, promoted } = await getFamtaskSparks();
+  const { open, promoted, members, currentUserId } = await getFamtaskSparks();
 
   return (
     <>
@@ -20,38 +19,12 @@ export default async function FamtaskSparksPage() {
         ) : (
           <ul className="divide-y divide-neutral-200 rounded-md border border-neutral-200 bg-white">
             {open.map((spark) => (
-              <li
+              <SparkCard
                 key={spark.id}
-                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm font-medium text-neutral-900">
-                    {spark.title}
-                  </p>
-                  {spark.note && (
-                    <p className="mt-0.5 break-words text-sm text-neutral-600">{spark.note}</p>
-                  )}
-                  <p className="mt-0.5 text-xs text-neutral-400">
-                    {formatCreatedDA(spark.created_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <form action={promoteSpark}>
-                    <input type="hidden" name="id" value={spark.id} />
-                    <SubmitButton pendingLabel="Opretter…">Gør til projekt</SubmitButton>
-                  </form>
-                  <form action={deleteSpark}>
-                    <input type="hidden" name="id" value={spark.id} />
-                    <button
-                      type="submit"
-                      aria-label={`Slet spark: ${spark.title}`}
-                      className="rounded-md p-2.5 text-neutral-400 transition hover:bg-red-50 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </form>
-                </div>
-              </li>
+                spark={spark}
+                members={members}
+                currentUserId={currentUserId}
+              />
             ))}
           </ul>
         )}

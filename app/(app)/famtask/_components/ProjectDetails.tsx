@@ -1,20 +1,24 @@
 'use client';
 
-// Projekt-header: titel, status (skifter med det samme), formål og
-// målmåned. "Rediger" åbner en inline-form til titel/formål/måned.
+// Projekt-header: titel, status (skifter med det samme), formål, målmåned,
+// groft beløb og ansvarlig (de tre sidste arves fra sparken, migration
+// 0072). "Rediger" åbner en inline-form til alle felter undtagen status.
 
 import { useOptimistic, useState, useTransition } from 'react';
 import { Pencil } from 'lucide-react';
 import type { PlanProject, PlanProjectStatus } from '@/lib/database.types';
-import { formatMonthYearDA } from '@/lib/format';
+import { formatAmount, formatMonthYearDA, formatOereForInput } from '@/lib/format';
 import {
   isProjectStatus,
   monthInputValue,
   PROJECT_STATUS_LABEL_DA,
   PROJECT_STATUSES,
+  type FamtaskMember,
 } from '@/lib/famtask';
+import { AmountInput } from '../../_components/AmountInput';
 import { setProjectStatus, updateProject } from '../actions';
 import {
+  amountFieldClass,
   fieldClass,
   labelClass,
   primaryButtonClass,
@@ -22,7 +26,13 @@ import {
   secondaryButtonClass,
 } from './styles';
 
-export function ProjectDetails({ project }: { project: PlanProject }) {
+export function ProjectDetails({
+  project,
+  members,
+}: {
+  project: PlanProject;
+  members: FamtaskMember[];
+}) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
@@ -57,6 +67,8 @@ export function ProjectDetails({ project }: { project: PlanProject }) {
     });
   }
 
+  const owner = members.find((m) => m.id === project.owner_member_id);
+
   if (editing) {
     return (
       <form onSubmit={handleSave} className="max-w-2xl space-y-4">
@@ -88,18 +100,51 @@ export function ProjectDetails({ project }: { project: PlanProject }) {
             className={fieldClass}
           />
         </div>
-        <div className="max-w-xs">
-          <label htmlFor="project-target-month" className={labelClass}>
-            Målmåned
-          </label>
-          <input
-            id="project-target-month"
-            name="target_month"
-            type="month"
-            defaultValue={monthInputValue(project.target_month)}
-            placeholder="ÅÅÅÅ-MM"
-            className={fieldClass}
-          />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label htmlFor="project-target-month" className={labelClass}>
+              Målmåned
+            </label>
+            <input
+              id="project-target-month"
+              name="target_month"
+              type="month"
+              defaultValue={monthInputValue(project.target_month)}
+              placeholder="ÅÅÅÅ-MM"
+              className={fieldClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="project-estimated-amount" className={labelClass}>
+              Beløb, groft (kr)
+            </label>
+            <AmountInput
+              id="project-estimated-amount"
+              name="estimated_amount"
+              defaultValue={
+                project.estimated_amount != null ? formatOereForInput(project.estimated_amount) : ''
+              }
+              className={amountFieldClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="project-owner" className={labelClass}>
+              Ansvarlig
+            </label>
+            <select
+              id="project-owner"
+              name="owner_member_id"
+              defaultValue={project.owner_member_id ?? ''}
+              className={fieldClass}
+            >
+              <option value="">Ingen</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {error && (
           <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -151,6 +196,12 @@ export function ProjectDetails({ project }: { project: PlanProject }) {
             Mål: {formatMonthYearDA(monthInputValue(project.target_month))}
           </span>
         )}
+        {project.estimated_amount != null && (
+          <span className="text-xs text-neutral-500">
+            Groft: <span className="font-mono tabnum">{formatAmount(project.estimated_amount)} kr</span>
+          </span>
+        )}
+        {owner && <span className="text-xs text-neutral-500">Ansvarlig: {owner.name}</span>}
         <button
           type="button"
           onClick={() => setEditing(true)}

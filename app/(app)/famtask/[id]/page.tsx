@@ -2,7 +2,7 @@
 //
 // Layout:
 //   - Tilbage-link
-//   - ProjectDetails: titel, status, formål, målmåned (+ rediger)
+//   - ProjectDetails: titel, status, formål, målmåned, beløb, ansvarlig (+ rediger)
 //   - StepList: tilføj, omdøb, flyt, status, beløb, måned
 //   - Slet projekt (bag en fold-ud, så det ikke trykkes ved et uheld)
 
@@ -23,7 +23,7 @@ export default async function FamtaskProjectPage({
   const { id } = await params;
   const data = await getFamtaskProject(id);
   if (!data) notFound();
-  const { project, steps } = data;
+  const { project, steps, members } = data;
 
   return (
     <>
@@ -36,7 +36,7 @@ export default async function FamtaskProjectPage({
       </Link>
 
       <section className="mt-3">
-        <ProjectDetails project={project} />
+        <ProjectDetails project={project} members={members} />
       </section>
 
       <section className="mt-6 max-w-3xl">

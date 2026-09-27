@@ -18,6 +18,8 @@ type Props = {
   pendingLabel?: string;
   variant?: Variant;
   className?: string;
+  // Slår knappen fra uafhængigt af pending, fx indtil en tjekliste er opfyldt
+  disabled?: boolean;
 };
 
 const VARIANTS: Record<Variant, string> = {
@@ -31,12 +33,13 @@ export function SubmitButton({
   pendingLabel = 'Gemmer…',
   variant = 'primary',
   className = '',
+  disabled = false,
 }: Props) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       className={`inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
     >

@@ -24,6 +24,7 @@ export default async function FamtaskSparksPage() {
                 spark={spark}
                 members={members}
                 currentUserId={currentUserId}
+                linkToSpark
               />
             ))}
           </ul>

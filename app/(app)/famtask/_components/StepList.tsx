@@ -1,6 +1,6 @@
 'use client';
 
-// Flad liste af skridt på et projekt.
+// Flad liste af skridt på et projekt eller en spark (migration 0074).
 //
 // - Status: ét tryk på ikonet (todo → i gang → færdig → todo)
 // - Rækkefølge: op/ned-knapper (træk-og-slip er upålideligt på mobil)
@@ -23,6 +23,7 @@ import {
   nextStepStatus,
   STEP_STATUS_LABEL_DA,
   STEP_STATUSES,
+  type StepParent,
 } from '@/lib/famtask';
 import { AmountInput } from '../../_components/AmountInput';
 import {
@@ -77,11 +78,11 @@ const iconButtonClass =
   'rounded-md p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900 disabled:pointer-events-none disabled:opacity-30';
 
 type Props = {
-  projectId: string;
+  parent: StepParent;
   steps: PlanStep[];
 };
 
-export function StepList({ projectId, steps }: Props) {
+export function StepList({ parent, steps }: Props) {
   const [optimisticSteps, applyAction] = useOptimistic(steps, applyOptimistic);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export function StepList({ projectId, steps }: Props) {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    fd.set('project_id', projectId);
+    fd.set(parent.kind === 'project' ? 'project_id' : 'spark_id', parent.id);
     startAdd(async () => {
       const res = await addStep(fd);
       if (res.ok) {

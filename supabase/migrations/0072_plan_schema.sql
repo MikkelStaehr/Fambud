@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0070 - Planlægningsmodul: plan-schema (sparks, projekter, skridt, budget)
+-- 0072 - Planlægningsmodul: plan-schema (sparks, projekter, skridt, budget)
 -- ----------------------------------------------------------------------------
 -- En simpel udgave af Task Studio inde i Fambud:
 --   sparks    - løse idéer der fanges hurtigt og evt. forfremmes til projekt

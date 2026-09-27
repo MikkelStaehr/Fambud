@@ -2,7 +2,7 @@
 
 // Projekt-header: titel, status (skifter med det samme), formål, målmåned,
 // groft beløb og ansvarlig (de tre sidste arves fra sparken, migration
-// 0072). "Rediger" åbner en inline-form til alle felter undtagen status.
+// 0073). "Rediger" åbner en inline-form til alle felter undtagen status.
 
 import { useOptimistic, useState, useTransition } from 'react';
 import { Pencil } from 'lucide-react';

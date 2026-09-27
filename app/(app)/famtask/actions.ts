@@ -1,6 +1,6 @@
 'use server';
 
-// Server Actions for /famtask (plan-schemaet, migration 0070).
+// Server Actions for /famtask (plan-schemaet, migration 0072).
 //
 // Samme mønster som /begivenheder: household_id kommer fra
 // getHouseholdContext() server-side, og hvert felt læses eksplicit fra
@@ -39,7 +39,7 @@ function fail(scope: string, error: { message?: string }, fallback: string): Fam
   return { ok: false, error: mapDbError(error, fallback) };
 }
 
-// "Ansvarlig"-feltet. Tom = ingen. Den sammensatte FK (0072) afviser et
+// "Ansvarlig"-feltet. Tom = ingen. Den sammensatte FK (0073) afviser et
 // medlem fra en anden husstand, så medlemmet slås ikke op først.
 function readOwnerMemberId(
   formData: FormData
@@ -88,7 +88,7 @@ export async function deleteSpark(formData: FormData) {
   revalidateFamtask();
 }
 
-// Tjekliste-felterne på en spark (migration 0072). Ændres noget, nulstilles
+// Tjekliste-felterne på en spark (migration 0073). Ændres noget, nulstilles
 // alle godkendelser: et ja gælder sparken som den så ud, da man sagde ja.
 // Gem uden ændringer rører ikke godkendelserne.
 export async function updateSpark(formData: FormData): Promise<FamtaskActionResult> {

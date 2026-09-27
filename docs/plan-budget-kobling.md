@@ -1,6 +1,6 @@
 # Plan → budget: skridt bliver til planlagt udgift
 
-**Status:** forslag, ikke implementeret. Bygger på migration 0070 (`plan`-schema).
+**Status:** forslag, ikke implementeret. Bygger på migration 0072 (`plan`-schema).
 
 ## Mål
 

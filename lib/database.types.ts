@@ -77,7 +77,7 @@ export type LifeEventTimeframe =
   | 'within_5y'
   | 'within_10y';
 export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
-// plan-schemaet (migration 0072 + 0073, Famtask).
+// plan-schemaet (migration 0072-0074, Famtask).
 export type PlanProjectStatus = 'ide' | 'aktiv' | 'pause' | 'faerdig';
 export type PlanStepStatus = 'todo' | 'i_gang' | 'faerdig';
 export type PlanFundingSource = 'overskud' | 'opsparing' | 'spare_op';
@@ -793,7 +793,8 @@ export type Database = {
       steps: {
         Row: {
           id: string;
-          project_id: string;
+          project_id: string | null;
+          spark_id: string | null;
           household_id: string;
           title: string;
           position: number;
@@ -804,7 +805,8 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          project_id: string;
+          project_id?: string | null;
+          spark_id?: string | null;
           household_id: string;
           title: string;
           position?: number;
@@ -815,7 +817,8 @@ export type Database = {
         };
         Update: {
           id?: string;
-          project_id?: string;
+          project_id?: string | null;
+          spark_id?: string | null;
           household_id?: string;
           title?: string;
           position?: number;
@@ -897,7 +900,13 @@ export type Database = {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      // Migration 0074. NULL = sparken findes ikke eller er skjult af RLS.
+      promote_spark: {
+        Args: { p_spark_id: string };
+        Returns: string | null;
+      };
+    };
     Enums: {
       project_status: PlanProjectStatus;
       step_status: PlanStepStatus;

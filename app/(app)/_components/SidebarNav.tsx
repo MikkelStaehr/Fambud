@@ -19,6 +19,7 @@ import {
   Sparkles,
   FileText,
   Lightbulb,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,8 @@ const NAV_MAIN: NavItem[] = [
   { href: '/konti', label: 'Konti', icon: Wallet },
   { href: '/laan', label: 'Lån', icon: Landmark },
   { href: '/begivenheder', label: 'Begivenheder', icon: Goal },
+  // Famtask: husstandens planlægning (sparks → projekter → skridt).
+  { href: '/famtask', label: 'Famtask', icon: ListChecks },
   { href: '/indkomst', label: 'Indkomst', icon: Coins },
   // Budget er det flade overblik (read-only tabel) - Table2-ikonet adskiller
   // den visuelt fra "Faste udgifter" (CRUD-værktøjet) der bruger ClipboardList.

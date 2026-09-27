@@ -8,6 +8,7 @@ import { FambudMark } from '@/app/_components/FambudMark';
 import { FeedbackModal } from './_components/FeedbackModal';
 import { MobileNav } from './_components/MobileNav';
 import { ProxyBanner } from './_components/ProxyBanner';
+import { QuickCapture } from './_components/QuickCapture';
 import { SidebarNav } from './_components/SidebarNav';
 import { SettingsLink } from './_components/SettingsLink';
 import { Toast } from './_components/Toast';
@@ -110,6 +111,9 @@ export default async function AppLayout({
       <Suspense fallback={null}>
         <Toast />
       </Suspense>
+
+      {/* Famtask: Cmd/Ctrl+K opretter en spark fra hvor som helst i appen */}
+      <QuickCapture />
 
       <div className="print:hidden">
         <BetaNotice />

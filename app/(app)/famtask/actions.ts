@@ -25,6 +25,7 @@ import {
   moveInOrder,
   parseMonthInput,
   sparkChecklist,
+  type StepParent,
 } from '@/lib/famtask';
 
 export type FamtaskActionResult = { ok: true } | { ok: false; error: string };
@@ -50,6 +51,30 @@ function readOwnerMemberId(
   return { ok: true, value: raw };
 }
 
+// Et ja gælder sparken som den så ud, da man sagde ja. Ændres tjekliste-
+// felterne (0073) eller sparkens skridt (0074), nulstilles alle godkendelser.
+async function resetSparkApprovals(sparkId: string): Promise<{ message?: string } | null> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { error } = await supabase
+    .schema('plan')
+    .from('spark_approvals')
+    .delete()
+    .eq('spark_id', sparkId)
+    .eq('household_id', householdId);
+  return error;
+}
+
+// Hvem et nyt skridt hører til: præcis ét af project_id og spark_id (0074).
+function readStepParent(formData: FormData): StepParent | null {
+  const projectId = String(formData.get('project_id') ?? '');
+  const sparkId = String(formData.get('spark_id') ?? '');
+  if (isUuid(projectId) && !sparkId) return { kind: 'project', id: projectId };
+  if (isUuid(sparkId) && !projectId) return { kind: 'spark', id: sparkId };
+  return null;
+}
+
+const PARENT_COLUMN = { project: 'project_id', spark: 'spark_id' } as const;
+
 // ----------------------------------------------------------------------------
 // Sparks
 // ----------------------------------------------------------------------------
@@ -70,6 +95,7 @@ export async function createSpark(formData: FormData): Promise<FamtaskActionResu
   return { ok: true };
 }
 
+// Sletter også sparkens skridt (FK cascade, 0074).
 export async function deleteSpark(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
@@ -86,6 +112,9 @@ export async function deleteSpark(formData: FormData) {
     throw new Error('Internal error');
   }
   revalidateFamtask();
+  // Sparkens egen side findes ikke længere, så vi går altid til indbakken.
+  await setFlashCookie('Spark slettet');
+  redirect('/famtask/sparks');
 }
 
 // Tjekliste-felterne på en spark (migration 0073). Ændres noget, nulstilles
@@ -139,11 +168,7 @@ export async function updateSpark(formData: FormData): Promise<FamtaskActionResu
     .eq('household_id', householdId);
   if (error) return fail('updateSpark', error, 'Kunne ikke gemme sparken');
 
-  const { error: resetErr } = await plan
-    .from('spark_approvals')
-    .delete()
-    .eq('spark_id', sparkId)
-    .eq('household_id', householdId);
+  const resetErr = await resetSparkApprovals(sparkId);
   if (resetErr) {
     return fail('updateSpark (reset)', resetErr, 'Sparken er gemt, men godkendelserne blev ikke nulstillet');
   }
@@ -183,9 +208,10 @@ export async function setSparkApproval(formData: FormData): Promise<FamtaskActio
   return { ok: true };
 }
 
-// "Gør til projekt": tjekker tjeklisten, opretter projektet, sætter
-// promoted_project_id og åbner projektet. Titel, formål, beløb, måned og
-// ansvarlig følger med over.
+// "Gør til projekt": tjekker tjeklisten og kalder plan.promote_spark, der i
+// én transaktion opretter projektet, flytter sparkens skridt over og sætter
+// promoted_project_id (0074). Titel, formål, beløb, måned og ansvarlig
+// følger med over.
 export async function promoteSpark(formData: FormData) {
   const sparkId = String(formData.get('id') ?? '');
   if (!isUuid(sparkId)) return;
@@ -195,7 +221,7 @@ export async function promoteSpark(formData: FormData) {
 
   const { data: spark, error: sparkErr } = await plan
     .from('sparks')
-    .select('id, title, note, estimated_amount, target_month, owner_member_id, promoted_project_id')
+    .select('id, note, estimated_amount, target_month, owner_member_id, promoted_project_id')
     .eq('id', sparkId)
     .eq('household_id', householdId)
     .maybeSingle();
@@ -209,22 +235,29 @@ export async function promoteSpark(formData: FormData) {
 
   // Tjeklisten håndhæves her på serveren, ikke kun ved at knappen er
   // slået fra på siden.
-  const [approvalsRes, members] = await Promise.all([
+  const [approvalsRes, stepsRes, members] = await Promise.all([
     plan
       .from('spark_approvals')
       .select('user_id')
       .eq('spark_id', sparkId)
       .eq('household_id', householdId),
+    plan
+      .from('steps')
+      .select('amount')
+      .eq('spark_id', sparkId)
+      .eq('household_id', householdId),
     getFamtaskMembers(),
   ]);
-  if (approvalsRes.error) {
-    console.error('promoteSpark (approvals) failed:', approvalsRes.error.message);
+  const readErr = approvalsRes.error ?? stepsRes.error;
+  if (readErr) {
+    console.error('promoteSpark (checklist) failed:', readErr.message);
     throw new Error('Internal error');
   }
   const checklist = sparkChecklist(
     spark,
     members,
-    (approvalsRes.data ?? []).map((a) => a.user_id)
+    (approvalsRes.data ?? []).map((a) => a.user_id),
+    (stepsRes.data ?? []).map((s) => s.amount)
   );
   if (!checklist.ready) {
     const missing = checklist.items
@@ -232,57 +265,21 @@ export async function promoteSpark(formData: FormData) {
       .map((i) => i.label.toLowerCase())
       .join(', ');
     await setFlashCookie(`Sparken mangler: ${missing}`, 'error');
-    redirect('/famtask/sparks');
+    redirect(`/famtask/sparks/${sparkId}`);
   }
 
-  const { data: project, error: projErr } = await plan
-    .from('projects')
-    .insert({
-      household_id: householdId,
-      title: spark.title,
-      purpose: spark.note,
-      estimated_amount: spark.estimated_amount,
-      target_month: spark.target_month,
-      owner_member_id: spark.owner_member_id,
-    })
-    .select('id')
-    .single();
-  if (projErr) {
-    console.error('promoteSpark (insert) failed:', projErr.message);
-    await setFlashCookie('Kunne ikke oprette projektet', 'error');
-    redirect('/famtask/sparks');
-  }
-
-  // Betinget link: kun hvis sparken stadig ikke er forfremmet. Taber vi et
-  // race, sletter vi vores nye projekt igen og går til det der vandt.
-  const { data: linked, error: linkErr } = await plan
-    .from('sparks')
-    .update({ promoted_project_id: project.id })
-    .eq('id', sparkId)
-    .eq('household_id', householdId)
-    .is('promoted_project_id', null)
-    .select('promoted_project_id');
-  if (linkErr || !linked || linked.length === 0) {
-    if (linkErr) console.error('promoteSpark (link) failed:', linkErr.message);
-    await plan
-      .from('projects')
-      .delete()
-      .eq('id', project.id)
-      .eq('household_id', householdId);
-    const { data: current } = await plan
-      .from('sparks')
-      .select('promoted_project_id')
-      .eq('id', sparkId)
-      .eq('household_id', householdId)
-      .maybeSingle();
-    if (current?.promoted_project_id) redirect(`/famtask/${current.promoted_project_id}`);
+  const { data: projectId, error: rpcErr } = await plan.rpc('promote_spark', {
+    p_spark_id: sparkId,
+  });
+  if (rpcErr || !projectId) {
+    if (rpcErr) console.error('promoteSpark (rpc) failed:', rpcErr.message);
     await setFlashCookie('Kunne ikke gøre sparken til et projekt', 'error');
-    redirect('/famtask/sparks');
+    redirect(`/famtask/sparks/${sparkId}`);
   }
 
   revalidateFamtask();
   await setFlashCookie('Projekt oprettet');
-  redirect(`/famtask/${project.id}`);
+  redirect(`/famtask/${projectId}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -371,10 +368,11 @@ export async function deleteProject(formData: FormData) {
 // ----------------------------------------------------------------------------
 
 // Tilføj er bevidst kun titel: hurtigt at skrive en liste. Beløb og måned
-// sættes bagefter på det enkelte skridt.
+// sættes bagefter på det enkelte skridt. Skridtet hører til et projekt
+// eller en spark (0074).
 export async function addStep(formData: FormData): Promise<FamtaskActionResult> {
-  const projectId = String(formData.get('project_id') ?? '');
-  if (!isUuid(projectId)) return { ok: false, error: 'Projektet findes ikke' };
+  const parent = readStepParent(formData);
+  if (!parent) return { ok: false, error: 'Skridtet mangler et projekt eller en spark' };
   const title = readText(formData, 'title', TEXT_LIMITS.mediumName);
   if (!title) return { ok: false, error: 'Skriv hvad skridtet er' };
 
@@ -384,22 +382,28 @@ export async function addStep(formData: FormData): Promise<FamtaskActionResult> 
   const { data: last, error: lastErr } = await plan
     .from('steps')
     .select('position')
-    .eq('project_id', projectId)
+    .eq(PARENT_COLUMN[parent.kind], parent.id)
     .eq('household_id', householdId)
     .order('position', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (lastErr) return fail('addStep (position)', lastErr, 'Kunne ikke tilføje skridtet');
 
-  // Sammensat FK (project_id, household_id) afviser et projekt fra en
-  // anden husstand, så vi behøver ikke slå projektet op først.
+  // De sammensatte FK'er afviser et projekt eller en spark fra en anden
+  // husstand, så vi behøver ikke slå forælderen op først.
   const { error } = await plan.from('steps').insert({
-    project_id: projectId,
+    project_id: parent.kind === 'project' ? parent.id : null,
+    spark_id: parent.kind === 'spark' ? parent.id : null,
     household_id: householdId,
     title,
     position: last ? last.position + 1 : 0,
   });
   if (error) return fail('addStep', error, 'Kunne ikke tilføje skridtet');
+
+  if (parent.kind === 'spark') {
+    const resetErr = await resetSparkApprovals(parent.id);
+    if (resetErr) return fail('addStep (reset)', resetErr, 'Skridtet er tilføjet, men godkendelserne blev ikke nulstillet');
+  }
 
   revalidateFamtask();
   return { ok: true };
@@ -420,15 +424,32 @@ export async function updateStep(formData: FormData): Promise<FamtaskActionResul
   if (!month.ok) return { ok: false, error: month.error };
 
   const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
-    .schema('plan')
+  const plan = supabase.schema('plan');
+
+  const { data: current, error: readErr } = await plan
+    .from('steps')
+    .select('spark_id, title, amount, month')
+    .eq('id', stepId)
+    .eq('household_id', householdId)
+    .maybeSingle();
+  if (readErr) return fail('updateStep (read)', readErr, 'Kunne ikke gemme skridtet');
+  if (!current) return { ok: false, error: 'Skridtet findes ikke længere' };
+
+  const { error } = await plan
     .from('steps')
     .update({ title, status, amount: amount.value, month: month.value })
     .eq('id', stepId)
-    .eq('household_id', householdId)
-    .select('id');
+    .eq('household_id', householdId);
   if (error) return fail('updateStep', error, 'Kunne ikke gemme skridtet');
-  if (!data || data.length === 0) return { ok: false, error: 'Skridtet findes ikke længere' };
+
+  // Status alene ændrer ikke budgettet, så kun titel, beløb og måned
+  // nulstiller godkendelserne på en spark.
+  const budgetChanged =
+    current.title !== title || current.amount !== amount.value || current.month !== month.value;
+  if (current.spark_id && budgetChanged) {
+    const resetErr = await resetSparkApprovals(current.spark_id);
+    if (resetErr) return fail('updateStep (reset)', resetErr, 'Skridtet er gemt, men godkendelserne blev ikke nulstillet');
+  }
 
   revalidateFamtask();
   return { ok: true };
@@ -471,17 +492,21 @@ export async function moveStep(formData: FormData): Promise<FamtaskActionResult>
 
   const { data: step, error: stepErr } = await plan
     .from('steps')
-    .select('project_id')
+    .select('project_id, spark_id')
     .eq('id', stepId)
     .eq('household_id', householdId)
     .maybeSingle();
   if (stepErr) return fail('moveStep (read)', stepErr, 'Kunne ikke flytte skridtet');
   if (!step) return { ok: false, error: 'Skridtet findes ikke længere' };
 
+  // Søskende er skridtene med samme forælder (projekt eller spark, 0074).
+  const [column, parentId] = step.project_id
+    ? (['project_id', step.project_id] as const)
+    : (['spark_id', step.spark_id as string] as const);
   const { data: siblings, error: sibErr } = await plan
     .from('steps')
     .select('id, position')
-    .eq('project_id', step.project_id)
+    .eq(column, parentId)
     .eq('household_id', householdId)
     .order('position', { ascending: true });
   if (sibErr) return fail('moveStep (siblings)', sibErr, 'Kunne ikke flytte skridtet');
@@ -514,13 +539,20 @@ export async function deleteStep(formData: FormData): Promise<FamtaskActionResul
   if (!isUuid(stepId)) return { ok: false, error: 'Skridtet findes ikke' };
 
   const { supabase, householdId } = await getHouseholdContext();
-  const { error } = await supabase
+  const { data: deleted, error } = await supabase
     .schema('plan')
     .from('steps')
     .delete()
     .eq('id', stepId)
-    .eq('household_id', householdId);
+    .eq('household_id', householdId)
+    .select('spark_id');
   if (error) return fail('deleteStep', error, 'Kunne ikke slette skridtet');
+
+  const sparkId = deleted?.[0]?.spark_id;
+  if (sparkId) {
+    const resetErr = await resetSparkApprovals(sparkId);
+    if (resetErr) return fail('deleteStep (reset)', resetErr, 'Skridtet er slettet, men godkendelserne blev ikke nulstillet');
+  }
 
   revalidateFamtask();
   return { ok: true };

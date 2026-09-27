@@ -122,3 +122,22 @@ test('sparkChecklist: uden medlemmer med login kan sparken ikke blive klar', () 
   const c = sparkChecklist(READY_SPARK, [{ id: 'm3', name: 'Emil', user_id: null }], []);
   assert.equal(c.ready, false);
 });
+
+test('sparkChecklist: prissatte skridt opfylder beløb uden groft beløb', () => {
+  const spark = { ...READY_SPARK, estimated_amount: null };
+  const c = sparkChecklist(spark, MEMBERS, ['u1', 'u2'], [250000, null, 1200000]);
+  assert.equal(c.ready, true);
+  assert.equal(c.stepsTotal, 1450000);
+});
+
+test('sparkChecklist: skridt uden beløb opfylder ikke beløb', () => {
+  const spark = { ...READY_SPARK, estimated_amount: null };
+  const c = sparkChecklist(spark, MEMBERS, ['u1', 'u2'], [null, null]);
+  assert.equal(c.items.find((i) => i.key === 'amount_month')?.done, false);
+  assert.equal(c.stepsTotal, null);
+});
+
+test('sparkChecklist: skridt erstatter ikke måneden', () => {
+  const spark = { ...READY_SPARK, target_month: null };
+  assert.equal(sparkChecklist(spark, MEMBERS, ['u1', 'u2'], [250000]).ready, false);
+});

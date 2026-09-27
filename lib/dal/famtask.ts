@@ -53,7 +53,8 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
     plan
       .from('steps')
       .select('project_id, status')
-      .eq('household_id', householdId),
+      .eq('household_id', householdId)
+      .not('project_id', 'is', null),
   ]);
   if (projectsRes.error) throw projectsRes.error;
   if (budgetRes.error) throw budgetRes.error;
@@ -64,6 +65,7 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
   );
   const counts = new Map<string, { steps: number; done: number }>();
   for (const s of stepsRes.data ?? []) {
+    if (!s.project_id) continue;
     const c = counts.get(s.project_id) ?? { steps: 0, done: 0 };
     c.steps += 1;
     if (s.status === 'faerdig') c.done += 1;
@@ -112,6 +114,8 @@ export async function getFamtaskProject(
 export type FamtaskOpenSpark = PlanSpark & {
   // user_id på dem der har sagt ja (migration 0073)
   approvedUserIds: string[];
+  // Beløb pr. skridt på sparken, null for skridt uden beløb (migration 0074)
+  stepAmounts: (number | null)[];
 };
 
 export type FamtaskSparks = {
@@ -127,7 +131,7 @@ export async function getFamtaskSparks(): Promise<FamtaskSparks> {
   const { supabase, householdId, user } = await getHouseholdContext();
   const plan = supabase.schema('plan');
 
-  const [sparksRes, approvalsRes, members] = await Promise.all([
+  const [sparksRes, approvalsRes, stepsRes, members] = await Promise.all([
     plan
       .from('sparks')
       .select('*')
@@ -137,21 +141,31 @@ export async function getFamtaskSparks(): Promise<FamtaskSparks> {
       .from('spark_approvals')
       .select('spark_id, user_id')
       .eq('household_id', householdId),
+    plan
+      .from('steps')
+      .select('spark_id, amount')
+      .eq('household_id', householdId)
+      .not('spark_id', 'is', null),
     getFamtaskMembers(),
   ]);
   if (sparksRes.error) throw sparksRes.error;
   if (approvalsRes.error) throw approvalsRes.error;
+  if (stepsRes.error) throw stepsRes.error;
 
-  const approvedBySpark = new Map<string, string[]>();
-  for (const a of approvalsRes.data ?? []) {
-    approvedBySpark.set(a.spark_id, [...(approvedBySpark.get(a.spark_id) ?? []), a.user_id]);
-  }
+  const approvedBySpark = groupBySpark(approvalsRes.data ?? [], (a) => a.user_id);
+  const amountsBySpark = groupBySpark(stepsRes.data ?? [], (s) => s.amount);
 
   const open: FamtaskOpenSpark[] = [];
   const promotedRaw: PlanSpark[] = [];
   for (const s of sparksRes.data ?? []) {
     if (s.promoted_project_id) promotedRaw.push(s);
-    else open.push({ ...s, approvedUserIds: approvedBySpark.get(s.id) ?? [] });
+    else {
+      open.push({
+        ...s,
+        approvedUserIds: approvedBySpark.get(s.id) ?? [],
+        stepAmounts: amountsBySpark.get(s.id) ?? [],
+      });
+    }
   }
 
   const projectIds = Array.from(
@@ -177,4 +191,67 @@ export async function getFamtaskSparks(): Promise<FamtaskSparks> {
     members,
     currentUserId: user.id,
   };
+}
+
+// Én spark med skridt (/famtask/sparks/[id]). Er sparken allerede blevet
+// til et projekt, sender siden videre dertil via spark.promoted_project_id.
+// null = findes ikke (eller tilhører en anden husstand) - siden viser 404.
+export async function getFamtaskSpark(id: string): Promise<{
+  spark: FamtaskOpenSpark;
+  steps: PlanStep[];
+  members: FamtaskMember[];
+  currentUserId: string;
+} | null> {
+  if (!isUuid(id)) return null;
+  const { supabase, householdId, user } = await getHouseholdContext();
+  const plan = supabase.schema('plan');
+
+  const [sparkRes, approvalsRes, stepsRes, members] = await Promise.all([
+    plan
+      .from('sparks')
+      .select('*')
+      .eq('id', id)
+      .eq('household_id', householdId)
+      .maybeSingle(),
+    plan
+      .from('spark_approvals')
+      .select('user_id')
+      .eq('spark_id', id)
+      .eq('household_id', householdId),
+    plan
+      .from('steps')
+      .select('*')
+      .eq('spark_id', id)
+      .eq('household_id', householdId)
+      .order('position', { ascending: true }),
+    getFamtaskMembers(),
+  ]);
+  if (sparkRes.error) throw sparkRes.error;
+  if (approvalsRes.error) throw approvalsRes.error;
+  if (stepsRes.error) throw stepsRes.error;
+  if (!sparkRes.data) return null;
+
+  const steps = stepsRes.data ?? [];
+  return {
+    spark: {
+      ...sparkRes.data,
+      approvedUserIds: (approvalsRes.data ?? []).map((a) => a.user_id),
+      stepAmounts: steps.map((s) => s.amount),
+    },
+    steps,
+    members,
+    currentUserId: user.id,
+  };
+}
+
+function groupBySpark<T extends { spark_id: string | null }, V>(
+  rows: T[],
+  pick: (row: T) => V
+): Map<string, V[]> {
+  const bySpark = new Map<string, V[]>();
+  for (const row of rows) {
+    if (!row.spark_id) continue;
+    bySpark.set(row.spark_id, [...(bySpark.get(row.spark_id) ?? []), pick(row)]);
+  }
+  return bySpark;
 }

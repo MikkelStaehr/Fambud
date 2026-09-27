@@ -1,6 +1,6 @@
 'use client';
 
-// Én spark i indbakken med tjeklisten fra migration 0072: formål, beløb og
+// Én spark i indbakken med tjeklisten fra migration 0073: formål, beløb og
 // måned, ansvarlig, og at alle med login har sagt ja.
 //
 // - Rediger: inline-form til alle felter. Ændringer nulstiller jeres ja

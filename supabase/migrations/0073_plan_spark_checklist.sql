@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0072 - Famtask: tjekliste før en spark kan blive til et projekt
+-- 0073 - Famtask: tjekliste før en spark kan blive til et projekt
 -- ----------------------------------------------------------------------------
 -- En spark må først gøres til projekt når fire ting er på plads:
 --   1. Formål           (sparks.note, findes allerede)
@@ -16,10 +16,8 @@
 -- (target_month havde projects allerede).
 --
 -- Rører én public-tabel: family_members får unique (id, household_id), så
--- owner_member_id kan få en sammensat FK som i 0070. Unik i forvejen via
+-- owner_member_id kan få en sammensat FK som i 0072. Unik i forvejen via
 -- primærnøglen, så constrainten kan ikke fejle på eksisterende data.
---
--- Nummer 0071 er reserveret til prod-baseline (branch chore/migration-baseline).
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -35,7 +33,7 @@ alter table plan.sparks
 -- 2. Nye felter på sparks og projects
 -- ----------------------------------------------------------------------------
 -- Beløb som bigint-øre (CLAUDE.md §7). 0 er tilladt: nogle projekter koster
--- ingenting. Måned som første dag i måneden, samme check som i 0070.
+-- ingenting. Måned som første dag i måneden, samme check som i 0072.
 -- on delete set null (owner_member_id): slettes medlemmet, mister sparken
 -- eller projektet kun sin ansvarlige, household_id bevares.
 alter table plan.sparks

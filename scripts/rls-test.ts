@@ -9,7 +9,7 @@
 //   3. Kør anonyme tests UDEN Bearer-header
 //   4. Output: pass/fail-tabel
 //
-// plan-schemaet (migration 0070) testes også positivt: testA1/testA2 skal
+// plan-schemaet (migration 0072) testes også positivt: testA1/testA2 skal
 // kunne læse/skrive egen husstand. Kræver at `plan` er tilføjet under
 // Exposed schemas i Supabase API settings.
 //
@@ -170,7 +170,7 @@ function summarise(r: RestResult): string {
 // Tabel-konfiguration: vi probaer hver tabel for SELECT/INSERT/UPDATE/DELETE.
 type TableSpec = {
   name: string;
-  // Sættes for tabeller uden for public (plan-schemaet fra migration 0070)
+  // Sættes for tabeller uden for public (plan-schemaet fra migration 0072)
   schema?: 'plan';
   // ID-kolonne der peger på en row i HH-A (kan probes for UPDATE/DELETE)
   knownIdColumn?: string;
@@ -314,7 +314,7 @@ const TABLES_FACTORY = (): TableSpec[] => [
     },
   },
   // --------------------------------------------------------------------
-  // plan-schema (migration 0070). anon har ingen grants på schemaet, så
+  // plan-schema (migration 0072). anon har ingen grants på schemaet, så
   // anonyme SELECTs forventes afvist med 4xx i stedet for 0 rows.
   // --------------------------------------------------------------------
   {
@@ -479,7 +479,7 @@ async function runMatrix(label: string, jwt: string | null) {
 }
 
 // ----------------------------------------------------------------------------
-// plan-schema (migration 0070)
+// plan-schema (migration 0072)
 // ----------------------------------------------------------------------------
 // Matricen ovenfor tester kun afvisning. Her tester vi også at egen husstand
 // KAN læse og skrive - ellers ville en fejlkonfiguration (fx plan mangler
@@ -570,7 +570,7 @@ async function runPlanMixedHousehold(jwtB1: string) {
   if (!PROJECT_A) return;
 
   // B skriver i SIN EGEN husstand (RLS siger ja), men refererer A's
-  // projekt. Det er de sammensatte FK'er i 0070 der skal afvise.
+  // projekt. Det er de sammensatte FK'er i 0072 der skal afvise.
   const step = await rest('POST', 'steps', jwtB1, {
     household_id: HH_B,
     project_id: PROJECT_A,

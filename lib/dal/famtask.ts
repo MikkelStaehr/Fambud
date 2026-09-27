@@ -1,4 +1,4 @@
-// Famtask: husstandens planlægning (plan-schemaet, migration 0070).
+// Famtask: husstandens planlægning (plan-schemaet, migration 0072).
 //
 // Data er husstands-niveau uden private rækker, så vi bruger
 // getHouseholdContext() (user-client + RLS) og ikke getPerspective().
@@ -110,7 +110,7 @@ export async function getFamtaskProject(
 }
 
 export type FamtaskOpenSpark = PlanSpark & {
-  // user_id på dem der har sagt ja (migration 0072)
+  // user_id på dem der har sagt ja (migration 0073)
   approvedUserIds: string[];
 };
 

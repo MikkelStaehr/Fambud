@@ -77,7 +77,7 @@ export type LifeEventTimeframe =
   | 'within_5y'
   | 'within_10y';
 export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
-// plan-schemaet (migration 0070 + 0072, Famtask).
+// plan-schemaet (migration 0072 + 0073, Famtask).
 export type PlanProjectStatus = 'ide' | 'aktiv' | 'pause' | 'faerdig';
 export type PlanStepStatus = 'todo' | 'i_gang' | 'faerdig';
 export type PlanFundingSource = 'overskud' | 'opsparing' | 'spare_op';
@@ -751,7 +751,7 @@ export type Database = {
     };
     CompositeTypes: Record<string, never>;
   };
-  // Famtask (migration 0070). Tilgås via supabase.schema('plan').
+  // Famtask (migration 0072). Tilgås via supabase.schema('plan').
   plan: {
     Tables: {
       projects: {

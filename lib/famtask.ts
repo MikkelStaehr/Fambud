@@ -1,4 +1,4 @@
-// Rene helpers til Famtask (plan-schemaet, migration 0070). Ingen DB, ingen
+// Rene helpers til Famtask (plan-schemaet, migration 0072). Ingen DB, ingen
 // React - så de kan unit-testes direkte (se famtask.test.ts).
 
 import type { PlanProjectStatus, PlanSpark, PlanStepStatus } from '@/lib/database.types';
@@ -44,7 +44,7 @@ export function isUuid(v: string): boolean {
 }
 
 // <input type="month"> giver 'YYYY-MM'. DB'en gemmer første dag i måneden
-// (check-constraint i 0070). Browsere uden month-picker (fx Firefox desktop)
+// (check-constraint i 0072). Browsere uden month-picker (fx Firefox desktop)
 // viser et tekstfelt, så vi accepterer samme format skrevet i hånden.
 // Tom værdi = null (ingen måned). Samme årsinterval som isValidOccursOn.
 export type MonthParseResult =
@@ -90,7 +90,7 @@ export function formatCreatedDA(iso: string): string {
 // vide hvem der skal sige ja. user_id er null for medlemmer uden login.
 export type FamtaskMember = { id: string; name: string; user_id: string | null };
 
-// Tjeklisten før en spark må blive til et projekt (migration 0072).
+// Tjeklisten før en spark må blive til et projekt (migration 0073).
 // Promote-actionen og sparks-siden bruger begge denne, så reglen kun
 // findes ét sted.
 //

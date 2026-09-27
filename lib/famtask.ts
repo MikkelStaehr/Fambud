@@ -77,6 +77,15 @@ export function formatMonthShortDA(date: string): string {
   }).format(new Date(y, m - 1, 1));
 }
 
+// timestamptz → '27. sep.' i dansk tid (created_at på sparks).
+export function formatCreatedDA(iso: string): string {
+  return new Intl.DateTimeFormat('da-DK', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Europe/Copenhagen',
+  }).format(new Date(iso));
+}
+
 // Flyt `id` én plads op eller ned i en ordnet liste. Returnerer den nye
 // rækkefølge, eller null hvis flytningen ikke giver mening (ukendt id,
 // allerede øverst/nederst).

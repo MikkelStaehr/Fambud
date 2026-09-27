@@ -7,8 +7,23 @@
 // af DAL'en.
 
 import type { PlanProject, PlanSpark, PlanStep } from '@/lib/database.types';
-import { isUuid } from '@/lib/famtask';
+import { isUuid, type FamtaskMember } from '@/lib/famtask';
 import { getHouseholdContext } from './auth';
+
+// Husstandens medlemmer i samme rækkefølge som /husholdning. Bruges til
+// "Ansvarlig" og til at vide hvem der skal godkende en spark (også af
+// promoteSpark, så tjeklisten tjekkes mod de samme data som siden viser).
+export async function getFamtaskMembers(): Promise<FamtaskMember[]> {
+  const { supabase, householdId } = await getHouseholdContext();
+  const { data, error } = await supabase
+    .from('family_members')
+    .select('id, name, user_id')
+    .eq('household_id', householdId)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
 
 export type FamtaskProjectSummary = PlanProject & {
   // Sum af steps.amount i øre (fra plan.project_budget)
@@ -67,12 +82,12 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
 // en anden husstand) - siden viser 404.
 export async function getFamtaskProject(
   id: string
-): Promise<{ project: PlanProject; steps: PlanStep[] } | null> {
+): Promise<{ project: PlanProject; steps: PlanStep[]; members: FamtaskMember[] } | null> {
   if (!isUuid(id)) return null;
   const { supabase, householdId } = await getHouseholdContext();
   const plan = supabase.schema('plan');
 
-  const [projectRes, stepsRes] = await Promise.all([
+  const [projectRes, stepsRes, members] = await Promise.all([
     plan
       .from('projects')
       .select('*')
@@ -85,36 +100,58 @@ export async function getFamtaskProject(
       .eq('project_id', id)
       .eq('household_id', householdId)
       .order('position', { ascending: true }),
+    getFamtaskMembers(),
   ]);
   if (projectRes.error) throw projectRes.error;
   if (stepsRes.error) throw stepsRes.error;
   if (!projectRes.data) return null;
 
-  return { project: projectRes.data, steps: stepsRes.data ?? [] };
+  return { project: projectRes.data, steps: stepsRes.data ?? [], members };
 }
+
+export type FamtaskOpenSpark = PlanSpark & {
+  // user_id på dem der har sagt ja (migration 0072)
+  approvedUserIds: string[];
+};
 
 export type FamtaskSparks = {
   // Indbakken: sparks der endnu ikke er blevet til et projekt
-  open: PlanSpark[];
+  open: FamtaskOpenSpark[];
   // Sparks der er gjort til projekt, med projektets titel til linket
   promoted: (PlanSpark & { projectTitle: string })[];
+  members: FamtaskMember[];
+  currentUserId: string;
 };
 
 export async function getFamtaskSparks(): Promise<FamtaskSparks> {
-  const { supabase, householdId } = await getHouseholdContext();
+  const { supabase, householdId, user } = await getHouseholdContext();
   const plan = supabase.schema('plan');
 
-  const { data: sparks, error } = await plan
-    .from('sparks')
-    .select('*')
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
+  const [sparksRes, approvalsRes, members] = await Promise.all([
+    plan
+      .from('sparks')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false }),
+    plan
+      .from('spark_approvals')
+      .select('spark_id, user_id')
+      .eq('household_id', householdId),
+    getFamtaskMembers(),
+  ]);
+  if (sparksRes.error) throw sparksRes.error;
+  if (approvalsRes.error) throw approvalsRes.error;
 
-  const open: PlanSpark[] = [];
+  const approvedBySpark = new Map<string, string[]>();
+  for (const a of approvalsRes.data ?? []) {
+    approvedBySpark.set(a.spark_id, [...(approvedBySpark.get(a.spark_id) ?? []), a.user_id]);
+  }
+
+  const open: FamtaskOpenSpark[] = [];
   const promotedRaw: PlanSpark[] = [];
-  for (const s of sparks ?? []) {
-    (s.promoted_project_id ? promotedRaw : open).push(s);
+  for (const s of sparksRes.data ?? []) {
+    if (s.promoted_project_id) promotedRaw.push(s);
+    else open.push({ ...s, approvedUserIds: approvedBySpark.get(s.id) ?? [] });
   }
 
   const projectIds = Array.from(
@@ -137,5 +174,7 @@ export async function getFamtaskSparks(): Promise<FamtaskSparks> {
       ...s,
       projectTitle: titleById.get(s.promoted_project_id as string) ?? 'Projekt',
     })),
+    members,
+    currentUserId: user.id,
   };
 }

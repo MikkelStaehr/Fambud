@@ -86,6 +86,10 @@ export function formatCreatedDA(iso: string): string {
   }).format(new Date(iso));
 }
 
+// Hvem et skridt hører til (migration 0074): et projekt, eller en spark
+// der endnu ikke er blevet til et projekt.
+export type StepParent = { kind: 'project' | 'spark'; id: string };
+
 // Husstandsmedlem som Famtask kender det: til "Ansvarlig"-valg og til at
 // vide hvem der skal sige ja. user_id er null for medlemmer uden login.
 export type FamtaskMember = { id: string; name: string; user_id: string | null };
@@ -96,6 +100,10 @@ export type FamtaskMember = { id: string; name: string; user_id: string | null }
 //
 // Kun medlemmer med login skal sige ja: de andre kan ikke logge ind og
 // godkende. Godkendelser fra nogen der ikke længere er medlem tæller ikke.
+//
+// "Beløb" er opfyldt af et groft beløb ELLER af skridt med beløb på sparken
+// (migration 0074). stepsTotal er summen af de prissatte skridt, null hvis
+// ingen skridt har et beløb.
 export type SparkChecklistKey = 'purpose' | 'amount_month' | 'owner' | 'approvals';
 
 export type SparkChecklist = {
@@ -103,14 +111,18 @@ export type SparkChecklist = {
   ready: boolean;
   // Navne på medlemmer med login der endnu ikke har sagt ja
   missingApprovers: string[];
+  stepsTotal: number | null;
 };
 
 export function sparkChecklist(
   spark: Pick<PlanSpark, 'note' | 'estimated_amount' | 'target_month' | 'owner_member_id'>,
   members: FamtaskMember[],
-  approvedUserIds: string[]
+  approvedUserIds: string[],
+  stepAmounts: (number | null)[] = []
 ): SparkChecklist {
   const approved = new Set(approvedUserIds);
+  const priced = stepAmounts.filter((a): a is number => a != null);
+  const stepsTotal = priced.length > 0 ? priced.reduce((sum, a) => sum + a, 0) : null;
   const approvers = members.filter((m) => m.user_id != null);
   const missingApprovers = approvers
     .filter((m) => !approved.has(m.user_id as string))
@@ -121,7 +133,7 @@ export function sparkChecklist(
     {
       key: 'amount_month',
       label: 'Beløb og måned',
-      done: spark.estimated_amount != null && spark.target_month != null,
+      done: (spark.estimated_amount != null || stepsTotal != null) && spark.target_month != null,
     },
     { key: 'owner', label: 'Ansvarlig', done: spark.owner_member_id != null },
     {
@@ -130,7 +142,7 @@ export function sparkChecklist(
       done: approvers.length > 0 && missingApprovers.length === 0,
     },
   ];
-  return { items, ready: items.every((i) => i.done), missingApprovers };
+  return { items, ready: items.every((i) => i.done), missingApprovers, stepsTotal };
 }
 
 // Flyt `id` én plads op eller ned i en ordnet liste. Returnerer den nye

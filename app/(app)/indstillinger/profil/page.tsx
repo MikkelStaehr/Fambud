@@ -14,6 +14,7 @@ import {
   setMonthlySummaryEmail,
   sendMyMonthlySummaryTest,
   setPaymentReminderEmail,
+  setFamtaskEmail,
 } from '../actions';
 
 export default async function ProfilPage({
@@ -184,6 +185,39 @@ export default async function ProfilPage({
                 overførsler der forfalder den kommende uge på dine egne
                 og fælles konti. Du får kun mailen når der faktisk er
                 noget på vej.
+              </span>
+            </span>
+          </label>
+          <button
+            type="submit"
+            className="mt-3 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700"
+          >
+            Gem
+          </button>
+        </form>
+
+        <form
+          action={setFamtaskEmail}
+          className="mt-3 rounded-md border border-neutral-200 bg-white p-4"
+        >
+          <label
+            htmlFor="famtask_email_enabled"
+            className="flex cursor-pointer items-start gap-3"
+          >
+            <input
+              id="famtask_email_enabled"
+              name="famtask_email_enabled"
+              type="checkbox"
+              defaultChecked={me.famtask_email_enabled}
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-emerald-700"
+            />
+            <span className="flex-1">
+              <span className="block text-sm font-medium text-neutral-900">
+                Mail når du bliver ansvarlig i Famtask
+              </span>
+              <span className="mt-0.5 block text-xs text-neutral-500">
+                Når en anden i husstanden gør dig ansvarlig for en spark
+                eller et projekt, får du en mail med et link til det.
               </span>
             </span>
           </label>

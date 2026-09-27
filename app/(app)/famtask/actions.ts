@@ -18,6 +18,10 @@ import { parseOptionalAmount, TEXT_LIMITS } from '@/lib/format';
 import { readOptionalText, readText } from '@/lib/actions/safe-form';
 import { mapDbError } from '@/lib/actions/error-map';
 import { setFlashCookie } from '@/lib/flash';
+import { logAuditEvent } from '@/lib/audit-log';
+import { sendFamtaskAssignmentEmail } from '@/lib/email/famtask-assignment';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { resolveSiteOrigin } from '@/lib/site-url';
 import {
   isProjectStatus,
   isStepStatus,
@@ -74,6 +78,97 @@ function readStepParent(formData: FormData): StepParent | null {
 }
 
 const PARENT_COLUMN = { project: 'project_id', spark: 'spark_id' } as const;
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? '';
+}
+
+// Mail til den nye ansvarlige (migration 0075). Kaldes efter at ændringen
+// er gemt, så en fejl her må aldrig give brugeren en fejl: alt fanges og
+// logges i audit-loggen. Ingen mail til en selv, til medlemmer uden login
+// eller email, eller hvis modtageren har slået det fra. Højst 20 i timen
+// pr. afsender (rate_limit_routes), så man ikke kan spamme sin partner.
+async function notifyNewOwner(n: {
+  kind: 'spark' | 'project';
+  id: string;
+  title: string;
+  purpose: string | null;
+  amount: number | null;
+  month: string | null;
+  ownerMemberId: string;
+}): Promise<void> {
+  const { supabase, householdId, user } = await getHouseholdContext();
+  const audit = {
+    user_id: user.id,
+    household_id: householdId,
+    resource: `${n.kind}:${n.id}`,
+  };
+  try {
+    const [ownerRes, meRes] = await Promise.all([
+      supabase
+        .from('family_members')
+        .select('name, email, user_id, famtask_email_enabled')
+        .eq('id', n.ownerMemberId)
+        .eq('household_id', householdId)
+        .maybeSingle(),
+      supabase
+        .from('family_members')
+        .select('name')
+        .eq('user_id', user.id)
+        .eq('household_id', householdId)
+        .maybeSingle(),
+    ]);
+    if (ownerRes.error) throw ownerRes.error;
+    const owner = ownerRes.data;
+    if (
+      !owner?.email ||
+      !owner.user_id ||
+      owner.user_id === user.id ||
+      !owner.famtask_email_enabled
+    ) {
+      return;
+    }
+
+    if (!(await checkRateLimit(user.id, 'famtask_assignment_email'))) {
+      await logAuditEvent({
+        ...audit,
+        action: 'famtask_assignment.failed',
+        result: 'denied',
+        metadata: { member_id: n.ownerMemberId, reason: 'rate_limited' },
+      });
+      return;
+    }
+
+    const origin = await resolveSiteOrigin();
+    const path = n.kind === 'spark' ? `/famtask/sparks/${n.id}` : `/famtask/${n.id}`;
+    await sendFamtaskAssignmentEmail(owner.email, {
+      firstName: firstName(owner.name),
+      assignerName: firstName(meRes.data?.name ?? '') || 'Et familiemedlem',
+      kind: n.kind,
+      title: n.title,
+      purpose: n.purpose,
+      amount: n.amount,
+      month: n.month,
+      url: `${origin}${path}`,
+      settingsUrl: `${origin}/indstillinger/profil`,
+    });
+    await logAuditEvent({
+      ...audit,
+      action: 'famtask_assignment.sent',
+      result: 'success',
+      metadata: { member_id: n.ownerMemberId },
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error('notifyNewOwner failed:', reason);
+    await logAuditEvent({
+      ...audit,
+      action: 'famtask_assignment.failed',
+      result: 'failure',
+      metadata: { member_id: n.ownerMemberId, reason: reason.slice(0, 200) },
+    });
+  }
+}
 
 // ----------------------------------------------------------------------------
 // Sparks
@@ -171,6 +266,18 @@ export async function updateSpark(formData: FormData): Promise<FamtaskActionResu
   const resetErr = await resetSparkApprovals(sparkId);
   if (resetErr) {
     return fail('updateSpark (reset)', resetErr, 'Sparken er gemt, men godkendelserne blev ikke nulstillet');
+  }
+
+  if (next.owner_member_id && next.owner_member_id !== current.owner_member_id) {
+    await notifyNewOwner({
+      kind: 'spark',
+      id: sparkId,
+      title,
+      purpose: note,
+      amount: amount.value,
+      month: targetMonth.value,
+      ownerMemberId: next.owner_member_id,
+    });
   }
 
   revalidateFamtask();
@@ -313,8 +420,18 @@ export async function updateProject(formData: FormData): Promise<FamtaskActionRe
   if (!owner.ok) return owner;
 
   const { supabase, householdId } = await getHouseholdContext();
-  const { data, error } = await supabase
-    .schema('plan')
+  const plan = supabase.schema('plan');
+
+  const { data: current, error: readErr } = await plan
+    .from('projects')
+    .select('owner_member_id')
+    .eq('id', projectId)
+    .eq('household_id', householdId)
+    .maybeSingle();
+  if (readErr) return fail('updateProject (read)', readErr, 'Kunne ikke gemme projektet');
+  if (!current) return { ok: false, error: 'Projektet findes ikke længere' };
+
+  const { error } = await plan
     .from('projects')
     .update({
       title,
@@ -324,10 +441,20 @@ export async function updateProject(formData: FormData): Promise<FamtaskActionRe
       owner_member_id: owner.value,
     })
     .eq('id', projectId)
-    .eq('household_id', householdId)
-    .select('id');
+    .eq('household_id', householdId);
   if (error) return fail('updateProject', error, 'Kunne ikke gemme projektet');
-  if (!data || data.length === 0) return { ok: false, error: 'Projektet findes ikke længere' };
+
+  if (owner.value && owner.value !== current.owner_member_id) {
+    await notifyNewOwner({
+      kind: 'project',
+      id: projectId,
+      title,
+      purpose,
+      amount: amount.value,
+      month: targetMonth.value,
+      ownerMemberId: owner.value,
+    });
+  }
 
   revalidateFamtask();
   return { ok: true };

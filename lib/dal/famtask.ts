@@ -30,6 +30,8 @@ export type FamtaskProjectSummary = PlanProject & {
   totalAmount: number;
   stepCount: number;
   doneCount: number;
+  // Skridt uden beløb: totalAmount er ikke hele budgettet, så længe > 0
+  unpricedCount: number;
 };
 
 // Alle projekter i husstanden med budget-sum og fremdrift. Nyeste først;
@@ -48,11 +50,12 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
       .from('project_budget')
       .select('project_id, total_amount')
       .eq('household_id', householdId),
-    // Kun status pr. skridt - antal færdige tælles i koden. En husstand
-    // har få nok skridt til at det er billigere end et ekstra view.
+    // Kun status og beløb pr. skridt - antal færdige og uden beløb tælles i
+    // koden. En husstand har få nok skridt til at det er billigere end et
+    // ekstra view.
     plan
       .from('steps')
-      .select('project_id, status')
+      .select('project_id, status, amount')
       .eq('household_id', householdId)
       .not('project_id', 'is', null),
   ]);
@@ -63,12 +66,13 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
   const totalByProject = new Map(
     (budgetRes.data ?? []).map((b) => [b.project_id, b.total_amount])
   );
-  const counts = new Map<string, { steps: number; done: number }>();
+  const counts = new Map<string, { steps: number; done: number; unpriced: number }>();
   for (const s of stepsRes.data ?? []) {
     if (!s.project_id) continue;
-    const c = counts.get(s.project_id) ?? { steps: 0, done: 0 };
+    const c = counts.get(s.project_id) ?? { steps: 0, done: 0, unpriced: 0 };
     c.steps += 1;
     if (s.status === 'faerdig') c.done += 1;
+    if (s.amount == null) c.unpriced += 1;
     counts.set(s.project_id, c);
   }
 
@@ -77,6 +81,7 @@ export async function getFamtaskProjects(): Promise<FamtaskProjectSummary[]> {
     totalAmount: totalByProject.get(p.id) ?? 0,
     stepCount: counts.get(p.id)?.steps ?? 0,
     doneCount: counts.get(p.id)?.done ?? 0,
+    unpricedCount: counts.get(p.id)?.unpriced ?? 0,
   }));
 }
 

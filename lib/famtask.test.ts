@@ -11,6 +11,8 @@ import {
   moveInOrder,
   nextStepStatus,
   parseMonthInput,
+  sparkChecklist,
+  type FamtaskMember,
 } from './famtask';
 
 test('parseMonthInput: tom værdi er null', () => {
@@ -58,4 +60,65 @@ test('isUuid', () => {
   assert.equal(isUuid('11111111-1111-1111-1111-111111111111'), true);
   assert.equal(isUuid('not-a-uuid'), false);
   assert.equal(isUuid(''), false);
+});
+
+const MEMBERS: FamtaskMember[] = [
+  { id: 'm1', name: 'Mikkel', user_id: 'u1' },
+  { id: 'm2', name: 'Louise', user_id: 'u2' },
+  // Barn uden login: skal ikke godkende
+  { id: 'm3', name: 'Emil', user_id: null },
+];
+
+const READY_SPARK = {
+  note: 'Mere plads til cyklerne',
+  estimated_amount: 4500000,
+  target_month: '2027-04-01',
+  owner_member_id: 'm2',
+};
+
+test('sparkChecklist: klar når alle fire punkter er opfyldt', () => {
+  const c = sparkChecklist(READY_SPARK, MEMBERS, ['u1', 'u2']);
+  assert.equal(c.ready, true);
+  assert.deepEqual(c.missingApprovers, []);
+  assert.ok(c.items.every((i) => i.done));
+});
+
+test('sparkChecklist: ny spark mangler alt', () => {
+  const c = sparkChecklist(
+    { note: null, estimated_amount: null, target_month: null, owner_member_id: null },
+    MEMBERS,
+    []
+  );
+  assert.equal(c.ready, false);
+  assert.deepEqual(c.items.map((i) => i.done), [false, false, false, false]);
+  assert.deepEqual(c.missingApprovers, ['Mikkel', 'Louise']);
+});
+
+test('sparkChecklist: formål med kun mellemrum tæller ikke', () => {
+  const c = sparkChecklist({ ...READY_SPARK, note: '   ' }, MEMBERS, ['u1', 'u2']);
+  assert.equal(c.items.find((i) => i.key === 'purpose')?.done, false);
+  assert.equal(c.ready, false);
+});
+
+test('sparkChecklist: beløb 0 er ok, men beløb og måned skal begge være sat', () => {
+  assert.equal(sparkChecklist({ ...READY_SPARK, estimated_amount: 0 }, MEMBERS, ['u1', 'u2']).ready, true);
+  assert.equal(sparkChecklist({ ...READY_SPARK, target_month: null }, MEMBERS, ['u1', 'u2']).ready, false);
+  assert.equal(sparkChecklist({ ...READY_SPARK, estimated_amount: null }, MEMBERS, ['u1', 'u2']).ready, false);
+});
+
+test('sparkChecklist: én godkendelse er ikke nok', () => {
+  const c = sparkChecklist(READY_SPARK, MEMBERS, ['u1']);
+  assert.equal(c.ready, false);
+  assert.deepEqual(c.missingApprovers, ['Louise']);
+});
+
+test('sparkChecklist: godkendelse fra en der ikke er medlem tæller ikke', () => {
+  const c = sparkChecklist(READY_SPARK, MEMBERS, ['u1', 'u-tidligere']);
+  assert.equal(c.ready, false);
+  assert.deepEqual(c.missingApprovers, ['Louise']);
+});
+
+test('sparkChecklist: uden medlemmer med login kan sparken ikke blive klar', () => {
+  const c = sparkChecklist(READY_SPARK, [{ id: 'm3', name: 'Emil', user_id: null }], []);
+  assert.equal(c.ready, false);
 });

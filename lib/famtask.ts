@@ -1,7 +1,7 @@
 // Rene helpers til Famtask (plan-schemaet, migration 0070). Ingen DB, ingen
 // React - så de kan unit-testes direkte (se famtask.test.ts).
 
-import type { PlanProjectStatus, PlanStepStatus } from '@/lib/database.types';
+import type { PlanProjectStatus, PlanSpark, PlanStepStatus } from '@/lib/database.types';
 
 export const PROJECT_STATUS_LABEL_DA: Record<PlanProjectStatus, string> = {
   ide: 'Idé',
@@ -84,6 +84,53 @@ export function formatCreatedDA(iso: string): string {
     month: 'short',
     timeZone: 'Europe/Copenhagen',
   }).format(new Date(iso));
+}
+
+// Husstandsmedlem som Famtask kender det: til "Ansvarlig"-valg og til at
+// vide hvem der skal sige ja. user_id er null for medlemmer uden login.
+export type FamtaskMember = { id: string; name: string; user_id: string | null };
+
+// Tjeklisten før en spark må blive til et projekt (migration 0072).
+// Promote-actionen og sparks-siden bruger begge denne, så reglen kun
+// findes ét sted.
+//
+// Kun medlemmer med login skal sige ja: de andre kan ikke logge ind og
+// godkende. Godkendelser fra nogen der ikke længere er medlem tæller ikke.
+export type SparkChecklistKey = 'purpose' | 'amount_month' | 'owner' | 'approvals';
+
+export type SparkChecklist = {
+  items: { key: SparkChecklistKey; label: string; done: boolean }[];
+  ready: boolean;
+  // Navne på medlemmer med login der endnu ikke har sagt ja
+  missingApprovers: string[];
+};
+
+export function sparkChecklist(
+  spark: Pick<PlanSpark, 'note' | 'estimated_amount' | 'target_month' | 'owner_member_id'>,
+  members: FamtaskMember[],
+  approvedUserIds: string[]
+): SparkChecklist {
+  const approved = new Set(approvedUserIds);
+  const approvers = members.filter((m) => m.user_id != null);
+  const missingApprovers = approvers
+    .filter((m) => !approved.has(m.user_id as string))
+    .map((m) => m.name);
+
+  const items: SparkChecklist['items'] = [
+    { key: 'purpose', label: 'Formål', done: !!spark.note?.trim() },
+    {
+      key: 'amount_month',
+      label: 'Beløb og måned',
+      done: spark.estimated_amount != null && spark.target_month != null,
+    },
+    { key: 'owner', label: 'Ansvarlig', done: spark.owner_member_id != null },
+    {
+      key: 'approvals',
+      label: 'Alle har sagt ja',
+      done: approvers.length > 0 && missingApprovers.length === 0,
+    },
+  ];
+  return { items, ready: items.every((i) => i.done), missingApprovers };
 }
 
 // Flyt `id` én plads op eller ned i en ordnet liste. Returnerer den nye

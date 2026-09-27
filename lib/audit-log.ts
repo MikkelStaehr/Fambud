@@ -59,7 +59,10 @@ export type AuditAction =
   | 'monthly_summary.sent'
   | 'monthly_summary.failed'
   | 'payment_reminder.sent'
-  | 'payment_reminder.failed';
+  | 'payment_reminder.failed'
+  // Famtask: mail til ny ansvarlig (migration 0075)
+  | 'famtask_assignment.sent'
+  | 'famtask_assignment.failed';
 
 export type AuditResult = 'success' | 'failure' | 'denied';
 

@@ -490,6 +490,7 @@ export type Database = {
           monthly_summary_email_enabled: boolean;
           last_monthly_summary_sent_at: string | null;
           payment_reminder_email_enabled: boolean;
+          famtask_email_enabled: boolean;
           last_payment_reminder_sent_at: string | null;
         };
         Insert: {
@@ -515,6 +516,7 @@ export type Database = {
           monthly_summary_email_enabled?: boolean;
           last_monthly_summary_sent_at?: string | null;
           payment_reminder_email_enabled?: boolean;
+          famtask_email_enabled?: boolean;
           last_payment_reminder_sent_at?: string | null;
         };
         Update: {
@@ -540,6 +542,7 @@ export type Database = {
           monthly_summary_email_enabled?: boolean;
           last_monthly_summary_sent_at?: string | null;
           payment_reminder_email_enabled?: boolean;
+          famtask_email_enabled?: boolean;
           last_payment_reminder_sent_at?: string | null;
         };
         Relationships: [];

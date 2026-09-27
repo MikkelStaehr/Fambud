@@ -43,7 +43,7 @@ export default async function FamtaskProjectPage({
         <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-neutral-500">
           Skridt
         </h3>
-        <StepList projectId={project.id} steps={steps} />
+        <StepList parent={{ kind: 'project', id: project.id }} steps={steps} />
       </section>
 
       <section className="mt-10 max-w-3xl border-t border-neutral-200 pt-6">

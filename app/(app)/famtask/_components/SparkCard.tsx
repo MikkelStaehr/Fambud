@@ -8,9 +8,12 @@
 // - Sig ja: optimistisk, så tjeklisten reagerer med det samme.
 // - Gør til projekt: slået fra indtil tjeklisten er opfyldt. promoteSpark
 //   tjekker igen på serveren.
+// - Skridt (0074): i indbakken vises antal og sum med et link til sparkens
+//   egen side, hvor skridtene redigeres. Prissatte skridt opfylder "Beløb".
 
+import Link from 'next/link';
 import { useOptimistic, useState, useTransition } from 'react';
-import { Circle, CircleCheck, Pencil, ThumbsUp, Trash2 } from 'lucide-react';
+import { ArrowRight, Circle, CircleCheck, Pencil, ThumbsUp, Trash2 } from 'lucide-react';
 import type { PlanSpark } from '@/lib/database.types';
 import { formatAmount, formatOereForInput } from '@/lib/format';
 import {
@@ -33,12 +36,14 @@ import {
 } from './styles';
 
 type Props = {
-  spark: PlanSpark & { approvedUserIds: string[] };
+  spark: PlanSpark & { approvedUserIds: string[]; stepAmounts: (number | null)[] };
   members: FamtaskMember[];
   currentUserId: string;
+  // true i indbakken: titel og skridt-linje linker til sparkens side
+  linkToSpark?: boolean;
 };
 
-export function SparkCard({ spark, members, currentUserId }: Props) {
+export function SparkCard({ spark, members, currentUserId, linkToSpark = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
@@ -51,7 +56,9 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
         : current.filter((id) => id !== currentUserId)
   );
 
-  const checklist = sparkChecklist(spark, members, approvedUserIds);
+  const checklist = sparkChecklist(spark, members, approvedUserIds, spark.stepAmounts);
+  const sparkHref = `/famtask/sparks/${spark.id}`;
+  const stepCount = spark.stepAmounts.length;
   const iApproved = approvedUserIds.includes(currentUserId);
   const owner = members.find((m) => m.id === spark.owner_member_id);
   const approvers = members.filter((m) => m.user_id != null);
@@ -84,7 +91,10 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
   // Detaljen ved hvert punkt: hvad der er udfyldt, eller hvem der mangler.
   function detail(key: SparkChecklistKey, done: boolean): string | null {
     if (key === 'amount_month' && done) {
-      return `${formatAmount(spark.estimated_amount as number)} kr, ${formatMonthShortDA(spark.target_month as string)}`;
+      const month = formatMonthShortDA(spark.target_month as string);
+      return checklist.stepsTotal != null
+        ? `${formatAmount(checklist.stepsTotal)} kr fra skridt, ${month}`
+        : `${formatAmount(spark.estimated_amount as number)} kr, ${month}`;
     }
     if (key === 'owner' && owner) return owner.name;
     if (key === 'approvals') {
@@ -138,6 +148,7 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
             <div>
               <label htmlFor={`spark-amount-${spark.id}`} className={labelClass}>
                 Beløb, groft (kr)
+                {stepCount > 0 && <span className="font-normal text-neutral-400"> (skridtene tæller)</span>}
               </label>
               <AmountInput
                 id={`spark-amount-${spark.id}`}
@@ -210,7 +221,15 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
     <li className="px-4 py-4">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="break-words text-sm font-medium text-neutral-900">{spark.title}</p>
+          <p className="break-words text-sm font-medium text-neutral-900">
+            {linkToSpark ? (
+              <Link href={sparkHref} className="hover:underline">
+                {spark.title}
+              </Link>
+            ) : (
+              spark.title
+            )}
+          </p>
           {spark.note && (
             <p className="mt-0.5 whitespace-pre-line break-words text-sm text-neutral-600">
               {spark.note}
@@ -252,6 +271,18 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
         })}
       </ul>
 
+      {linkToSpark && (
+        <Link
+          href={sparkHref}
+          className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-neutral-600 hover:text-neutral-900"
+        >
+          {stepCount > 0
+            ? `${stepCount} skridt${checklist.stepsTotal != null ? `, ${formatAmount(checklist.stepsTotal)} kr` : ''}`
+            : 'Bryd ned i skridt'}
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      )}
+
       {errorBox}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -274,7 +305,18 @@ export function SparkCard({ spark, members, currentUserId }: Props) {
             Gør til projekt
           </SubmitButton>
         </form>
-        <form action={deleteSpark} className="ml-auto">
+        <form
+          action={deleteSpark}
+          className="ml-auto"
+          onSubmit={(e) => {
+            if (
+              stepCount > 0 &&
+              !window.confirm(`Slet sparken og dens ${stepCount} skridt? Det kan ikke fortrydes.`)
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
           <input type="hidden" name="id" value={spark.id} />
           <button
             type="submit"

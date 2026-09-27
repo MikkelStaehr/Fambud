@@ -9,6 +9,10 @@
 //   3. Kør anonyme tests UDEN Bearer-header
 //   4. Output: pass/fail-tabel
 //
+// plan-schemaet (migration 0070) testes også positivt: testA1/testA2 skal
+// kunne læse/skrive egen husstand. Kræver at `plan` er tilføjet under
+// Exposed schemas i Supabase API settings.
+//
 // Brug:
 //   npx tsx scripts/rls-test.ts
 //
@@ -80,7 +84,8 @@ async function rest(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   jwt: string | null,
-  body?: unknown
+  body?: unknown,
+  schema?: string
 ): Promise<RestResult> {
   const headers: Record<string, string> = {
     apikey: ANON!,
@@ -88,6 +93,9 @@ async function rest(
     Prefer: 'return=representation',
   };
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
+  // PostgREST vælger schema via Accept-Profile (GET) / Content-Profile
+  // (skrivninger). Uden header bruges public.
+  if (schema) headers[method === 'GET' ? 'Accept-Profile' : 'Content-Profile'] = schema;
   const res = await fetch(`${URL}/rest/v1/${path}`, {
     method,
     headers,
@@ -162,6 +170,8 @@ function summarise(r: RestResult): string {
 // Tabel-konfiguration: vi probaer hver tabel for SELECT/INSERT/UPDATE/DELETE.
 type TableSpec = {
   name: string;
+  // Sættes for tabeller uden for public (plan-schemaet fra migration 0070)
+  schema?: 'plan';
   // ID-kolonne der peger på en row i HH-A (kan probes for UPDATE/DELETE)
   knownIdColumn?: string;
   knownIdValue?: string;
@@ -177,6 +187,10 @@ let TXN_A: string | undefined;
 let COMPONENT_A: string | undefined;
 let INVITE_A: string | undefined;
 let PREDICTABLE_A: string | undefined;
+// plan-schema: oprettes af runPlanOwnHousehold() som testA1
+let PROJECT_A: string | undefined;
+let STEP_A: string | undefined;
+let SPARK_A: string | undefined;
 
 const TABLES_FACTORY = (): TableSpec[] => [
   {
@@ -299,6 +313,56 @@ const TABLES_FACTORY = (): TableSpec[] => [
       route: 'signup',
     },
   },
+  // --------------------------------------------------------------------
+  // plan-schema (migration 0070). anon har ingen grants på schemaet, så
+  // anonyme SELECTs forventes afvist med 4xx i stedet for 0 rows.
+  // --------------------------------------------------------------------
+  {
+    name: 'projects',
+    schema: 'plan',
+    knownIdColumn: PROJECT_A ? 'id' : undefined,
+    knownIdValue: PROJECT_A,
+    insertPayload: {
+      household_id: HH_A,
+      title: 'PWNED project',
+    },
+    updatePayload: { title: 'HACKED' },
+  },
+  {
+    name: 'steps',
+    schema: 'plan',
+    knownIdColumn: STEP_A ? 'id' : undefined,
+    knownIdValue: STEP_A,
+    insertPayload: PROJECT_A
+      ? {
+          household_id: HH_A,
+          project_id: PROJECT_A,
+          title: 'PWNED step',
+          amount: 99999,
+        }
+      : undefined,
+    updatePayload: { title: 'HACKED' },
+  },
+  {
+    name: 'sparks',
+    schema: 'plan',
+    knownIdColumn: SPARK_A ? 'id' : undefined,
+    knownIdValue: SPARK_A,
+    insertPayload: {
+      household_id: HH_A,
+      title: 'PWNED spark',
+      created_by: USER_A1,
+    },
+    updatePayload: { title: 'HACKED' },
+  },
+  {
+    // View med security_invoker: skal respektere RLS på projects/steps.
+    // Kun SELECT er granted, så DELETE-probet skal give 4xx.
+    name: 'project_budget',
+    schema: 'plan',
+    knownIdColumn: PROJECT_A ? 'project_id' : undefined,
+    knownIdValue: PROJECT_A,
+  },
 ];
 
 async function runMatrix(label: string, jwt: string | null) {
@@ -314,17 +378,26 @@ async function runMatrix(label: string, jwt: string | null) {
     // household_id, så vi springer den filter-baserede SELECT over.
     const filterCol = t.name === 'households' ? 'id' : 'household_id';
     const skipCrossHouseholdSelect = t.name === 'rate_limits';
+    const area = t.schema ? `${t.schema}.${t.name}` : t.name;
+
+    // plan-schemaet har ingen anon-grants: anonyme SELECTs skal afvises
+    // på schema-niveau (4xx). Alle andre SELECTs skal give 200 + 0 rows.
+    const expectSchemaDenied = jwt === null && t.schema === 'plan';
+    const selectDenied = (r: RestResult) =>
+      expectSchemaDenied
+        ? r.status >= 400
+        : r.status === 200 && (r.rows?.length ?? 0) === 0;
+    const selectExpected = expectSchemaDenied ? 'HTTP 4xx' : 'HTTP 200, 0 rows';
 
     // 1. SELECT all - skal returnere 0 rows pga RLS
     if (!skipCrossHouseholdSelect) {
-      const sel = await rest('GET', `${t.name}?${filterCol}=eq.${HH_A}`, jwt);
-      const selOk = sel.status === 200 && (sel.rows?.length ?? 0) === 0;
-      record(t.name, 'SELECT cross-household', selOk, 'HTTP 200, 0 rows', summarise(sel));
+      const sel = await rest('GET', `${t.name}?${filterCol}=eq.${HH_A}`, jwt, undefined, t.schema);
+      record(area, 'SELECT cross-household', selectDenied(sel), selectExpected, summarise(sel));
     } else {
       // For rate_limits: bare SELECT alle rows - skal returnere 0 (eller 4xx)
       const sel = await rest('GET', `${t.name}?limit=10`, jwt);
       const selOk = sel.status >= 400 || (sel.status === 200 && (sel.rows?.length ?? 0) === 0);
-      record(t.name, 'SELECT all (deny-by-default)', selOk, 'HTTP 4xx OR 0 rows', summarise(sel));
+      record(area, 'SELECT all (deny-by-default)', selOk, 'HTTP 4xx OR 0 rows', summarise(sel));
     }
 
     // 2. SELECT specific row by known ID
@@ -332,27 +405,28 @@ async function runMatrix(label: string, jwt: string | null) {
       const selById = await rest(
         'GET',
         `${t.name}?${t.knownIdColumn}=eq.${t.knownIdValue}`,
-        jwt
+        jwt,
+        undefined,
+        t.schema
       );
-      const selByIdOk = selById.status === 200 && (selById.rows?.length ?? 0) === 0;
       record(
-        t.name,
+        area,
         `SELECT by id`,
-        selByIdOk,
-        'HTTP 200, 0 rows',
+        selectDenied(selById),
+        selectExpected,
         summarise(selById)
       );
     }
 
     // 3. INSERT cross-household
     if (t.insertPayload) {
-      const ins = await rest('POST', t.name, jwt, t.insertPayload);
+      const ins = await rest('POST', t.name, jwt, t.insertPayload, t.schema);
       // Pass: enten afvist (4xx) ELLER 0 rows returned
       const insOk =
         ins.status >= 400 ||
         (ins.rows !== null && ins.rows.length === 0);
       record(
-        t.name,
+        area,
         'INSERT cross-household',
         insOk,
         'HTTP 4xx OR 0 rows',
@@ -366,13 +440,14 @@ async function runMatrix(label: string, jwt: string | null) {
         'PATCH',
         `${t.name}?${t.knownIdColumn}=eq.${t.knownIdValue}`,
         jwt,
-        t.updatePayload
+        t.updatePayload,
+        t.schema
       );
       const updOk =
         upd.status >= 400 ||
         (upd.rows !== null && upd.rows.length === 0);
       record(
-        t.name,
+        area,
         'UPDATE cross-household',
         updOk,
         'HTTP 4xx OR 0 rows',
@@ -385,19 +460,156 @@ async function runMatrix(label: string, jwt: string | null) {
       const del = await rest(
         'DELETE',
         `${t.name}?${t.knownIdColumn}=eq.${t.knownIdValue}`,
-        jwt
+        jwt,
+        undefined,
+        t.schema
       );
       const delOk =
         del.status >= 400 ||
         (del.rows !== null && del.rows.length === 0);
       record(
-        t.name,
+        area,
         'DELETE cross-household',
         delOk,
         'HTTP 4xx OR 0 rows',
         summarise(del) + (delOk ? '' : ' [BREACH]')
       );
     }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// plan-schema (migration 0070)
+// ----------------------------------------------------------------------------
+// Matricen ovenfor tester kun afvisning. Her tester vi også at egen husstand
+// KAN læse og skrive - ellers ville en fejlkonfiguration (fx plan mangler
+// under Exposed schemas → HTTP 406) ligne "afvist = pass" i matricen.
+
+function firstId(r: RestResult): string | undefined {
+  return (r.rows?.[0] as { id?: string } | undefined)?.id;
+}
+
+function exactlyOne(r: RestResult): boolean {
+  return r.status >= 200 && r.status < 300 && r.rows?.length === 1;
+}
+
+// Neutral summary til positive tests (summarise() kalder rows for LEAKED).
+function summariseOwn(r: RestResult): string {
+  if (r.status >= 400) return `HTTP ${r.status}: ${r.raw.slice(0, 160)}`;
+  return `HTTP ${r.status}, ${r.rows?.length ?? 0} rows`;
+}
+
+async function runPlanOwnHousehold(jwtA1: string, jwtA2: string) {
+  console.log(`\n========================================================`);
+  console.log('Test-suite: plan-schema, egen husstand (testA1 + testA2)');
+  console.log(`========================================================`);
+
+  const proj = await rest('POST', 'projects', jwtA1, {
+    household_id: HH_A,
+    title: 'RLS-test projekt',
+  }, 'plan');
+  if (proj.status === 406) {
+    console.error('HINT: HTTP 406 - er "plan" tilføjet under Exposed schemas i Supabase API settings?');
+  }
+  PROJECT_A = firstId(proj);
+  record('plan.projects', 'INSERT egen husstand (A1)', exactlyOne(proj), 'HTTP 201, 1 row', summariseOwn(proj));
+  if (!PROJECT_A) return;
+
+  const step = await rest('POST', 'steps', jwtA1, {
+    household_id: HH_A,
+    project_id: PROJECT_A,
+    title: 'RLS-test skridt',
+    amount: 150000,
+    month: '2026-11-01',
+    funding_source: 'opsparing',
+  }, 'plan');
+  STEP_A = firstId(step);
+  record('plan.steps', 'INSERT egen husstand (A1)', exactlyOne(step), 'HTTP 201, 1 row', summariseOwn(step));
+
+  // created_by udelades bevidst: default auth.uid() skal udfylde den.
+  const spark = await rest('POST', 'sparks', jwtA1, {
+    household_id: HH_A,
+    title: 'RLS-test spark',
+    promoted_project_id: PROJECT_A,
+  }, 'plan');
+  SPARK_A = firstId(spark);
+  const createdBy = (spark.rows?.[0] as { created_by?: string } | undefined)?.created_by;
+  record(
+    'plan.sparks',
+    'INSERT egen husstand (A1), created_by = A1',
+    exactlyOne(spark) && createdBy === USER_A1,
+    'HTTP 201, 1 row, created_by = A1',
+    summariseOwn(spark) + `, created_by=${createdBy?.slice(0, 8) ?? 'null'}`
+  );
+
+  // testA2 er medlem af samme husstand: skal kunne læse og rette A1's rækker.
+  const own = [['projects', PROJECT_A], ['steps', STEP_A], ['sparks', SPARK_A]] as const;
+  for (const [name, id] of own) {
+    if (!id) continue;
+    const sel = await rest('GET', `${name}?id=eq.${id}`, jwtA2, undefined, 'plan');
+    record(`plan.${name}`, 'SELECT egen husstand (A2)', exactlyOne(sel), 'HTTP 200, 1 row', summariseOwn(sel));
+    const upd = await rest('PATCH', `${name}?id=eq.${id}`, jwtA2, { title: `RLS-test ${name} (A2)` }, 'plan');
+    record(`plan.${name}`, 'UPDATE egen husstand (A2)', exactlyOne(upd), 'HTTP 200, 1 row', summariseOwn(upd));
+  }
+
+  const budget = await rest('GET', `project_budget?project_id=eq.${PROJECT_A}`, jwtA1, undefined, 'plan');
+  const total = (budget.rows?.[0] as { total_amount?: number } | undefined)?.total_amount;
+  record(
+    'plan.project_budget',
+    'SELECT egen husstand (A1), sum af steps',
+    exactlyOne(budget) && total === 150000,
+    'HTTP 200, total_amount 150000',
+    summariseOwn(budget) + `, total_amount=${total}`
+  );
+}
+
+async function runPlanMixedHousehold(jwtB1: string) {
+  console.log(`\n========================================================`);
+  console.log('Test-suite: plan-schema, testB1 peger ind i HH-A fra HH-B');
+  console.log(`========================================================`);
+  if (!PROJECT_A) return;
+
+  // B skriver i SIN EGEN husstand (RLS siger ja), men refererer A's
+  // projekt. Det er de sammensatte FK'er i 0070 der skal afvise.
+  const step = await rest('POST', 'steps', jwtB1, {
+    household_id: HH_B,
+    project_id: PROJECT_A,
+    title: 'PWNED step',
+    amount: 99999,
+  }, 'plan');
+  record(
+    'plan.steps',
+    "INSERT i HH-B med A's project_id",
+    step.status >= 400,
+    'HTTP 4xx',
+    summarise(step) + (step.status >= 400 ? '' : ' [BREACH]')
+  );
+
+  const spark = await rest('POST', 'sparks', jwtB1, {
+    household_id: HH_B,
+    title: 'PWNED spark',
+    promoted_project_id: PROJECT_A,
+  }, 'plan');
+  record(
+    'plan.sparks',
+    "INSERT i HH-B med A's promoted_project_id",
+    spark.status >= 400,
+    'HTTP 4xx',
+    summarise(spark) + (spark.status >= 400 ? '' : ' [BREACH]')
+  );
+}
+
+async function cleanupPlanOwnHousehold(jwtA1: string) {
+  console.log(`\n========================================================`);
+  console.log('Test-suite: plan-schema, oprydning (testA1 sletter egne rækker)');
+  console.log(`========================================================`);
+  // Sletning er også en positiv test. Spark og step slettes før projektet,
+  // så cascade/set null fra projekt-delete ikke fjerner dem først.
+  const own = [['sparks', SPARK_A], ['steps', STEP_A], ['projects', PROJECT_A]] as const;
+  for (const [name, id] of own) {
+    if (!id) continue;
+    const del = await rest('DELETE', `${name}?id=eq.${id}`, jwtA1, undefined, 'plan');
+    record(`plan.${name}`, 'DELETE egen husstand (A1)', exactlyOne(del), 'HTTP 200, 1 row', summariseOwn(del));
   }
 }
 
@@ -460,9 +672,15 @@ async function main() {
 
   await discoverIds(jwtA1);
 
+  // plan-schema: egen husstand kan læse/skrive (opretter også mål-rows
+  // til matricen nedenfor)
+  const jwtA2 = await signIn('mikkelstaehrmadsen+testA2@gmail.com');
+  await runPlanOwnHousehold(jwtA1, jwtA2);
+
   // Kør cross-household tests som testB1
   const jwtB1 = await signIn('mikkelstaehrmadsen+testB1@gmail.com');
   await runMatrix('testB1 → HH-A (cross-household)', jwtB1);
+  await runPlanMixedHousehold(jwtB1);
 
   // Kør tests som outsider (egen husstand, ingen relation til HH-A)
   const jwtOutsider = await signIn('mikkelstaehrmadsen+testOutsider@gmail.com');
@@ -470,6 +688,8 @@ async function main() {
 
   // Kør tests anonymt (ingen JWT, kun apikey)
   await runMatrix('Anonym (ingen JWT)', null);
+
+  await cleanupPlanOwnHousehold(jwtA1);
 
   // Sammenfatning
   const total = results.length;

@@ -77,7 +77,7 @@ export type LifeEventTimeframe =
   | 'within_5y'
   | 'within_10y';
 export type LifeEventItemStatus = 'planlagt' | 'booket' | 'betalt';
-// plan-schemaet (migration 0070, Famtask).
+// plan-schemaet (migration 0070 + 0072, Famtask).
 export type PlanProjectStatus = 'ide' | 'aktiv' | 'pause' | 'faerdig';
 export type PlanStepStatus = 'todo' | 'i_gang' | 'faerdig';
 export type PlanFundingSource = 'overskud' | 'opsparing' | 'spare_op';
@@ -763,6 +763,8 @@ export type Database = {
           status: PlanProjectStatus;
           target_month: string | null;
           created_at: string;
+          estimated_amount: number | null;
+          owner_member_id: string | null;
         };
         Insert: {
           id?: string;
@@ -772,6 +774,8 @@ export type Database = {
           status?: PlanProjectStatus;
           target_month?: string | null;
           created_at?: string;
+          estimated_amount?: number | null;
+          owner_member_id?: string | null;
         };
         Update: {
           id?: string;
@@ -781,6 +785,8 @@ export type Database = {
           status?: PlanProjectStatus;
           target_month?: string | null;
           created_at?: string;
+          estimated_amount?: number | null;
+          owner_member_id?: string | null;
         };
         Relationships: [];
       };
@@ -829,6 +835,9 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           promoted_project_id: string | null;
+          estimated_amount: number | null;
+          target_month: string | null;
+          owner_member_id: string | null;
         };
         Insert: {
           id?: string;
@@ -838,6 +847,9 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           promoted_project_id?: string | null;
+          estimated_amount?: number | null;
+          target_month?: string | null;
+          owner_member_id?: string | null;
         };
         Update: {
           id?: string;
@@ -847,6 +859,30 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           promoted_project_id?: string | null;
+          estimated_amount?: number | null;
+          target_month?: string | null;
+          owner_member_id?: string | null;
+        };
+        Relationships: [];
+      };
+      spark_approvals: {
+        Row: {
+          spark_id: string;
+          household_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          spark_id: string;
+          household_id: string;
+          user_id?: string;
+          created_at?: string;
+        };
+        Update: {
+          spark_id?: string;
+          household_id?: string;
+          user_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -885,3 +921,4 @@ export type LifeEventItem = Database['public']['Tables']['life_event_items']['Ro
 export type PlanProject = Database['plan']['Tables']['projects']['Row'];
 export type PlanStep = Database['plan']['Tables']['steps']['Row'];
 export type PlanSpark = Database['plan']['Tables']['sparks']['Row'];
+export type PlanSparkApproval = Database['plan']['Tables']['spark_approvals']['Row'];

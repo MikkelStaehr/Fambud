@@ -550,6 +550,28 @@ export async function setPaymentReminderEmail(formData: FormData) {
   redirect('/indstillinger/profil');
 }
 
+// Toggle på mail når man bliver ansvarlig for en spark eller et projekt i
+// Famtask (migration 0075). Samme checkbox-mønster som
+// setMonthlySummaryEmail.
+export async function setFamtaskEmail(formData: FormData) {
+  const { supabase, user } = await getHouseholdContext();
+  const enabled = formData.get('famtask_email_enabled') === 'on';
+
+  const { error } = await supabase
+    .from('family_members')
+    .update({ famtask_email_enabled: enabled })
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('setFamtaskEmail failed:', error.message);
+    redirect(
+      '/indstillinger/profil?error=' +
+        encodeURIComponent('Indstillingen kunne ikke gemmes - prøv igen.')
+    );
+  }
+  revalidatePath('/indstillinger', 'layout');
+  redirect('/indstillinger/profil');
+}
+
 // Sender en test-mail til den indloggede bruger med deres egen aktuelle
 // månedsoversigt. Til validering af email-template + Resend-deliverability
 // før den rigtige månedlige cron fyrer af.
